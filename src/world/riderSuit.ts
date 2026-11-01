@@ -21,6 +21,10 @@ const SEAM = 0.012;
 const HEM = 0.04;
 /** Une pièce de moins de points que cela n'est pas du tissu qui recouvre le corps. */
 const MIN_LAYER = 2000;
+/** Rayon dans lequel les poids du corps se moyennent pour habiller un point de la combinaison. */
+const BLEND = 0.03;
+/** Dont le maillot (9 000 points) dépasse le cuissard (50 000), qu'il recouvre. */
+const JERSEY_LIFT = 0.005;
 
 export interface SuitPart {
   /** Dans le repère du personnage au repos (mètres, debout, de face vers +Z). */
@@ -59,6 +63,16 @@ function faceOutward(geometry: THREE.BufferGeometry): void {
   normals.needsUpdate = true;
 }
 
+/** Écarte chaque point de `distance` le long de sa normale. */
+function inflate(geometry: THREE.BufferGeometry, distance: number): void {
+  const position = geometry.getAttribute('position');
+  const normal = geometry.getAttribute('normal');
+  for (let i = 0; i < position.count; i++) {
+    position.setXYZ(i, position.getX(i) + normal.getX(i) * distance, position.getY(i) + normal.getY(i) * distance, position.getZ(i) + normal.getZ(i) * distance);
+  }
+  position.needsUpdate = true;
+}
+
 export async function loadSuit(): Promise<SuitPart[]> {
   const gltf = await new GLTFLoader().loadAsync(SUIT_URL);
   gltf.scene.updateMatrixWorld(true);
@@ -75,6 +89,14 @@ export async function loadSuit(): Promise<SuitPart[]> {
     faceOutward(geometry);
     const material = (o.material as THREE.MeshStandardMaterial).clone();
     material.side = THREE.DoubleSide;
+    // Le maillot recouvre le haut du cuissard : on le gonfle de quelques millimètres et on le fait gagner le
+    // test de profondeur, sans quoi les deux tissus se disputent les mêmes pixels et le bord est déchiqueté.
+    if (geometry.getAttribute('position').count < MIN_LAYER * 10 && geometry.getAttribute('position').count >= MIN_LAYER) {
+      inflate(geometry, JERSEY_LIFT);
+      material.polygonOffset = true;
+      material.polygonOffsetFactor = -2;
+      material.polygonOffsetUnits = -2;
+    }
     parts.push({ geometry, material });
   });
   return parts;
@@ -101,6 +123,20 @@ class Grid {
 
   point(i: number): THREE.Vector3 {
     return this.points[i];
+  }
+
+  /** Indices des points à moins de `radius`. */
+  within(p: THREE.Vector3, radius: number): number[] {
+    const rings = Math.ceil(radius / this.size);
+    const cx = Math.floor(p.x / this.size);
+    const cy = Math.floor(p.y / this.size);
+    const cz = Math.floor(p.z / this.size);
+    const found: number[] = [];
+    for (let x = cx - rings; x <= cx + rings; x++)
+      for (let y = cy - rings; y <= cy + rings; y++)
+        for (let z = cz - rings; z <= cz + rings; z++)
+          for (const i of this.cells.get(`${x}/${y}/${z}`) ?? []) if (this.points[i].distanceToSquared(p) <= radius * radius) found.push(i);
+    return found;
   }
 
   /** Indice du point le plus proche à moins de `radius`, ou -1. */
@@ -190,14 +226,30 @@ export function skinSuit(
     const positions = vectors(geometry.getAttribute('position'));
     const skinIndex = new Uint16Array(positions.length * 4);
     const skinWeight = new Float32Array(positions.length * 4);
+    const blend = new Map<number, number>();
     positions.forEach((p, i) => {
-      let at = -1;
-      for (let radius = 0.03; at < 0 && radius < 0.5; radius *= 2) at = grid.nearest(p, radius);
-      if (at < 0) at = 0;
-      for (let k = 0; k < 4; k++) {
-        skinIndex[i * 4 + k] = joints.getComponent(at, k);
-        skinWeight[i * 4 + k] = weights.getComponent(at, k);
+      // Les os et poids sont la moyenne de ceux des points du corps voisins : un poids qui change d'un point à
+      // l'autre déchirerait le tissu au moindre pli, là où deux os se rencontrent (taille, hanches).
+      let around = grid.within(p, BLEND);
+      if (around.length === 0) {
+        let at = -1;
+        for (let radius = BLEND * 2; at < 0 && radius < 0.5; radius *= 2) at = grid.nearest(p, radius);
+        around = [at < 0 ? 0 : at];
       }
+      blend.clear();
+      for (const at of around) {
+        const near = 1 / (bodyRest[at].distanceTo(p) + 0.004);
+        for (let k = 0; k < 4; k++) {
+          const w = weights.getComponent(at, k);
+          if (w > 0) blend.set(joints.getComponent(at, k), (blend.get(joints.getComponent(at, k)) ?? 0) + w * near);
+        }
+      }
+      const top = [...blend.entries()].sort((x, y) => y[1] - x[1]).slice(0, 4);
+      const total = top.reduce((sum, [, w]) => sum + w, 0);
+      top.forEach(([bone, w], k) => {
+        skinIndex[i * 4 + k] = bone;
+        skinWeight[i * 4 + k] = w / total;
+      });
     });
     geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndex, 4));
     geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinWeight, 4));
