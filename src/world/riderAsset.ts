@@ -3,14 +3,26 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 export const RIDER_ASSET_URL = `${import.meta.env.BASE_URL}models/rider/Superhero_Male_FullBody.gltf`;
 
-/** Tête du personnage dans son repère d'origine : centre du crâne et largeur. */
+/** Tête du personnage dans son repère d'origine (mètres, debout, de face vers +Z). */
 export interface HeadFrame {
-  center: THREE.Vector3;
+  /** Largeur de la tête. */
   width: number;
+  /** Milieu des yeux. */
+  eyes: THREE.Vector3;
+  /** Calotte du casque : le haut du crâne du personnage, gonflé et allongé vers l'arrière. */
+  shell: THREE.BufferGeometry;
+  /** Où la sangle part du casque (côté droit, à reflèter à gauche) et où elle passe sous le menton. */
+  temple: THREE.Vector3;
+  chin: THREE.Vector3;
+  /** Repères des aérations sur la calotte : avant de la tête, milieu et profondeur. */
+  vents: { front: number; middle: number; depth: number };
+  /** Passe du repère d'origine à celui de l'os de la tête, au repos. */
+  restInverse: THREE.Matrix4;
 }
 
 let asset: THREE.Object3D | null = null;
@@ -96,24 +108,97 @@ function keepRestPositions(mesh: THREE.SkinnedMesh): void {
   geometry.setAttribute('aRest', new THREE.BufferAttribute(rest, 3));
 }
 
-/** Centre et largeur du crâne, d'après les points portés par l'os de la tête. */
-function measureHead(mesh: THREE.SkinnedMesh): HeadFrame {
+/** Épaisseur de la coque du casque, et allongement vers l'arrière (part de la profondeur de la tête). */
+const SHELL_THICKNESS = 0.014;
+const SHELL_TAIL = 0.55;
+/** Dans la queue, la coque descend vers la nuque : le profil d'un casque aéro. */
+const SHELL_DROP = 0.04;
+
+/**
+ * Mesure la tête et fabrique la calotte du casque à partir de son crâne : les triangles au-dessus d'une
+ * ligne qui passe au-dessus des sourcils, des tempes et de la nuque, gonflés le long de leur normale.
+ * Le casque épouse ainsi la tête au lieu de flotter dessus.
+ */
+function measureHead(mesh: THREE.SkinnedMesh, eyesMesh: THREE.SkinnedMesh, headBone: THREE.Object3D): HeadFrame {
   const geometry = mesh.geometry;
+  const count = geometry.getAttribute('position').count;
   const joints = geometry.getAttribute('skinIndex');
   const weights = geometry.getAttribute('skinWeight');
-  const names = mesh.skeleton.bones.map((b) => b.name);
+  const names = mesh.skeleton.bones.map((bone) => bone.name);
+  const normals = geometry.getAttribute('normal');
+  const rest: THREE.Vector3[] = [];
+  const normal: THREE.Vector3[] = [];
+  const onHead: boolean[] = [];
   const box = new THREE.Box3();
-  const v = new THREE.Vector3();
-  for (let i = 0; i < joints.count; i++) {
+  for (let i = 0; i < count; i++) {
     let best = 0;
     for (let k = 1; k < 4; k++) if (weights.getComponent(i, k) > weights.getComponent(i, best)) best = k;
-    if (names[joints.getComponent(i, best)] !== 'Head') continue;
-    v.fromBufferAttribute(geometry.getAttribute('position'), i);
-    mesh.applyBoneTransform(i, v);
-    box.expandByPoint(v.applyMatrix4(mesh.matrixWorld));
+    const p = new THREE.Vector3().fromBufferAttribute(geometry.getAttribute('position'), i);
+    mesh.applyBoneTransform(i, p);
+    rest.push(p.applyMatrix4(mesh.matrixWorld));
+    normal.push(new THREE.Vector3().fromBufferAttribute(normals, i).transformDirection(mesh.matrixWorld));
+    onHead.push(names[joints.getComponent(i, best)] === 'Head');
+    if (onHead[i]) box.expandByPoint(rest[i]);
   }
   const size = box.getSize(new THREE.Vector3());
-  return { center: box.getCenter(new THREE.Vector3()), width: size.x };
+  const middle = box.getCenter(new THREE.Vector3());
+  const top = box.max.y;
+  // Le bord du casque : haut sur le front, plus bas sur les tempes, jusqu'à la nuque derrière.
+  const edge = (z: number): number => {
+    const back = (1 - THREE.MathUtils.clamp((z - middle.z) / (size.z / 2), -1, 1)) / 2;
+    return top - size.y * (0.34 + 0.3 * back);
+  };
+
+  const index = geometry.getIndex()!;
+  const used = new Map<number, number>();
+  const positions: number[] = [];
+  const rim: number[] = [];
+  const triangles: number[] = [];
+  const keep = (v: number): number => {
+    let at = used.get(v);
+    if (at === undefined) {
+      at = positions.length / 3;
+      used.set(v, at);
+      const q = rest[v].clone().addScaledVector(normal[v], SHELL_THICKNESS);
+      const behind = THREE.MathUtils.clamp((middle.z - q.z) / (size.z / 2), 0, 1);
+      q.z = middle.z + (q.z - middle.z) * (1 + SHELL_TAIL * behind);
+      q.y -= SHELL_DROP * behind * behind;
+      positions.push(q.x, q.y, q.z);
+      rim.push(rest[v].y - edge(rest[v].z));
+    }
+    return at;
+  };
+  for (let t = 0; t < index.count; t += 3) {
+    const [a, b, c] = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
+    if (!(onHead[a] && onHead[b] && onHead[c])) continue;
+    const centre = rest[a].clone().add(rest[b]).add(rest[c]).multiplyScalar(1 / 3);
+    if (centre.y > edge(centre.z)) triangles.push(keep(a), keep(b), keep(c));
+  }
+  let shell: THREE.BufferGeometry = new THREE.BufferGeometry();
+  shell.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  shell.setAttribute('aRim', new THREE.Float32BufferAttribute(rim, 1));
+  shell.setIndex(triangles);
+  // Les points confondus de la peau (coutures du dessin) sont soudés : la coque est lisse.
+  shell = mergeVertices(shell, 1e-4);
+  shell.computeVertexNormals();
+
+  const eyeBox = new THREE.Box3();
+  const v = new THREE.Vector3();
+  eyesMesh.skeleton.update();
+  for (let i = 0; i < eyesMesh.geometry.getAttribute('position').count; i++) {
+    v.fromBufferAttribute(eyesMesh.geometry.getAttribute('position'), i);
+    eyesMesh.applyBoneTransform(i, v);
+    eyeBox.expandByPoint(v.applyMatrix4(eyesMesh.matrixWorld));
+  }
+  return {
+    width: size.x,
+    eyes: eyeBox.getCenter(new THREE.Vector3()),
+    shell,
+    temple: new THREE.Vector3(size.x * 0.46, edge(middle.z) + 0.004, middle.z + size.z * 0.02),
+    chin: new THREE.Vector3(size.x * 0.05, box.min.y + 0.02, middle.z + size.z * 0.12),
+    vents: { front: middle.z + size.z / 2, middle: middle.z, depth: size.z },
+    restInverse: headBone.matrixWorld.clone().invert(),
+  };
 }
 
 /** Lance le chargement ; en cas d'échec, le jeu garde son cycliste dessiné par le code. */
@@ -122,13 +207,17 @@ export function preloadRiderAsset(): Promise<void> {
     .loadAsync(RIDER_ASSET_URL)
     .then((gltf) => {
       gltf.scene.updateMatrixWorld(true);
+      let body: THREE.SkinnedMesh | null = null;
+      let eyes: THREE.SkinnedMesh | null = null;
       gltf.scene.traverse((o) => {
-        if (o instanceof THREE.SkinnedMesh && o.name === 'SuperHero_Male') {
-          head = measureHead(o);
-          slimUpperBody(o);
-          keepRestPositions(o);
-        }
+        if (o instanceof THREE.SkinnedMesh && o.name === 'SuperHero_Male') body = o;
+        if (o instanceof THREE.SkinnedMesh && o.name === 'Eyes') eyes = o;
       });
+      if (body && eyes) {
+        slimUpperBody(body);
+        keepRestPositions(body);
+        head = measureHead(body, eyes, gltf.scene.getObjectByName('Head')!);
+      }
       asset = gltf.scene;
     })
     .catch(() => {

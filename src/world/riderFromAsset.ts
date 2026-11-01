@@ -5,8 +5,9 @@
 import * as THREE from 'three';
 import type { RiderFit } from './bikeFromAsset';
 import { at } from './modelParts';
-import { cloneRiderAsset, riderHead } from './riderAsset';
-import { addHeadGear } from './riderGear';
+import { cloneRiderAsset, type HeadFrame, riderHead } from './riderAsset';
+import { addGlasses } from './riderGear';
+import { place, turned } from './modelParts';
 import { pbr } from './materials';
 
 const PEDAL_SIDE = 0.1;
@@ -109,6 +110,38 @@ function dressSkin(source: THREE.MeshStandardMaterial, outfit: Outfit): THREE.Me
   return skin;
 }
 
+/**
+ * Casque aéro : la couleur de l'équipe sous un vernis, un bord de mousse sombre, deux prises d'air sur le
+ * front et une longue fente d'évacuation au sommet, dessinés par pixel sur la calotte.
+
+ */
+function helmetMaterial(accent: THREE.Material, skull: HeadFrame): THREE.Material {
+  const color = ((accent as THREE.MeshStandardMaterial).color ?? new THREE.Color(0xdddddd)).clone();
+  const material = new THREE.MeshPhysicalMaterial({ color, roughness: 0.36, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.08 });
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uVents = { value: new THREE.Vector3(skull.vents.front, skull.vents.middle, skull.vents.depth) };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aRim;\nvarying float vRim;\nvarying vec3 vShell;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRim = aRim;\nvShell = position;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vRim;\nvarying vec3 vShell;\nuniform vec3 uVents;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        float foam = 1.0 - smoothstep(0.004, 0.012, vRim);
+        float ax = abs(vShell.x);
+        float zf = uVents.x;
+        float zm = uVents.y;
+        float dd = uVents.z;
+        float intake = smoothstep(0.014, 0.016, ax) * (1.0 - smoothstep(0.029, 0.031, ax)) * smoothstep(zf - 0.09, zf - 0.085, vShell.z) * (1.0 - smoothstep(zf - 0.035, zf - 0.03, vShell.z));
+        float exhaust = (1.0 - smoothstep(0.005, 0.007, ax)) * smoothstep(zm - 0.42 * dd, zm - 0.415 * dd, vShell.z) * (1.0 - smoothstep(zm + 0.03, zm + 0.035, vShell.z));
+        float slot = max(intake, exhaust) * smoothstep(0.025, 0.035, vRim);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.015), max(foam, slot));`,
+      );
+  };
+  return material;
+}
+
 export interface AssetRider {
   group: THREE.Group;
   pose(crankAngle: number): void;
@@ -139,18 +172,31 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
     }
   });
 
-  // Casque, lunettes et sangle, posés sur le crâne du personnage.
+  // Casque ajusté sur le crâne, sangle et lunettes. Tout se pose dans le repère d'origine du personnage, puis
+  // se rattache à l'os de la tête : ils le suivent quand il s'incline.
   const headBone = bone('Head');
   const skull = riderHead();
-  const gear = new THREE.Group();
   const dark = outfit.mono ? outfit.jersey : pbr({ color: 0x16181c, roughness: 0.5 });
-  const lens = outfit.mono ? outfit.jersey : pbr({ color: 0x0b1118, roughness: 0.08, metalness: 0.95 });
-  addHeadGear(gear, { accent: outfit.accent, dark, lens, tt: false });
-  // Le casque est dessiné pour une tête de 17 cm de large, face vers -Z ; le personnage regarde vers +Z.
-  gear.scale.setScalar(skull.width / 0.172);
-  gear.rotation.y = Math.PI;
-  gear.position.copy(headBone.worldToLocal(rig.localToWorld(skull.center.clone())));
-  headBone.add(gear);
+  const lens = outfit.mono ? outfit.jersey : pbr({ color: 0x24384a, roughness: 0.1, metalness: 0.7, transparent: true, opacity: 0.8 });
+  const fitted = new THREE.Group();
+  fitted.matrixAutoUpdate = false;
+  fitted.matrix.copy(skull.restInverse);
+  headBone.add(fitted);
+  fitted.add(new THREE.Mesh(skull.shell, outfit.mono ? outfit.jersey : helmetMaterial(outfit.accent, skull)));
+  for (const side of [-1, 1]) {
+    const strap = new THREE.Mesh(turned([0.0045, 0.0045], 6), dark);
+    place(strap, new THREE.Vector3(skull.temple.x * side, skull.temple.y, skull.temple.z), new THREE.Vector3(skull.chin.x * side, skull.chin.y, skull.chin.z));
+    fitted.add(strap);
+  }
+  const glasses = new THREE.Group();
+  addGlasses(glasses, { dark, lens });
+  // Les lunettes sont dessinées pour une tête de 17 cm de large, face vers -Z ; le personnage regarde vers +Z.
+  const size = skull.width / 0.172;
+  // Un peu plus hautes que celles du dessin d'origine, et en avant des yeux, que le visage enfonce.
+  glasses.scale.set(size * 0.92, size * 1.1, size * 0.96);
+  glasses.rotation.y = Math.PI;
+  glasses.position.set(skull.eyes.x, skull.eyes.y - 0.018 * size * 1.1, skull.eyes.z + 0.05 - 0.117 * size);
+  fitted.add(glasses);
 
   // Le bassin se pose sur la selle : le milieu des deux hanches au point voulu.
   const hips = worldPos(bone('thigh_l')).add(worldPos(bone('thigh_r'))).multiplyScalar(0.5);

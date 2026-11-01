@@ -78,7 +78,11 @@ export function addHeadGear(headGroup: THREE.Object3D, { accent, dark, lens, tt 
     place(strap, new THREE.Vector3(side * 0.09, 0.0, 0.01), new THREE.Vector3(side * 0.012, -0.115, -0.04));
     headGroup.add(strap);
   }
-  // Lunettes enveloppantes : un écran courbe et brillant, qui reflète le ciel.
+  addGlasses(headGroup, { dark, lens });
+}
+
+/** Lunettes enveloppantes : un écran courbe et brillant qui reflète le ciel, et deux branches. */
+export function addGlasses(headGroup: THREE.Object3D, { dark, lens }: { dark: THREE.Material; lens: THREE.Material }): void {
   const shield = new THREE.SphereGeometry(1, 24, 8, Math.PI * 1.5 - 1.1, 2.2, 1.28, 0.62);
   const glasses = new THREE.Mesh(shield, lens);
   (lens as THREE.Material).side = THREE.DoubleSide;
