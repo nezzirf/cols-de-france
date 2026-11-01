@@ -198,3 +198,82 @@
     gap: 12px;
   }
 }
+
+/* Écran partagé : un panneau qui remplit sa moitié d'écran, chiffres lisibles de loin, boutons au doigt. */
+.mini-split {
+  background: #0b0d10;
+}
+
+.mini-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(14px, 4vmin, 40px);
+  min-height: 0;
+  padding: clamp(14px, 4vmin, 36px);
+}
+
+.mini-split .mini-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(30vmin, 1fr));
+  gap: clamp(10px, 3vmin, 28px);
+}
+
+.mini-split .mini-metric {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.mini-split .mini-label,
+.mini-split .mini-metric small {
+  font-size: clamp(13px, 2.6vmin, 20px);
+}
+
+.mini-split .mini-metric b {
+  font-size: clamp(34px, 11vmin, 90px);
+  line-height: 1;
+}
+
+.mini-split .mini-power b {
+  font-size: clamp(48px, 16vmin, 130px);
+}
+
+.mini-split .mini-target b {
+  font-size: clamp(40px, 13vmin, 104px);
+}
+
+.mini-split .mini-line {
+  flex-wrap: wrap;
+}
+
+.mini-split .mini-line canvas {
+  flex-basis: 100%;
+  height: clamp(44px, 12vmin, 90px);
+}
+
+.mini-split .mini-time {
+  font-size: clamp(16px, 3.4vmin, 26px);
+}
+
+.mini-split .mini-status {
+  font-size: clamp(12px, 2.4vmin, 18px);
+}
+
+.mini-stop {
+  align-self: stretch;
+  min-height: 56px;
+  padding: 12px 20px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.mini-stop:active {
+  background: rgba(255, 255, 255, 0.12);
+}

@@ -7,7 +7,7 @@
  */
 export async function startCapture(): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getDisplayMedia) {
-    throw new Error('Ce navigateur ne sait pas capturer une application : utilise Chrome ou Edge sur ordinateur.');
+    throw new Error('Ce navigateur ne sait pas capturer une application : utilise Chrome ou Edge sur ordinateur, ou l’écran partagé.');
   }
   // Les options propres à Chrome sont ignorées ailleurs : l'écran entier est exclu, car il contiendrait le jeu lui-même.
   const options = { video: { frameRate: { ideal: 30 } }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include', monitorTypeSurfaces: 'exclude' };
@@ -19,6 +19,16 @@ export async function startCapture(): Promise<MediaStream> {
     }
     throw err;
   }
+}
+
+/** Ce que ce navigateur sait faire : une tablette ne capture pas d'application et n'a pas de barre flottante. */
+export function castSupport(): { capture: boolean; floating: boolean } {
+  return { capture: !!navigator.mediaDevices?.getDisplayMedia && !isTouchDevice(), floating: floatingBarSupported() };
+}
+
+/** Les navigateurs de tablette peuvent annoncer getDisplayMedia sans le proposer vraiment : on s'en tient au tactile. */
+function isTouchDevice(): boolean {
+  return navigator.maxTouchPoints > 1 && matchMedia('(pointer: coarse)').matches;
 }
 
 interface DocumentPictureInPicture {

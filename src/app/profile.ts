@@ -24,8 +24,8 @@ export const CUSTOM_ROUTE_ID = 'perso';
 
 /** Le monde d'entraînement, le parcours choisi dans l'onglet Parcours, ou une application en fond. */
 export type WorkoutWhere = 'monde' | 'parcours' | 'app';
-/** Capturer l'application dans la page, ou la laisser à part sous une barre flottante. */
-export type AppMode = 'capture' | 'flottante';
+/** Capturer l'application dans la page, la laisser à part sous une barre flottante, ou n'afficher que le panneau (écran partagé). */
+export type AppMode = 'capture' | 'flottante' | 'partage';
 export type AppBars = 'haut' | 'bas' | 'les-deux';
 
 export interface AppOptions {

@@ -96,6 +96,10 @@ toute sortie lancée depuis cet onglet.
 - **Barre flottante** (Chrome ou Edge sur ordinateur) : une petite fenêtre qui reste au-dessus de
   toutes les autres, même d'une vidéo en plein écran. Tu ouvres ton application à côté et tu glisses
   la barre en haut ou en bas.
+- **Écran partagé** (tablette) : ni la capture ni la barre flottante n'existent sur tablette. Ouvre ton
+  application, puis place le jeu à côté d'elle avec l'écran partagé du système ; le jeu n'affiche que
+  le panneau de la sortie, en gros, avec un bouton « Terminer la sortie ». Il est proposé d'office sur
+  tablette.
 
 Limites : Netflix, Disney+ et d'autres services protégés par DRM s'affichent souvent en noir dans une
 capture, ce que le jeu ne peut pas contourner ; la barre flottante est faite pour ce cas. Rien de

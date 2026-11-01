@@ -17,6 +17,7 @@ import { importWorkout } from '../sim/workoutImport';
 import { WORLD_NAME } from '../sim/worldRoute';
 import { drawWorkout } from './charts';
 import { duration, esc } from './format';
+import { castSupport } from '../app/castSource';
 import type { MenuContext } from './menu';
 
 const PRESET_PREFIX = 'preset-';
@@ -31,6 +32,7 @@ const WHERE: { id: WorkoutWhere; title: string; hint: string }[] = [
 const APP_MODES: { id: AppMode; title: string; hint: string }[] = [
   { id: 'capture', title: 'Capturer dans la page', hint: "L'application s'affiche entre les barres" },
   { id: 'flottante', title: 'Barre flottante', hint: 'Une petite fenêtre au-dessus de tout (Chrome, Edge)' },
+  { id: 'partage', title: 'Écran partagé', hint: 'Le jeu à côté de ton application (tablette)' },
 ];
 
 const APP_BARS: { id: AppBars; label: string }[] = [
@@ -42,6 +44,8 @@ const APP_BARS: { id: AppBars; label: string }[] = [
 const APP_NOTES: Record<AppMode, string> = {
   capture:
     "Au lancement, ton navigateur te demande quelle fenêtre ou quel onglet afficher en fond. Le film reste entier, entre les barres. Netflix et d'autres services protégés peuvent apparaître en noir : dans ce cas, choisis la barre flottante.",
+  partage:
+    "Pour une tablette : ouvre ton application, puis place le jeu à côté d'elle avec l'écran partagé du système. Le jeu n'affiche que le panneau de la sortie, en gros, avec un bouton pour la terminer.",
   flottante:
     "Le jeu ouvre une barre qui reste au-dessus de toutes tes fenêtres, même d'une vidéo en plein écran (Chrome ou Edge sur ordinateur). Ouvre ton application en plein écran, puis glisse la barre en haut ou en bas.",
 };
@@ -161,15 +165,25 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
       </section>
     </div>`;
 
+  // Une tablette ne capture pas d'application et n'a pas de barre flottante : on lui propose l'écran partagé.
+  const support = castSupport();
+  const usable = (m: AppMode) => (m === 'capture' ? support.capture : m === 'flottante' ? support.floating : true);
+  if (!usable(p.appMode)) p.appMode = 'partage';
+
   const showWhere = () => {
     const mark = (selector: string, key: string, value: string) =>
       page.querySelectorAll<HTMLElement>(selector).forEach((x) => x.setAttribute('aria-pressed', String(x.dataset[key] === value)));
     mark('[data-where]', 'where', p.workoutWhere);
     mark('[data-app-mode]', 'appMode', p.appMode);
+    page.querySelectorAll<HTMLButtonElement>('[data-app-mode]').forEach((b) => {
+      const ok = usable(b.dataset.appMode as AppMode);
+      b.disabled = !ok;
+      b.title = ok ? '' : 'Pas disponible dans ce navigateur';
+    });
     mark('[data-app-bars]', 'appBars', p.appBars);
     (page.querySelector('[data-r="app"]') as HTMLElement).hidden = p.workoutWhere !== 'app';
     // La barre flottante est une seule fenêtre : choisir sa place est l'affaire du joueur.
-    (page.querySelector('[data-r="barsRow"]') as HTMLElement).hidden = p.appMode === 'flottante';
+    (page.querySelector('[data-r="barsRow"]') as HTMLElement).hidden = p.appMode !== 'capture';
     (page.querySelector('[data-r="appNote"]') as HTMLElement).textContent = APP_NOTES[p.appMode];
   };
   const onChoice = (selector: string, apply: (value: string) => void, key: string) =>

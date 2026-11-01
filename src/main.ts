@@ -202,7 +202,9 @@ class App {
     // Capture et fenêtre flottante exigent un geste récent du joueur : on les demande avant tout le reste.
     let stream: MediaStream | null = null;
     let pip: Window | null = null;
-    if (app.mode === 'capture') {
+    if (app.mode === 'partage') {
+      // Rien à demander : le système place le jeu à côté de l'application.
+    } else if (app.mode === 'capture') {
       const fake = import.meta.env.DEV ? (window as unknown as { __fakeCast?: () => MediaStream }).__fakeCast : undefined;
       stream = fake ? fake() : await startCapture();
     } else {
@@ -227,7 +229,9 @@ class App {
     this.canvas.style.display = 'none';
     this.root.innerHTML = '';
     let mini: MiniHud;
-    if (pip) {
+    if (app.mode === 'partage') {
+      mini = new MiniHud(this.root, { placement: 'haut', steps, split: { onStop: () => void this.quit() } });
+    } else if (pip) {
       mini = new MiniHud(pip.document.body, { placement: 'haut', steps, floating: true });
       this.pip = pip;
       this.root.innerHTML = `<div class="screen"><div class="result">

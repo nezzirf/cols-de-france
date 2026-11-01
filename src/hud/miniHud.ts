@@ -15,6 +15,8 @@ export interface MiniHudOptions {
   steps: WorkoutStep[] | null;
   /** Barre flottante : une seule barre, sans zone de vidéo. */
   floating?: boolean;
+  /** Écran partagé : un panneau tactile qui remplit sa moitié d'écran, avec de quoi terminer la sortie. */
+  split?: { onStop: () => void };
 }
 
 const UPDATE_MS = 200;
@@ -42,7 +44,7 @@ export class MiniHud {
     parent: HTMLElement,
     private options: MiniHudOptions,
   ) {
-    const { placement, steps, floating } = options;
+    const { placement, steps, floating, split } = options;
     const hasPlan = steps !== null;
     const metrics = `<div class="mini-metrics">
         ${metric('Puissance', 'W', 'power', 'mini-power')}
@@ -62,8 +64,11 @@ export class MiniHud {
     const bottom = both ? line : placement === 'bas' && !floating ? `${metrics}${line}` : '';
 
     this.el = document.createElement('div');
-    this.el.className = `mini${floating ? ' mini-floating' : ''}`;
-    this.el.innerHTML = `
+    this.el.className = `mini${floating ? ' mini-floating' : ''}${split ? ' mini-split' : ''}`;
+    this.el.innerHTML = split
+      ? `<section class="mini-panel">${metrics}${line}<button class="mini-stop" data-a="stop">Terminer la sortie</button></section>
+      <div class="mini-toast" data-r="toast" hidden></div>`
+      : `
       ${top ? `<header class="mini-bar mini-top">${top}</header>` : ''}
       ${floating ? '' : '<main class="mini-stage"></main>'}
       ${bottom ? `<footer class="mini-bar mini-bottom">${bottom}</footer>` : ''}
@@ -73,6 +78,7 @@ export class MiniHud {
     this.chart = this.el.querySelector('[data-r="chart"]');
     this.status = this.el.querySelector('[data-r="status"]') as HTMLElement;
     this.toastEl = this.el.querySelector('[data-r="toast"]') as HTMLElement;
+    this.el.querySelector('[data-a="stop"]')?.addEventListener('click', () => split?.onStop());
     this.el.querySelectorAll<HTMLElement>('[data-m]').forEach((e) => this.values.set(e.dataset.m!, e));
   }
 
