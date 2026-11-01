@@ -62,6 +62,8 @@ const CLOTH_UNIFORMS = ['uJersey', 'uShorts', 'uGloves', 'uShoes', 'uSocks'] as 
  */
 function dressSkin(source: THREE.MeshStandardMaterial, outfit: Outfit): THREE.MeshStandardMaterial {
   const skin = source.clone();
+  // Les muscles du dessin de la peau s'adoucissent : un coureur est plus sec qu'un haltérophile.
+  skin.normalScale = new THREE.Vector2(0.55, 0.55);
   const colorOf = (m: THREE.Material): THREE.Color => ((m as THREE.MeshStandardMaterial).color ?? new THREE.Color(0x888888)).clone();
   const colors: Record<(typeof CLOTH_UNIFORMS)[number], THREE.Color> = {
     uJersey: colorOf(outfit.jersey),
@@ -87,7 +89,8 @@ function dressSkin(source: THREE.MeshStandardMaterial, outfit: Outfit): THREE.Me
         float ax = abs(vRest.x);
         float y = vRest.y;
         float shorts = smoothstep(0.66 - w, 0.66 + w, y) * (1.0 - smoothstep(1.03 - w, 1.03 + w, y));
-        float torso = smoothstep(1.03 - w, 1.03 + w, y) * (1.0 - smoothstep(1.5 - w, 1.5 + w, y));
+        float collar = 1.555 + 0.045 * smoothstep(0.05, 0.11, ax);
+        float torso = smoothstep(1.03 - w, 1.03 + w, y) * (1.0 - smoothstep(collar - w, collar + w, y));
         float jersey = torso * (1.0 - smoothstep(0.36 - w, 0.36 + w, ax));
         float gloves = smoothstep(0.7 - w, 0.7 + w, ax) * step(1.2, y);
         float shoes = 1.0 - smoothstep(0.115 - w, 0.115 + w, y);
