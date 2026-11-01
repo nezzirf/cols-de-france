@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import type { BikeShape } from '../sim/bikes';
 import { BB as BB_POINT, type BikeLook, buildBike } from './bikeModel';
-import { pbr } from './materials';
+import { pbr, skinMaterial } from './materials';
 import { at, ball, place, type Point, sculpt, turned, weldNormals } from './modelParts';
 import { bibTexture } from './riderTextures';
 
@@ -128,7 +128,7 @@ function radiusAt(profile: number[], t: number): number {
 export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, look: RiderLook = ROAD_LOOK): RiderModel {
   const group = new THREE.Group();
   const mono = look.mono === true || kit === jersey;
-  const skin = mono ? jersey : pbr({ color: 0xc99672, roughness: 0.52 });
+  const skin = mono ? jersey : skinMaterial(0xc99672);
   const sock = mono ? jersey : pbr({ color: 0xf1efe9, roughness: 0.8 });
   const shoeMat = mono ? jersey : pbr({ color: 0xf1f1ee, roughness: 0.32 });
   const soleMat = mono ? jersey : pbr({ color: 0x17181b, roughness: 0.4 });
@@ -189,8 +189,10 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
   }
 
   // Bande de couleur sur le maillot, comme les tenues d'équipe.
-  const bandGeo = turned([0.181, 0.19, 0.196, 0.196], 18);
+  const bandGeo = turned([0.19, 0.198, 0.202, 0.2], 24);
   bandGeo.scale(1.12, 1, 0.74);
+  // Le dos du maillot est bombé aux omoplates : la bande le suit, sinon son bord en émerge par endroits.
+  sculpt(bandGeo, (_x, _y, z) => [0, z > 0 ? 0.026 : 0.002]);
   const band = new THREE.Mesh(bandGeo, accent);
   place(band, pelvis.clone().lerp(shoulderC, 0.58), pelvis.clone().lerp(shoulderC, 0.72));
   group.add(band);
@@ -204,8 +206,8 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
   group.add(waist);
   for (const side of [-1, 1]) {
     const glute = ball(1, kit);
-    glute.scale.set(0.108, 0.118, 0.135);
-    glute.position.copy(at(HIP.x - 0.025, HIP.y - 0.015, side * HIP_SIDE));
+    glute.scale.set(0.098, 0.098, 0.108);
+    glute.position.copy(at(HIP.x - 0.012, HIP.y - 0.03, side * (HIP_SIDE - 0.012)));
     group.add(glute);
   }
 
@@ -328,8 +330,13 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
   footGeo.scale(1.08, 1, 0.82);
   const soleGeo = turned([0, 0.03, 0.038, 0.04, 0.036, 0.024, 0], 12);
   soleGeo.scale(1.12, 1, 0.22);
+  // Deux sangles à scratch autour du pied : elles passent là où la chaussure est la plus large.
+  const strapNear = turned([0.0465, 0.0465], 16).scale(1.08, 1, 0.84);
+  const strapFar = turned([0.0385, 0.0385], 16).scale(1.08, 1, 0.84);
   const makeLeg = () => {
     const leg = {
+      strapA: new THREE.Mesh(strapNear, dark),
+      strapB: new THREE.Mesh(strapFar, dark),
       hip: ball(0.102, kit),
       thigh: new THREE.Mesh(thighGeo, skin),
       shorts: new THREE.Mesh(shortsGeo, kit),
@@ -339,7 +346,7 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
       foot: new THREE.Mesh(footGeo, shoeMat),
       sole: new THREE.Mesh(soleGeo, soleMat),
     };
-    group.add(leg.hip, leg.thigh, leg.shorts, leg.knee, leg.calf, leg.sock, leg.foot, leg.sole);
+    group.add(leg.hip, leg.thigh, leg.shorts, leg.knee, leg.calf, leg.sock, leg.foot, leg.sole, leg.strapA, leg.strapB);
     return leg;
   };
   const legs = [makeLeg(), makeLeg()];
@@ -374,8 +381,14 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
       const toeY = py + 0.012;
       place(leg.foot, a.copy(at(heelX, heelY, side * PEDAL_SIDE)), b.copy(at(toeX, toeY, side * PEDAL_SIDE)));
       place(leg.sole, a.copy(at(heelX, heelY - 0.026, side * PEDAL_SIDE)), b.copy(at(toeX, toeY - 0.024, side * PEDAL_SIDE)));
+      const heel3 = at(heelX, heelY, side * PEDAL_SIDE);
+      const toe3 = at(toeX, toeY, side * PEDAL_SIDE);
+      const along = (t: number) => heel3.clone().lerp(toe3, t);
+      place(leg.strapA, along(0.47), along(0.55));
+      place(leg.strapB, along(0.66), along(0.73));
     });
     for (const wheel of wheels) wheel.rotation.x = crankAngle * WHEEL_TURNS_PER_CRANK;
+    bike.drive(crankAngle);
   };
   pose(0);
   return { group, pose };
