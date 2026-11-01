@@ -194,7 +194,7 @@ export class Menu {
     const { where } = this.launch;
     if (where === 'app') {
       const how = p.appMode === 'flottante' ? 'barre flottante' : p.appMode === 'partage' ? 'écran partagé' : { haut: 'barre en haut', bas: 'barre en bas', 'les-deux': 'barres en haut et en bas' }[p.appBars];
-      return `Application en fond · ${how}`;
+      return `Média · ${how}`;
     }
     if (where === 'monde' || p.routeId === WORLD_ROUTE_ID) return `${WORLD_NAME} · boucle de 6 biomes`;
     if (p.routeId === CUSTOM_ROUTE_ID) return `Personnalisé · ${fr(p.customKm)} km à ${fr(p.customGrade)} %`;

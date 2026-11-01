@@ -14,9 +14,11 @@ import {
 } from '../sim/workout';
 import type { AppBars, AppMode, WorkoutWhere } from '../app/profile';
 import { importWorkout } from '../sim/workoutImport';
-import { WORLD_NAME } from '../sim/worldRoute';
+import { MAX_CLIMB_KM, MAX_GRADE_PCT, WARMUP_KM } from '../sim/customRoute';
+import { CUSTOM_ROUTE_ID } from '../app/profile';
+import { WORLD_ROUTE_ID } from '../sim/worldRoute';
 import { drawWorkout } from './charts';
-import { duration, esc } from './format';
+import { duration, esc, fr } from './format';
 import { castSupport } from '../app/castSource';
 import type { MenuContext } from './menu';
 
@@ -24,9 +26,9 @@ const PRESET_PREFIX = 'preset-';
 const KINDS = Object.keys(BLOCK_LABELS) as BlockKind[];
 
 const WHERE: { id: WorkoutWhere; title: string; hint: string }[] = [
-  { id: 'monde', title: WORLD_NAME, hint: 'Boucle de 46 km, six paysages' },
-  { id: 'parcours', title: 'Parcours choisi', hint: "Celui de l'onglet Parcours" },
-  { id: 'app', title: 'Application en fond', hint: 'Netflix, YouTube… avec des barres minimales' },
+  { id: 'monde', title: 'Multi Worlds', hint: 'Boucle de 46 km, six paysages' },
+  { id: 'parcours', title: 'Parcours', hint: 'Un grand col, ou ton propre parcours' },
+  { id: 'app', title: 'Média', hint: 'Netflix, YouTube… avec des barres minimales' },
 ];
 
 const APP_MODES: { id: AppMode; title: string; hint: string }[] = [
@@ -108,12 +110,29 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
   let selected = 0;
 
   page.innerHTML = `
-    <section class="m-panel" aria-label="Lieu de la sortie">
+    <section class="m-panel" data-tone="blue" aria-label="Lieu de la sortie">
       <h3 class="m-caption">Où rouler la séance ?</h3>
       <div class="m-options">
         ${WHERE.map((w) => `<button class="m-option" data-where="${w.id}"><b>${w.title}</b><span>${w.hint}</span></button>`).join('')}
       </div>
-      <div class="m-panel-sub" data-r="app" hidden>
+      <div class="m-panel-sub" data-tone="green" data-r="routePick" hidden>
+        <div class="m-group">
+          <h4 class="m-caption">Choisis le parcours</h4>
+          <div class="m-options">
+            ${ctx.routes
+              .map((r) => `<button class="m-option" data-route="${r.id}"><b>${r.name}</b><span>${r.massif} · ${fr(r.climb.lengthKm)} km · ${fr(r.climb.avgGradePct)} % · ${r.climb.topM} m</span></button>`)
+              .join('')}
+            <button class="m-option" data-route="${CUSTOM_ROUTE_ID}"><b>Personnalisé</b><span>${WARMUP_KM} km de plat, puis la montée que tu choisis</span></button>
+          </div>
+        </div>
+        <div class="m-group m-custom-row" data-r="customRow">
+          <label class="m-field"><span class="m-caption">Distance de la montée <b data-r="km"></b></span>
+            <input type="range" min="1" max="${MAX_CLIMB_KM}" step="0.5" data-f="customKm" value="${p.customKm}"></label>
+          <label class="m-field"><span class="m-caption">Pente <b data-r="grade"></b></span>
+            <input type="range" min="0" max="${MAX_GRADE_PCT}" step="0.5" data-f="customGrade" value="${p.customGrade}"></label>
+        </div>
+      </div>
+      <div class="m-panel-sub" data-tone="violet" data-r="app" hidden>
         <div class="m-group">
           <h4 class="m-caption">Affichage de l'application</h4>
           <div class="m-options">
@@ -181,6 +200,11 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
       b.title = ok ? '' : 'Pas disponible dans ce navigateur';
     });
     mark('[data-app-bars]', 'appBars', p.appBars);
+    mark('[data-route]', 'route', p.routeId);
+    (page.querySelector('[data-r="routePick"]') as HTMLElement).hidden = p.workoutWhere !== 'parcours';
+    (page.querySelector('[data-r="customRow"]') as HTMLElement).hidden = p.routeId !== CUSTOM_ROUTE_ID;
+    (page.querySelector('[data-r="km"]') as HTMLElement).textContent = `${fr(p.customKm)} km`;
+    (page.querySelector('[data-r="grade"]') as HTMLElement).textContent = `${fr(p.customGrade)} %`;
     (page.querySelector('[data-r="app"]') as HTMLElement).hidden = p.workoutWhere !== 'app';
     // La barre flottante est une seule fenêtre : choisir sa place est l'affaire du joueur.
     (page.querySelector('[data-r="barsRow"]') as HTMLElement).hidden = p.appMode !== 'capture';
@@ -194,7 +218,23 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
         ctx.changed();
       }),
     );
-  onChoice('[data-where]', (v) => (p.workoutWhere = v as WorkoutWhere), 'where');
+  onChoice(
+    '[data-where]',
+    (v) => {
+      p.workoutWhere = v as WorkoutWhere;
+      // Le Multi Worlds a son propre choix : ici, il faut un col ou le parcours personnalisé.
+      if (v === 'parcours' && p.routeId === WORLD_ROUTE_ID) p.routeId = ctx.routes[0]?.id ?? CUSTOM_ROUTE_ID;
+    },
+    'where',
+  );
+  onChoice('[data-route]', (v) => (p.routeId = v), 'route');
+  page.querySelectorAll<HTMLInputElement>('[data-f]').forEach((input) =>
+    input.addEventListener('input', () => {
+      p[input.dataset.f as 'customKm' | 'customGrade'] = Number(input.value);
+      showWhere();
+      ctx.changed();
+    }),
+  );
   onChoice('[data-app-mode]', (v) => (p.appMode = v as AppMode), 'appMode');
   onChoice('[data-app-bars]', (v) => (p.appBars = v as AppBars), 'appBars');
   showWhere();

@@ -1204,3 +1204,82 @@
   outline: 2px dashed var(--m-accent);
   outline-offset: 6px;
 }
+
+/* Couleurs des parties : chaque bloc a sa teinte et son liseré, l'orange reste réservé à ce qui est choisi. */
+.m-root [data-tone='blue'] {
+  --tone: #2f7fd6;
+  --tone-ink: #21609f;
+  --tone-bg: #eaf2fc;
+}
+
+.m-root [data-tone='green'] {
+  --tone: #2c9c60;
+  --tone-ink: #1f7a49;
+  --tone-bg: #e9f6ef;
+}
+
+.m-root [data-tone='violet'] {
+  --tone: #7a5bd0;
+  --tone-ink: #5b3fb0;
+  --tone-bg: #f1ecfb;
+}
+
+.m-root [data-tone='amber'] {
+  --tone: #d99a10;
+  --tone-ink: #94670a;
+  --tone-bg: #fdf4de;
+}
+
+.m-root .m-panel[data-tone] {
+  border-left: 6px solid var(--tone);
+  background: var(--tone-bg);
+}
+
+.m-root .m-panel-sub[data-tone] {
+  padding: 14px 16px;
+  border: 0;
+  border-left: 5px solid var(--tone);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.m-root [data-tone] > .m-caption,
+.m-root [data-tone] .m-caption {
+  color: var(--tone-ink);
+}
+
+.m-custom-row {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.m-custom-row .m-field b {
+  color: var(--m-text);
+  font-size: 13px;
+}
+
+/* La liste des séances et l'éditeur : deux zones distinctes, et dans l'éditeur une teinte par étape. */
+.m-root .m-wk-side {
+  padding: 14px;
+  border-left: 6px solid #d99a10;
+  border-radius: 16px;
+  background: #fdf4de;
+}
+
+.m-root .m-wk-editor {
+  border-top: 6px solid #2c9c60;
+}
+
+.m-root .m-wk-editor .m-wk-section {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f3f6f9;
+}
+
+.m-root .m-wk-editor .m-wk-section:nth-of-type(3) {
+  background: #e9f6ef;
+}
+
+.m-root .m-wk-editor .m-wk-form {
+  background: #fff4ec;
+}
