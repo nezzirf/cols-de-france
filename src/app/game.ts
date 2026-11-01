@@ -5,6 +5,7 @@ import { commandChanged } from '../hardware/types';
 import { PhysicsEngine, type RiderSetup, trainerCommand, type TrainerCommand } from '../sim/physicsEngine';
 import type { Route } from '../sim/route';
 import { DEFAULT_GEAR, GEAR_COUNT, shiftedGrade } from '../sim/gears';
+import { type RideSample, rideStats, type RideStats } from '../sim/rideStats';
 import { LocalPrStore, type SegmentResult, type SegmentStatus, SegmentTracker } from '../sim/segments';
 import { totalDuration, type WorkoutStep, workoutStateAt } from '../sim/workout';
 import type { RouteEvent } from '../world/landmarks';
@@ -62,6 +63,11 @@ export interface RideSummary {
   avgPowerW: number;
   maxPowerW: number;
   results: SegmentResult[];
+  /** Un point par seconde, pour le récap et l'enregistrement. */
+  samples: RideSample[];
+  stats: RideStats;
+  /** Instant du premier coup de pédale, en millisecondes. */
+  startedAt: number;
 }
 
 export class Game {
@@ -92,6 +98,9 @@ export class Game {
   /** Exploration : les sauts fausseraient les temps, les segments sont donc coupés. */
   private exploring = false;
   private frozen = false;
+  private samples: RideSample[] = [];
+  private nextSampleS = 1;
+  private startedAt = 0;
   /** Facteur 0..1 appliqué à la pente envoyée au frein. */
   difficulty = 1;
 
@@ -202,12 +211,14 @@ export class Game {
 
     // Le chrono part au premier coup de pédale.
     if (this.elapsedS > 0 || power > 0 || this.physics.speedMps > 0) {
+      if (this.startedAt === 0) this.startedAt = Date.now();
       this.elapsedS += dt;
       this.energyJ += power * dt;
       this.maxPower = Math.max(this.maxPower, power);
     }
 
     const dist = Math.min(this.physics.distanceM, this.route.lengthM);
+    this.record(dist);
     if (!this.exploring) {
       for (const r of this.tracker.update(dist, this.elapsedS)) {
         this.results.push(r);
@@ -228,6 +239,27 @@ export class Game {
       else if (this.exploring) this.jumpTo(this.route.lengthM);
       else this.finish();
     }
+  }
+
+  /** Garde un point par seconde de sortie. */
+  private record(dist: number): void {
+    while (this.elapsedS >= this.nextSampleS) {
+      this.samples.push({
+        t: this.nextSampleS,
+        distanceM: this.traveledM(dist),
+        powerW: this.data.powerW,
+        cadenceRpm: this.data.cadenceRpm,
+        heartRateBpm: this.data.bpm,
+        altitudeM: this.route.eleAt(dist),
+        speedKmh: this.physics.speedMps * 3.6,
+      });
+      this.nextSampleS++;
+    }
+  }
+
+  /** Termine la sortie à la demande du cycliste : le récap s'affiche comme à l'arrivée. */
+  end(): void {
+    if (!this.finished) this.finish();
   }
 
   /** Fin du tour : le cycliste reprend au départ, là où la route se raccorde exactement à son arrivée. */
@@ -318,13 +350,17 @@ export class Game {
   private finish(): void {
     this.finished = true;
     this.stop();
+    const covered = this.traveledM(this.distanceM);
     const summary: RideSummary = {
       elapsedS: this.elapsedS,
-      distanceKm: this.traveledM(this.distanceM) / 1000,
-      avgSpeedKmh: (this.traveledM(this.distanceM) / this.elapsedS) * 3.6,
-      avgPowerW: this.energyJ / this.elapsedS,
+      distanceKm: covered / 1000,
+      avgSpeedKmh: this.elapsedS > 0 ? (covered / this.elapsedS) * 3.6 : 0,
+      avgPowerW: this.elapsedS > 0 ? this.energyJ / this.elapsedS : 0,
       maxPowerW: this.maxPower,
       results: this.results,
+      samples: this.samples,
+      stats: rideStats(this.samples, this.ftp),
+      startedAt: this.startedAt || Date.now(),
     };
     this.onFinish(summary);
   }

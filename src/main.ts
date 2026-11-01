@@ -22,6 +22,7 @@ import { buildWorldRoute, WORLD_ROUTE_ID } from './sim/worldRoute';
 import { expandBlocks, type Workout } from './sim/workout';
 import { fr } from './ui/format';
 import { type DeviceKind, Menu } from './ui/menu';
+import { showRecap } from './ui/recap';
 import { paintCustomGround } from './world/customGround';
 import { paintWorldGround } from './world/worldGround';
 import { type FreeCamera, MOVE_KEYS } from './world/freeCamera';
@@ -52,6 +53,7 @@ class App {
   private hud: Hud | null = null;
   private mini: MiniHud | null = null;
   private miniTimer = 0;
+  private endButton: HTMLButtonElement | null = null;
   private cast: MediaStream | null = null;
   private pip: Window | null = null;
   private releaseLock: (() => void) | null = null;
@@ -196,6 +198,7 @@ class App {
     window.addEventListener('blur', this.onBlur);
     this.releaseLock = keepAwake();
     game.start();
+    this.addEndButton();
     if (import.meta.env.DEV) (window as unknown as { __game: Game }).__game = game;
   }
 
@@ -235,7 +238,7 @@ class App {
     this.root.innerHTML = '';
     let mini: MiniHud;
     if (app.mode === 'partage') {
-      mini = new MiniHud(this.root, { placement: 'haut', steps, split: { onStop: () => void this.quit() } });
+      mini = new MiniHud(this.root, { placement: 'haut', steps, split: { onStop: () => this.game?.end() } });
     } else if (pip) {
       mini = new MiniHud(pip.document.body, { placement: 'haut', steps, floating: true });
       this.pip = pip;
@@ -244,7 +247,7 @@ class App {
         <p>${workout ? `Ta séance « ${workout.name} » suit son cours` : 'Ta sortie suit son cours'} dans la petite fenêtre. Ouvre ton application en plein écran et glisse la barre en haut ou en bas de l'écran.</p>
         <button class="btn primary" data-a="stop">Terminer la sortie</button>
       </div></div>`;
-      this.root.querySelector('[data-a="stop"]')!.addEventListener('click', () => void this.quit());
+      this.root.querySelector('[data-a="stop"]')!.addEventListener('click', () => this.game?.end());
       pip.addEventListener('keydown', this.onKey);
       // Fermer la barre met fin à la sortie, comme Échap.
       pip.addEventListener('pagehide', () => {
@@ -283,6 +286,8 @@ class App {
     window.addEventListener('keydown', this.onKey);
     this.releaseLock = keepAwake();
     game.start();
+    // L'écran partagé et la barre flottante ont déjà leur bouton ; avec la capture, il se pose sur la page.
+    if (app.mode === 'capture') this.addEndButton();
     if (import.meta.env.DEV) (window as unknown as { __game: Game }).__game = game;
   }
 
@@ -414,33 +419,42 @@ class App {
     }
   };
 
+  /**
+   * Bouton pour finir la sortie : un premier appui demande confirmation, le second termine et ouvre le récap.
+   * Il évite qu'un appui involontaire, sur une tablette surtout, mette fin à la séance.
+   */
+  private addEndButton(): void {
+    const label = 'Terminer la séance';
+    const button = document.createElement('button');
+    button.className = 'end-ride';
+    button.textContent = label;
+    let timer = 0;
+    button.addEventListener('click', () => {
+      if (button.dataset.confirm !== 'true') {
+        button.dataset.confirm = 'true';
+        button.textContent = 'Appuie encore pour terminer';
+        timer = window.setTimeout(() => {
+          delete button.dataset.confirm;
+          button.textContent = label;
+        }, 3000);
+        return;
+      }
+      clearTimeout(timer);
+      this.game?.end();
+    });
+    this.root.appendChild(button);
+    this.endButton = button;
+  }
+
   private showResult(name: string, s: RideSummary): void {
-    const screen = document.createElement('div');
-    screen.className = 'screen over';
-    const segs = s.results
-      .map((r) => {
-        const detail = r.isNewPr
-          ? `<span class="pr">Nouveau record</span>`
-          : `<span>record ${formatTime(r.previousPrS ?? 0)}</span>`;
-        return `<div class="result-seg"><span>${r.def.name}</span><span>${formatTime(r.timeS)} · ${detail}</span></div>`;
-      })
-      .join('');
-    screen.innerHTML = `<div class="result">
-      <h2>${name}</h2>
-      <div class="result-grid">
-        <div><b>${formatTime(s.elapsedS)}</b>Temps</div>
-        <div><b>${fr(s.distanceKm)} km</b>Distance</div>
-        <div><b>${fr(s.avgSpeedKmh)} km/h</b>Vitesse moyenne</div>
-        <div><b>${Math.round(s.avgPowerW)} W</b>Puissance moyenne</div>
-      </div>
-      ${segs}
-      <button class="btn primary" data-a="menu">Retour au menu</button>
-    </div>`;
-    this.root.appendChild(screen);
-    screen.querySelector('[data-a="menu"]')!.addEventListener('click', () => void this.quit());
+    this.endButton?.remove();
+    this.endButton = null;
+    showRecap(this.root, { name, summary: s, onMenu: () => void this.quit() });
   }
 
   private async quit(): Promise<void> {
+    this.endButton?.remove();
+    this.endButton = null;
     window.removeEventListener('keydown', this.onKey);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
