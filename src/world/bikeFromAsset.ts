@@ -10,10 +10,13 @@ const ASSET_BB = { fx: -0.096, y: 0.287 };
 const ASSET_WHEEL_R = 0.364;
 const ASSET_SADDLE = { fx: -0.512, top: 1.056 };
 const ASSET_HOOD = { fx: 0.34, y: 0.97 };
+const ASSET_CRANK = 0.184;
 
 /** Où poser le cycliste sur ce vélo : bassin sur la selle, mains sur les cocottes, jambes à la bonne longueur. */
 export interface RiderFit {
   bb: Point;
+  /** Longueur des manivelles. */
+  crank: number;
   hip: Point;
   shoulder: Point;
   neck: Point;
@@ -122,6 +125,7 @@ export function buildAssetBike(wheelRadiusM: number, material: THREE.Material | 
   const hand = onBike(ASSET_HOOD.fx, ASSET_HOOD.y);
   const fit: RiderFit = {
     bb,
+    crank: ASSET_CRANK * scale,
     hip,
     shoulder: [hip[0] + 0.5, hip[1] + 0.33],
     neck: [hip[0] + 0.58, hip[1] + 0.39],

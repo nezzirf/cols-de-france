@@ -44,7 +44,7 @@ const TABS: { id: TabId; label: string }[] = [
 ];
 
 const CREDITS =
-  'Tracés © contributeurs OpenStreetMap (ODbL) · Altitudes IGN RGE ALTI · Relief Mapzen Terrain Tiles · Bâtiments IGN BD TOPO · Photos IGN BD ORTHO · Vélo de route « Canyon Aeroad » par hipoojan (Sketchfab)';
+  'Tracés © contributeurs OpenStreetMap (ODbL) · Altitudes IGN RGE ALTI · Relief Mapzen Terrain Tiles · Bâtiments IGN BD TOPO · Photos IGN BD ORTHO · Vélo de route « Canyon Aeroad » par hipoojan (Sketchfab) · Cycliste « Universal Base Characters » par Quaternius (CC0)';
 
 const DEVICES: { kind: DeviceKind; label: string; title: string }[] = [
   { kind: 'ble', label: 'Bluetooth', title: 'Connecter le KICKR Core en Bluetooth' },

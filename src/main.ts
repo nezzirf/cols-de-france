@@ -4,6 +4,7 @@ import { Game, type RideSummary } from './app/game';
 import { type AppOptions, CUSTOM_ROUTE_ID, loadProfile, saveProfile } from './app/profile';
 import { keepAwake, openFloatingBar, startCapture } from './app/castSource';
 import { preloadBikeAsset } from './world/bikeAsset';
+import { preloadRiderAsset } from './world/riderAsset';
 import { DemoTrainer } from './hardware/demoTrainer';
 import { BluetoothHeartRate } from './hardware/heartRate';
 import { KickrAnt } from './hardware/antUsb';
@@ -68,7 +69,7 @@ class App {
       },
       start: (routeId, workout, app) => (app ? this.startAppRide(workout, app) : this.startRide(routeId, workout)),
     });
-    const bikeLoading = preloadBikeAsset();
+    const bikeLoading = Promise.all([preloadBikeAsset(), preloadRiderAsset()]);
     await this.menu.show();
     // Le vélo modélisé arrive après le menu : l'aperçu se refait dès qu'il est là.
     void bikeLoading.then(() => this.menu?.refreshPreview());

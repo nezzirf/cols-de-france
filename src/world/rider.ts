@@ -6,6 +6,9 @@ import type { BikeShape } from '../sim/bikes';
 import { BB as BB_POINT, type BikeLook, buildBike, WHEEL_TURNS_PER_CRANK } from './bikeModel';
 import { pbr, skinMaterial } from './materials';
 import { at, ball, place, type Point, sculpt, turned, weldNormals } from './modelParts';
+import { addHeadGear, helmetPoint } from './riderGear';
+import { buildAssetRider } from './riderFromAsset';
+import { riderAssetReady } from './riderAsset';
 import { bibTexture } from './riderTextures';
 
 const THIGH = 0.43;
@@ -17,7 +20,7 @@ const PEDAL_SIDE = 0.1;
 const HIP = new THREE.Vector2(-0.12, 0.98); // x vers l'avant (+) dans le plan du vélo, y vers le haut
 const BB = new THREE.Vector2(BB_POINT[0], BB_POINT[1]);
 const HIP_SIDE = 0.088;
-const VENT_PIECES = 5;
+export { helmetPoint };
 
 export interface RiderLook extends BikeLook {
   /** Couleur du casque et des bandes du maillot ; absente, elle reprend le maillot. */
@@ -67,36 +70,6 @@ const POSTURES: Record<BikeShape, Posture> = {
   vtt: { shoulder: [0.22, 1.42], neck: [0.29, 1.5], head: [0.37, 1.62], hand: [0.5, 1.03], handSide: 0.33, headTilt: 0.1 },
   ville: { shoulder: [-0.02, 1.5], neck: [0.01, 1.59], head: [0.04, 1.71], hand: [0.46, 1.02], handSide: 0.27, headTilt: 0 },
 };
-
-/** Dimensions du casque : demi-largeur, demi-hauteur et demi-longueur vers l'avant. */
-const HELMET = { width: 0.104, height: 0.1, front: 0.118 };
-
-/**
- * Point de la coque du casque à partir d'une direction : la moitié arrière s'allonge et se
- * resserre en pointe, ce qui donne le profil effilé des casques de course.
- */
-export function helmetPoint(dir: THREE.Vector3, tail: number): THREE.Vector3 {
-  const rear = Math.max(0, dir.z);
-  const narrow = 1 - 0.55 * rear * rear;
-  return new THREE.Vector3(
-    dir.x * HELMET.width * narrow,
-    dir.y * HELMET.height * (1 - 0.3 * rear * rear),
-    dir.z * HELMET.front * (dir.z > 0 ? tail : 1),
-  );
-}
-
-function helmetGeometry(tail: number): THREE.BufferGeometry {
-  const g = new THREE.SphereGeometry(1, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.57);
-  const p = g.getAttribute('position') as THREE.BufferAttribute;
-  const v = new THREE.Vector3();
-  for (let i = 0; i < p.count; i++) {
-    v.fromBufferAttribute(p, i);
-    const q = helmetPoint(v, tail);
-    p.setXYZ(i, q.x, q.y, q.z);
-  }
-  g.computeVertexNormals();
-  return g;
-}
 
 /** Crâne, mâchoire et menton : une sphère resserrée vers le bas, le front en retrait. */
 function headGeometry(): THREE.BufferGeometry {
@@ -151,6 +124,18 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
   const shin = fit?.shin ?? SHIN;
   group.add(bike.group);
   const wheels = bike.wheels;
+
+  // Cycliste modélisé : un personnage rigué, dont les membres suivent les pédales et le cintre.
+  if (fit && riderAssetReady()) {
+    const body = buildAssetRider(fit, { jersey, shorts: kit, accent, mono });
+    group.add(body.group);
+    const pose = (crankAngle: number) => {
+      bike.drive(crankAngle);
+      body.pose(crankAngle);
+    };
+    pose(0);
+    return { group, pose };
+  }
 
   const unitArm = turned([0.012, 0.012], 8);
   const cranks = [new THREE.Mesh(unitArm, dark), new THREE.Mesh(unitArm, dark)];
@@ -245,48 +230,7 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
   nape.scale.set(0.083, 0.066, 0.062);
   nape.position.set(0, -0.012, 0.05);
   headGroup.add(nape);
-  const tail = tt ? 2.3 : 1.65;
-  const helmet = new THREE.Mesh(helmetGeometry(tail), accent);
-  const shellY = 0.024;
-  helmet.position.set(0, shellY, 0.004);
-  headGroup.add(helmet);
-  // Aérations : de longues fentes qui épousent la coque, tronçon par tronçon. Tracées d'un
-  // seul trait, elles couperaient la courbure et passeraient à l'intérieur du casque.
-  const ventGeo = turned([0.006, 0.012, 0.012, 0.006], 8);
-  ventGeo.scale(1, 1, 0.5);
-  const onShell = (d: THREE.Vector3) =>
-    helmetPoint(d.clone().normalize(), tail).multiplyScalar(1.015).add(new THREE.Vector3(0, shellY, 0.004));
-  const slot = (from: THREE.Vector3, to: THREE.Vector3) => {
-    for (let k = 0; k < VENT_PIECES; k++) {
-      const piece = new THREE.Mesh(ventGeo, dark);
-      place(piece, onShell(from.clone().lerp(to, k / VENT_PIECES)), onShell(from.clone().lerp(to, (k + 1) / VENT_PIECES)));
-      headGroup.add(piece);
-    }
-  };
-  const ventCount = tt ? 1 : 2;
-  for (let n = -ventCount; n <= ventCount; n++) {
-    const across = n * 0.3;
-    slot(new THREE.Vector3(across, 0.6, -0.75), new THREE.Vector3(across * 0.6, 0.8, 0.6));
-  }
-  for (const side of [-1, 1]) slot(new THREE.Vector3(side * 0.95, 0.28, -0.25), new THREE.Vector3(side * 0.7, 0.42, 0.68));
-  // Sangle sous le menton.
-  for (const side of [-1, 1]) {
-    const strap = new THREE.Mesh(turned([0.0055, 0.0055], 6), dark);
-    place(strap, new THREE.Vector3(side * 0.09, 0.0, 0.01), new THREE.Vector3(side * 0.012, -0.115, -0.04));
-    headGroup.add(strap);
-  }
-  // Lunettes enveloppantes : un écran courbe et brillant, qui reflète le ciel.
-  const shield = new THREE.SphereGeometry(1, 24, 8, Math.PI * 1.5 - 1.1, 2.2, 1.28, 0.62);
-  const glasses = new THREE.Mesh(shield, lens);
-  (lens as THREE.Material).side = THREE.DoubleSide;
-  glasses.scale.set(0.098, 0.082, 0.117);
-  glasses.position.set(0, 0.018, 0);
-  headGroup.add(glasses);
-  for (const side of [-1, 1]) {
-    const temple = new THREE.Mesh(turned([0.0035, 0.0035], 6), dark);
-    place(temple, new THREE.Vector3(side * 0.09, 0.018, -0.05), new THREE.Vector3(side * 0.09, 0.014, 0.03));
-    headGroup.add(temple);
-  }
+  addHeadGear(headGroup, { accent, dark, lens, tt });
 
   for (const side of [-1, 1]) {
     const sh = at(posture.shoulder[0], posture.shoulder[1], side * 0.17);
