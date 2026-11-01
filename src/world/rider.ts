@@ -5,8 +5,8 @@ import * as THREE from 'three';
 import type { BikeShape } from '../sim/bikes';
 import { BB as BB_POINT, type BikeLook, buildBike, WHEEL_TURNS_PER_CRANK } from './bikeModel';
 import { pbr, skinMaterial } from './materials';
-import { at, ball, place, type Point, sculpt, turned, weldNormals } from './modelParts';
-import { addHeadGear, helmetPoint } from './riderGear';
+import { at, ball, place, type Point, sculpt, turned } from './modelParts';
+import { addHeadGear, headGeometry, helmetPoint } from './riderGear';
 import { buildAssetRider } from './riderFromAsset';
 import { riderAssetReady } from './riderAsset';
 import { bibTexture } from './riderTextures';
@@ -71,24 +71,6 @@ const POSTURES: Record<BikeShape, Posture> = {
   ville: { shoulder: [-0.02, 1.5], neck: [0.01, 1.59], head: [0.04, 1.71], hand: [0.46, 1.02], handSide: 0.27, headTilt: 0 },
 };
 
-/** Crâne, mâchoire et menton : une sphère resserrée vers le bas, le front en retrait. */
-function headGeometry(): THREE.BufferGeometry {
-  const g = new THREE.SphereGeometry(1, 32, 24);
-  const p = g.getAttribute('position') as THREE.BufferAttribute;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i);
-    const y = p.getY(i);
-    const z = p.getZ(i);
-    const jaw = y < 0 ? 1 - 0.42 * y * y : 1;
-    const eyes = z < -0.55 && y > 0 && y < 0.34 ? 0.95 : 1;
-    const chin = y < -0.7 && z < 0 ? 1.08 : 1;
-    p.setXYZ(i, x * 0.086 * jaw, y * 0.118, z * 0.102 * jaw * eyes * chin);
-  }
-  g.computeVertexNormals();
-  weldNormals(g);
-  return g;
-}
-
 /** Point d'un profil de révolution, interpolé. */
 function radiusAt(profile: number[], t: number): number {
   const f = t * (profile.length - 1);
@@ -127,7 +109,7 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
 
   // Cycliste modélisé : un personnage rigué, dont les membres suivent les pédales et le cintre.
   if (fit && riderAssetReady()) {
-    const body = buildAssetRider(fit, { jersey, shorts: kit, accent, mono });
+    const body = buildAssetRider(fit, { accent });
     group.add(body.group);
     const pose = (crankAngle: number) => {
       bike.drive(crankAngle);

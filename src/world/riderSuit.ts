@@ -1,6 +1,6 @@
-// Combinaison du cycliste : un maillot et un cuissard modélisés, qui gardent leur forme. C'est le corps qui
-// s'y glisse : ses points qui dépassent sont repoussés à l'intérieur, puis la combinaison hérite du squelette
-// du corps pour suivre ses mouvements.
+// Combinaison du cycliste : un maillot et un cuissard modélisés, qui gardent leur forme et font le tronc du
+// cycliste. Elle se rattache au squelette du personnage fabriqué en code, os par os, d'après la distance de
+// chaque point du tissu aux membres.
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -12,25 +12,21 @@ const MM = 0.001;
 const COLLAR_TOP_MM = 68;
 const COLLAR_HEIGHT = 1.55;
 const CENTER_MM = 8;
-/** Le corps reste au moins à cette distance sous le tissu : ses triangles sont grands, et une marge évite qu'ils percent entre deux points. */
-const MARGIN = 0.02;
-/** Portée de la recherche du tissu le plus proche. */
-const REACH = 0.1;
-/** Écart de côté jusqu'auquel un point reste sous le tissu (mailles du maillage), et où il n'est plus recouvert. */
-const SEAM = 0.012;
-const HEM = 0.04;
-/** Une pièce de moins de points que cela n'est pas du tissu qui recouvre le corps. */
-const MIN_LAYER = 2000;
-/** Rayon dans lequel les poids du corps se moyennent pour habiller un point de la combinaison. */
-const BLEND = 0.03;
-/** Dont le maillot (9 000 points) dépasse le cuissard (50 000), qu'il recouvre. */
+/** Une pièce de moins de points que cela n'est pas du tissu (fermeture éclair). */
+const MIN_FABRIC = 2000;
+/** Le maillot (9 000 points) recouvre le haut du cuissard (50 000) : on le gonfle de quelques millimètres. */
 const JERSEY_LIFT = 0.005;
+/** Écart, en mètres, au-delà duquel un os pèse peu sur un point du tissu. */
+const REACH = 0.05;
 
 export interface SuitPart {
   /** Dans le repère du personnage au repos (mètres, debout, de face vers +Z). */
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
 }
+
+const vectors = (attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): THREE.Vector3[] =>
+  Array.from({ length: attribute.count }, (_, i) => new THREE.Vector3().fromBufferAttribute(attribute, i));
 
 /**
  * Les normales d'une pièce peuvent regarder vers l'intérieur du tissu. On compare, pour quelques points, la
@@ -39,7 +35,7 @@ export interface SuitPart {
 function faceOutward(geometry: THREE.BufferGeometry): void {
   const points = vectors(geometry.getAttribute('position'));
   const normals = geometry.getAttribute('normal');
-  if (points.length < MIN_LAYER) return;
+  if (points.length < MIN_FABRIC) return;
   const step = Math.ceil(points.length / 300);
   const middle = new THREE.Vector3();
   const here = new THREE.Vector3();
@@ -89,9 +85,10 @@ export async function loadSuit(): Promise<SuitPart[]> {
     faceOutward(geometry);
     const material = (o.material as THREE.MeshStandardMaterial).clone();
     material.side = THREE.DoubleSide;
-    // Le maillot recouvre le haut du cuissard : on le gonfle de quelques millimètres et on le fait gagner le
-    // test de profondeur, sans quoi les deux tissus se disputent les mêmes pixels et le bord est déchiqueté.
-    if (geometry.getAttribute('position').count < MIN_LAYER * 10 && geometry.getAttribute('position').count >= MIN_LAYER) {
+    // Le maillot recouvre le haut du cuissard : on le gonfle et on le fait gagner le test de profondeur, sans
+    // quoi les deux tissus se disputent les mêmes pixels et le bord est déchiqueté.
+    const points = geometry.getAttribute('position').count;
+    if (points >= MIN_FABRIC && points < MIN_FABRIC * 10) {
       inflate(geometry, JERSEY_LIFT);
       material.polygonOffset = true;
       material.polygonOffsetFactor = -2;
@@ -102,169 +99,56 @@ export async function loadSuit(): Promise<SuitPart[]> {
   return parts;
 }
 
-/** Grille de recherche du point le plus proche. */
-class Grid {
-  private cells = new Map<string, number[]>();
-  constructor(
-    private points: THREE.Vector3[],
-    private size: number,
-  ) {
-    points.forEach((p, i) => {
-      const key = this.key(p.x, p.y, p.z);
-      const list = this.cells.get(key);
-      if (list) list.push(i);
-      else this.cells.set(key, [i]);
-    });
-  }
-
-  private key(x: number, y: number, z: number): string {
-    return `${Math.floor(x / this.size)}/${Math.floor(y / this.size)}/${Math.floor(z / this.size)}`;
-  }
-
-  point(i: number): THREE.Vector3 {
-    return this.points[i];
-  }
-
-  /** Indices des points à moins de `radius`. */
-  within(p: THREE.Vector3, radius: number): number[] {
-    const rings = Math.ceil(radius / this.size);
-    const cx = Math.floor(p.x / this.size);
-    const cy = Math.floor(p.y / this.size);
-    const cz = Math.floor(p.z / this.size);
-    const found: number[] = [];
-    for (let x = cx - rings; x <= cx + rings; x++)
-      for (let y = cy - rings; y <= cy + rings; y++)
-        for (let z = cz - rings; z <= cz + rings; z++)
-          for (const i of this.cells.get(`${x}/${y}/${z}`) ?? []) if (this.points[i].distanceToSquared(p) <= radius * radius) found.push(i);
-    return found;
-  }
-
-  /** Indice du point le plus proche à moins de `radius`, ou -1. */
-  nearest(p: THREE.Vector3, radius: number): number {
-    const rings = Math.ceil(radius / this.size);
-    const cx = Math.floor(p.x / this.size);
-    const cy = Math.floor(p.y / this.size);
-    const cz = Math.floor(p.z / this.size);
-    let best = -1;
-    let bestSq = radius * radius;
-    for (let x = cx - rings; x <= cx + rings; x++)
-      for (let y = cy - rings; y <= cy + rings; y++)
-        for (let z = cz - rings; z <= cz + rings; z++) {
-          for (const i of this.cells.get(`${x}/${y}/${z}`) ?? []) {
-            const d = this.points[i].distanceToSquared(p);
-            if (d < bestSq) {
-              bestSq = d;
-              best = i;
-            }
-          }
-        }
-    return best;
-  }
+/** Un membre du squelette : l'os qui le fait bouger, et le segment qu'il occupe au repos. */
+export interface Limb {
+  bone: number;
+  from: THREE.Vector3;
+  to: THREE.Vector3;
 }
 
-const vectors = (attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): THREE.Vector3[] =>
-  Array.from({ length: attribute.count }, (_, i) => new THREE.Vector3().fromBufferAttribute(attribute, i));
-
-const smoothstep = (a: number, b: number, x: number): number => {
-  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-};
-
-/**
- * Repousse sous le tissu les points du corps qui le dépassent, là où la combinaison les recouvre. Un point est
- * recouvert quand le tissu le plus proche est juste au-dessus de lui ; au-delà d'un bord du tissu (col, manches,
- * jambes), le plus proche est sur le bord, de côté : on le repousse de moins en moins, pour que le corps se
- * raccorde sans marche. `rest` donne la position au repos de chaque point du corps (modifiée sur place) et
- * `skip` les points à laisser tels quels (tête, mains). Renvoie, pour chaque point, s'il est sous le tissu :
- * ces points-là se verront à peine, et le corps peut s'en passer.
- */
-export function fitBodyInside(rest: THREE.Vector3[], suit: SuitPart[], skip: (i: number) => boolean): boolean[] {
-  // Les petites pièces (fermeture éclair) ne comptent pas : seul le tissu recouvre le corps.
-  const layers = suit
-    .filter(({ geometry }) => geometry.getAttribute('position').count >= MIN_LAYER)
-    .map(({ geometry }) => {
-      const points = vectors(geometry.getAttribute('position'));
-      return { points, normals: vectors(geometry.getAttribute('normal')).map((v) => v.normalize()), grid: new Grid(points, REACH) };
-    });
-  const diff = new THREE.Vector3();
-  const under: boolean[] = rest.map(() => false);
-  rest.forEach((p, i) => {
-    if (skip(i)) return;
-    // Chaque couche (maillot, cuissard) peut recouvrir le point : on le repousse sous la plus exigeante.
-    let push = 0;
-    let along: THREE.Vector3 | null = null;
-    for (const layer of layers) {
-      const at = layer.grid.nearest(p, REACH);
-      if (at < 0) continue;
-      // Hauteur du point sous la surface du tissu, le long de la normale : positive s'il dépasse.
-      const out = diff.subVectors(p, layer.points[at]).dot(layer.normals[at]);
-      if (out < -MARGIN) continue;
-      // Écart de côté avec le tissu : petit sous le tissu, grand au-delà de son bord.
-      const aside = Math.sqrt(Math.max(0, diff.lengthSq() - out * out));
-      if (aside < SEAM) under[i] = true;
-      const covered = 1 - smoothstep(SEAM, HEM, aside);
-      if ((out + MARGIN) * covered > push) {
-        push = (out + MARGIN) * covered;
-        along = layer.normals[at];
-      }
-    }
-    if (along) p.addScaledVector(along, -push);
-  });
-  return under;
+/** Distance d'un point à un segment. */
+function distanceToSegment(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3, scratch: THREE.Vector3): number {
+  const span = scratch.subVectors(b, a);
+  const t = Math.min(1, Math.max(0, p.clone().sub(a).dot(span) / span.lengthSq()));
+  return p.distanceTo(a.clone().addScaledVector(span, t));
 }
 
 /**
- * Donne à chaque point de la combinaison les os et les poids du point du corps le plus proche : elle suit
- * alors le squelette comme une seconde peau.
+ * Rattache la combinaison au squelette : chaque point du tissu prend les os des membres les plus proches, avec un
+ * poids qui décroît vite avec la distance. Deux membres voisins (bras et torse, cuisses) se partagent les points
+ * qui sont entre eux, et le tissu plie sans se déchirer.
  */
-export function skinSuit(
-  body: THREE.SkinnedMesh,
-  bodyRest: THREE.Vector3[],
-  suit: SuitPart[],
-): THREE.SkinnedMesh[] {
-  const grid = new Grid(bodyRest, 0.03);
-  const joints = body.geometry.getAttribute('skinIndex');
-  const weights = body.geometry.getAttribute('skinWeight');
-  const toLocal = body.matrixWorld.clone().invert();
+export function skinSuit(skeleton: THREE.Skeleton, limbs: Limb[], suit: SuitPart[]): THREE.SkinnedMesh[] {
+  const scratch = new THREE.Vector3();
   return suit.map(({ geometry, material }, n) => {
-    const positions = vectors(geometry.getAttribute('position'));
-    const skinIndex = new Uint16Array(positions.length * 4);
-    const skinWeight = new Float32Array(positions.length * 4);
-    const blend = new Map<number, number>();
-    positions.forEach((p, i) => {
-      // Les os et poids sont la moyenne de ceux des points du corps voisins : un poids qui change d'un point à
-      // l'autre déchirerait le tissu au moindre pli, là où deux os se rencontrent (taille, hanches).
-      let around = grid.within(p, BLEND);
-      if (around.length === 0) {
-        let at = -1;
-        for (let radius = BLEND * 2; at < 0 && radius < 0.5; radius *= 2) at = grid.nearest(p, radius);
-        around = [at < 0 ? 0 : at];
+    const points = vectors(geometry.getAttribute('position'));
+    const skinIndex = new Uint16Array(points.length * 4);
+    const skinWeight = new Float32Array(points.length * 4);
+    const near: { bone: number; d: number }[] = [];
+    points.forEach((p, i) => {
+      // Le plus proche de chaque os : un os peut porter plusieurs segments (le tronc).
+      const best = new Map<number, number>();
+      for (const limb of limbs) {
+        const d = distanceToSegment(p, limb.from, limb.to, scratch);
+        if (d < (best.get(limb.bone) ?? Infinity)) best.set(limb.bone, d);
       }
-      blend.clear();
-      for (const at of around) {
-        const near = 1 / (bodyRest[at].distanceTo(p) + 0.004);
-        for (let k = 0; k < 4; k++) {
-          const w = weights.getComponent(at, k);
-          if (w > 0) blend.set(joints.getComponent(at, k), (blend.get(joints.getComponent(at, k)) ?? 0) + w * near);
-        }
-      }
-      const top = [...blend.entries()].sort((x, y) => y[1] - x[1]).slice(0, 4);
-      const total = top.reduce((sum, [, w]) => sum + w, 0);
-      top.forEach(([bone, w], k) => {
+      near.length = 0;
+      for (const [bone, d] of best) near.push({ bone, d });
+      near.sort((a, b) => a.d - b.d);
+      const closest = near[0].d;
+      const top = near.slice(0, 4).map(({ bone, d }) => ({ bone, w: Math.exp(-((d * d - closest * closest) / (REACH * REACH))) }));
+      const total = top.reduce((sum, { w }) => sum + w, 0);
+      top.forEach(({ bone, w }, k) => {
         skinIndex[i * 4 + k] = bone;
         skinWeight[i * 4 + k] = w / total;
       });
     });
     geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndex, 4));
     geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinWeight, 4));
-    geometry.applyMatrix4(toLocal);
     const mesh = new THREE.SkinnedMesh(geometry, material);
     mesh.name = `Suit_${n}`;
-    mesh.position.copy(body.position);
-    mesh.quaternion.copy(body.quaternion);
-    mesh.scale.copy(body.scale);
     mesh.frustumCulled = false;
-    mesh.bind(body.skeleton, body.bindMatrix);
+    mesh.bind(skeleton);
     return mesh;
   });
 }

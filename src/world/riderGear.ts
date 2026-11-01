@@ -2,9 +2,27 @@
 // de face vers -Z.
 
 import * as THREE from 'three';
-import { place, turned } from './modelParts';
+import { place, turned, weldNormals } from './modelParts';
 
 const VENT_PIECES = 5;
+
+/** Crâne, mâchoire et menton : une sphère resserrée vers le bas, le front en retrait. */
+export function headGeometry(): THREE.BufferGeometry {
+  const g = new THREE.SphereGeometry(1, 32, 24);
+  const p = g.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    const jaw = y < 0 ? 1 - 0.42 * y * y : 1;
+    const eyes = z < -0.55 && y > 0 && y < 0.34 ? 0.95 : 1;
+    const chin = y < -0.7 && z < 0 ? 1.08 : 1;
+    p.setXYZ(i, x * 0.086 * jaw, y * 0.118, z * 0.102 * jaw * eyes * chin);
+  }
+  g.computeVertexNormals();
+  weldNormals(g);
+  return g;
+}
 
 /** Dimensions du casque : demi-largeur, demi-hauteur et demi-longueur vers l'avant. */
 const HELMET = { width: 0.104, height: 0.1, front: 0.118 };
