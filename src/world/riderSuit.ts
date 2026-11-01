@@ -175,9 +175,10 @@ const smoothstep = (a: number, b: number, x: number): number => {
  * recouvert quand le tissu le plus proche est juste au-dessus de lui ; au-delà d'un bord du tissu (col, manches,
  * jambes), le plus proche est sur le bord, de côté : on le repousse de moins en moins, pour que le corps se
  * raccorde sans marche. `rest` donne la position au repos de chaque point du corps (modifiée sur place) et
- * `skip` les points à laisser tels quels (tête, mains).
+ * `skip` les points à laisser tels quels (tête, mains). Renvoie, pour chaque point, s'il est sous le tissu :
+ * ces points-là se verront à peine, et le corps peut s'en passer.
  */
-export function fitBodyInside(rest: THREE.Vector3[], suit: SuitPart[], skip: (i: number) => boolean): void {
+export function fitBodyInside(rest: THREE.Vector3[], suit: SuitPart[], skip: (i: number) => boolean): boolean[] {
   // Les petites pièces (fermeture éclair) ne comptent pas : seul le tissu recouvre le corps.
   const layers = suit
     .filter(({ geometry }) => geometry.getAttribute('position').count >= MIN_LAYER)
@@ -186,6 +187,7 @@ export function fitBodyInside(rest: THREE.Vector3[], suit: SuitPart[], skip: (i:
       return { points, normals: vectors(geometry.getAttribute('normal')).map((v) => v.normalize()), grid: new Grid(points, REACH) };
     });
   const diff = new THREE.Vector3();
+  const under: boolean[] = rest.map(() => false);
   rest.forEach((p, i) => {
     if (skip(i)) return;
     // Chaque couche (maillot, cuissard) peut recouvrir le point : on le repousse sous la plus exigeante.
@@ -199,6 +201,7 @@ export function fitBodyInside(rest: THREE.Vector3[], suit: SuitPart[], skip: (i:
       if (out < -MARGIN) continue;
       // Écart de côté avec le tissu : petit sous le tissu, grand au-delà de son bord.
       const aside = Math.sqrt(Math.max(0, diff.lengthSq() - out * out));
+      if (aside < SEAM) under[i] = true;
       const covered = 1 - smoothstep(SEAM, HEM, aside);
       if ((out + MARGIN) * covered > push) {
         push = (out + MARGIN) * covered;
@@ -207,6 +210,7 @@ export function fitBodyInside(rest: THREE.Vector3[], suit: SuitPart[], skip: (i:
     }
     if (along) p.addScaledVector(along, -push);
   });
+  return under;
 }
 
 /**

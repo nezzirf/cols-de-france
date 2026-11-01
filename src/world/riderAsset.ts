@@ -121,7 +121,7 @@ function bodyAtRest(mesh: THREE.SkinnedMesh): { rest: THREE.Vector3[]; bone: str
 function putOnSuit(body: THREE.SkinnedMesh, suit: Awaited<ReturnType<typeof loadSuit>>): THREE.SkinnedMesh[] {
   const { rest, bone } = bodyAtRest(body);
   // La tête, les mains et les pieds ne sont pas couverts : ils restent tels quels.
-  fitBodyInside(rest, suit, (i) => /^(Head|hand|index|middle|pinky|ring|thumb|foot|ball)/.test(bone[i]));
+  const under = fitBodyInside(rest, suit, (i) => /^(Head|hand|index|middle|pinky|ring|thumb|foot|ball)/.test(bone[i]));
   const toLocal = body.matrixWorld.clone().invert();
   const position = body.geometry.getAttribute('position');
   rest.forEach((p, i) => {
@@ -129,6 +129,16 @@ function putOnSuit(body: THREE.SkinnedMesh, suit: Awaited<ReturnType<typeof load
     position.setXYZ(i, local.x, local.y, local.z);
   });
   position.needsUpdate = true;
+  // Le tronc, c'est la combinaison : les triangles du corps entièrement sous le tissu sont retirés. Il ne reste que
+  // ce qui en dépasse (tête, cou, bras, mains, jambes) et un anneau de recouvrement à chaque ouverture, pour que les
+  // membres y entrent sans vide.
+  const index = body.geometry.getIndex()!;
+  const kept: number[] = [];
+  for (let t = 0; t < index.count; t += 3) {
+    const [a, b, c] = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
+    if (!(under[a] && under[b] && under[c])) kept.push(a, b, c);
+  }
+  body.geometry.setIndex(kept);
   return skinSuit(body, rest, suit);
 }
 
