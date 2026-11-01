@@ -26,6 +26,10 @@ function box(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = h 
 /** Longueur enterrée des poteaux : ils partent du sol, même sur un terrain en pente. */
 const ANCHOR_M = 14;
 
+const SIGN_SIDE_M = 5.5;
+const VILLAGE_SIGN_M = 220;
+const CHALET_SIGN_M = 60;
+
 function post(width: number, top: number, mat: THREE.Material, x = 0, depth = width): THREE.Mesh {
   return box(width, top + ANCHOR_M, depth, mat, x, (top - ANCHOR_M) / 2);
 }
@@ -37,6 +41,10 @@ interface PlateOptions {
   fg: string;
   lines: { text: string; size: number; bold?: boolean }[];
   accent?: string;
+  /** Liseré intérieur, comme sur les panneaux routiers. */
+  border?: string;
+  /** Barre diagonale du panneau de sortie d'agglomération. */
+  strike?: string;
 }
 
 /** Plaque de texte réelle dans la scène : le texte est dessiné dans une texture. */
@@ -68,10 +76,60 @@ function plate(o: PlateOptions): THREE.Mesh {
     g.fillText(line.text, c.width / 2, y + (line.size * 1.2 * px) / 2);
     y += line.size * 1.2 * px;
   }
+  if (o.border) {
+    const line = c.height * 0.085;
+    g.strokeStyle = o.border;
+    g.lineWidth = line;
+    g.beginPath();
+    g.roundRect(line, line, c.width - line * 2, c.height - line * 2, line);
+    g.stroke();
+  }
+  if (o.strike) {
+    g.strokeStyle = o.strike;
+    g.lineWidth = c.height * 0.1;
+    g.beginPath();
+    g.moveTo(c.width * 0.06, c.height * 0.86);
+    g.lineTo(c.width * 0.94, c.height * 0.14);
+    g.stroke();
+  }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
   return new THREE.Mesh(new THREE.PlaneGeometry(o.width, o.height), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+}
+
+/** Sur les panneaux français, le nom du lieu est toujours en capitales. */
+export function townName(name: string): string {
+  return name.toLocaleUpperCase('fr-FR');
+}
+
+const SIGN_RED = '#c8102e';
+const SIGN_BLACK = '#15171a';
+
+/**
+ * Panneau de ville français, sur ses deux poteaux : fond blanc et liseré rouge à l'entrée
+ * d'agglomération (EB10), barré de rouge à la sortie (EB20). Un lieu-dit a un liseré noir.
+ */
+function townSign(name: string, kind: 'entree' | 'sortie' | 'lieu-dit'): THREE.Group {
+  const g = new THREE.Group();
+  const width = 2.1;
+  const height = 0.8;
+  const top = 2.4;
+  g.add(post(0.07, top + height / 2 - 0.1, metal, -width * 0.32));
+  g.add(post(0.07, top + height / 2 - 0.1, metal, width * 0.32));
+  g.add(box(width + 0.02, height + 0.02, 0.03, metal, 0, top));
+  const p = plate({
+    width,
+    height,
+    bg: '#ffffff',
+    fg: SIGN_BLACK,
+    lines: [{ text: townName(name), size: 0.3, bold: true }],
+    border: kind === 'lieu-dit' ? SIGN_BLACK : SIGN_RED,
+    strike: kind === 'sortie' ? SIGN_RED : undefined,
+  });
+  p.position.set(0, top, 0.02);
+  g.add(p);
+  return g;
 }
 
 function stele(name: string): THREE.Group {
@@ -183,11 +241,36 @@ function hairpinPanel(number: number, name: string | null): THREE.Group {
   return g;
 }
 
-function finishBanner(name: string): THREE.Group {
+/** Panneau brun de signalisation touristique, pour annoncer chaque nouveau biome. */
+function zoneSign(name: string, km: number): THREE.Group {
+  const g = new THREE.Group();
+  const width = 4;
+  const height = 1.2;
+  const top = 2.7;
+  g.add(post(0.09, top + height / 2 - 0.1, metal, -width * 0.36));
+  g.add(post(0.09, top + height / 2 - 0.1, metal, width * 0.36));
+  g.add(box(width + 0.02, height + 0.02, 0.03, metal, 0, top));
+  const p = plate({
+    width,
+    height,
+    bg: '#6b3b18',
+    fg: '#ffffff',
+    lines: [
+      { text: name.toLocaleUpperCase('fr-FR'), size: 0.28, bold: true },
+      { text: `km ${km.toFixed(0)}`, size: 0.2 },
+    ],
+    border: '#ffffff',
+  });
+  p.position.set(0, top, 0.02);
+  g.add(p);
+  return g;
+}
+
+function finishBanner(label: string): THREE.Group {
   const g = new THREE.Group();
   g.add(post(0.3, 6, metal, -5));
   g.add(post(0.3, 6, metal, 5));
-  const p = plate({ width: 10.4, height: 1.5, bg: '#b5121b', fg: '#ffffff', lines: [{ text: `SOMMET · ${name}`, size: 0.85, bold: true }] });
+  const p = plate({ width: 10.4, height: 1.5, bg: '#b5121b', fg: '#ffffff', lines: [{ text: label, size: 0.85, bold: true }] });
   p.position.y = 5.6;
   g.add(p);
   return g;
@@ -202,7 +285,8 @@ export class Landmarks {
     private field: HeightField,
     scene: THREE.Scene,
   ) {
-    this.addBollards();
+    if (route.data.world) this.addZoneSigns();
+    else this.addBollards();
     this.addHairpins();
     route.data.pois.forEach((p) => this.addPoi(p));
     this.addFinish();
@@ -254,26 +338,24 @@ export class Landmarks {
     }
   }
 
-  /** Panneau d'entrée : les bâtiments du lieu sont les vrais, posés par buildBuildings. */
-  private addPlaceSign(poi: Poi, distM: number): void {
-    const panel = plate({
-      width: 3.4,
-      height: 1,
-      bg: '#ffffff',
-      fg: '#15171a',
-      lines: [{ text: poi.name, size: 0.42, bold: true }],
-    });
-    const frame = new THREE.Group();
-    frame.add(post(0.1, 2.3, metal));
-    panel.position.y = 2.5;
-    frame.add(panel);
-    this.onShoulder(frame, distM, 5.5);
+  /** Panneaux d'entrée et de sortie : les bâtiments du lieu sont les vrais, posés par buildBuildings. */
+  private addPlaceSigns(poi: Poi): void {
+    if (poi.type === 'chalet') {
+      const distM = Math.max(0, poi.distM - CHALET_SIGN_M);
+      this.onShoulder(townSign(poi.name, 'lieu-dit'), distM, SIGN_SIDE_M);
+      this.events.push({ distM, text: poi.name });
+      return;
+    }
+    const distM = Math.max(0, poi.distM - VILLAGE_SIGN_M);
+    this.onShoulder(townSign(poi.name, 'entree'), distM, SIGN_SIDE_M);
     this.events.push({ distM, text: poi.name });
+    const exitM = poi.distM + VILLAGE_SIGN_M;
+    if (exitM < this.route.lengthM) this.onShoulder(townSign(poi.name, 'sortie'), exitM, SIGN_SIDE_M);
   }
 
   private addPoi(poi: Poi): void {
     if (poi.type === 'village' || poi.type === 'chalet') {
-      this.addPlaceSign(poi, Math.max(0, poi.distM - (poi.type === 'village' ? 220 : 60)));
+      this.addPlaceSigns(poi);
       return;
     }
     if (poi.type === 'eglise') {
@@ -303,9 +385,25 @@ export class Landmarks {
     if (poi.offsetM < 500) this.events.push({ distM: poi.distM, text: poi.name });
   }
 
+  /** Un panneau à l'entrée de chaque biome, posé sur l'accotement. */
+  private addZoneSigns(): void {
+    const start = this.route.data.loop?.fromM ?? 0;
+    // Le premier panneau est celui de la fin du tour : celui du départ le doublerait.
+    for (const zone of this.route.data.world!.zones) {
+      if (zone.fromM <= start) continue;
+      this.onShoulder(zoneSign(zone.name, (zone.fromM - start) / 1000), zone.fromM, SIGN_SIDE_M);
+    }
+  }
+
   private addFinish(): void {
     const { endM, name, climb } = this.route.data;
-    this.onShoulder(finishBanner(name), endM - 8, 0);
+    // Une boucle n'a pas d'arrivée : le tour suivant commence sans interruption.
+    if (this.route.data.loop) return;
+    if (this.route.data.world) {
+      this.onShoulder(finishBanner(`ARRIVÉE · ${name}`), endM - 8, 0);
+      return;
+    }
+    this.onShoulder(finishBanner(`SOMMET · ${name}`), endM - 8, 0);
     this.onShoulder(colPanel(name, climb.topM), endM - 45, 6.5);
   }
 }

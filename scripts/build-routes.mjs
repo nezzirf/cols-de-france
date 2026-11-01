@@ -15,7 +15,7 @@ import { downloadBuildings, processBuildings } from './buildings.mjs';
 import { buildOrtho } from './ortho.mjs';
 import { ROUTES } from './route-defs.mjs';
 import { roundTightBends } from './roadGeometry.mjs';
-import { findBacktracks } from './routeChecks.mjs';
+import { findBacktracks, findDetours } from './routeChecks.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CACHE = path.join(ROOT, '.cache');
@@ -395,6 +395,10 @@ async function buildRoute(def) {
   const backtracks = findBacktracks({ x, z, ele, stepM: SAMPLE_M });
   for (const b of backtracks) {
     console.warn(`  ! aller-retour du tracé entre ${b.fromM / 1000} et ${b.toM / 1000} km`);
+  }
+
+  for (const d of findDetours({ x, z, ele, stepM: SAMPLE_M })) {
+    console.warn(`  ! boucle du tracé entre ${d.fromM / 1000} et ${d.toM / 1000} km`);
   }
 
   const footIndex = def.footFromEndKm

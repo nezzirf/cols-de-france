@@ -1,10 +1,12 @@
 // Arbres, rochers et herbe placés sur le relief par tuiles déterministes autour du cycliste.
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { valueNoise } from '../sim/noise';
 import type { Biomes } from '../sim/route';
+import { biomeWeights, pickZone, snowAmount, type WorldBiome, type WorldMeta } from '../sim/worldBiomes';
 import { ROCK_COLORS } from './biomes';
 import type { Occupancy } from './buildings';
-import type { LandCover } from './landCover';
 import {
   barkTexture,
   broadleafTexture,
@@ -16,9 +18,11 @@ import {
   frondTexture,
   grassTexture,
   leafClusterTexture,
+  palmTexture,
 } from './foliage';
 import type { HeightField } from './heightField';
 import { pbr } from './materials';
+import { WORLD_STYLE } from './worldStyle';
 import { broadleafCrown, broadleafTrunk, coniferCrown, coniferTrunk } from './treeGeometry';
 
 const TILE_M = 160;
@@ -34,7 +38,7 @@ const GRASS_CELL_M = 1.05;
 const GRASS_RADIUS_TILES = 3;
 const MAX_TUFTS = 24000;
 
-type Species = 'conifer' | 'broadleaf' | 'rock';
+type Species = 'conifer' | 'broadleaf' | 'palm' | 'cactus' | 'rock';
 type Tree = 'conifer' | 'broadleaf';
 type Plant = 'grass' | 'fern' | 'flower';
 
@@ -65,6 +69,23 @@ function lumpy(geo: THREE.BufferGeometry, amount: number, seed: number): THREE.B
 
 export function rockGeometry(): THREE.BufferGeometry {
   return painted(lumpy(new THREE.DodecahedronGeometry(1, 1), 0.2, 3).scale(1.25, 0.7, 1), 0xffffff);
+}
+
+/** Cactus candélabre : un tronc cannelé et deux bras relevés, vert en tout point. */
+export function cactusGeometry(): THREE.BufferGeometry {
+  const green = 0x5d8f4a;
+  const part = (geo: THREE.BufferGeometry) => painted(lumpy(geo, 0.05, 5), green);
+  const arm = (side: number, height: number, reach: number, rise: number): THREE.BufferGeometry[] => [
+    part(new THREE.CylinderGeometry(0.28, 0.3, reach, 8, 1).rotateZ(Math.PI / 2).translate(side * reach * 0.5, height, 0)),
+    part(new THREE.CylinderGeometry(0.26, 0.28, rise, 8, 2).translate(side * reach, height + rise / 2, 0)),
+    part(new THREE.SphereGeometry(0.26, 8, 6).translate(side * reach, height + rise, 0)),
+  ];
+  return mergeGeometries([
+    part(new THREE.CylinderGeometry(0.4, 0.48, 4.4, 10, 3).translate(0, 2.2, 0)),
+    part(new THREE.SphereGeometry(0.4, 10, 6).translate(0, 4.4, 0)),
+    ...arm(-1, 1.9, 1.0, 1.7),
+    ...arm(1, 2.7, 0.9, 1.2),
+  ])!;
 }
 
 const hash = (x: number, y: number, s: number): number => {
@@ -106,14 +127,17 @@ export class Vegetation {
   private conifers: number[];
   private broadleaves: number[];
   private rockColor: THREE.Color;
+  private palms = [0xffffff, 0xf4f6e4, 0xe6eed2];
+  private cacti = [0xffffff, 0xe6f0d8, 0xf2eed0, 0xd8e4c0];
   private wind = { value: 0 };
 
   constructor(
     private field: HeightField,
     private biomes: Biomes,
     private occupancy: Occupancy,
-    private cover: LandCover,
+    private cover: { isForest(x: number, z: number): boolean },
     scene: THREE.Scene,
+    private world: WorldMeta | null = null,
   ) {
     const foliage = (map: THREE.Texture, wind: number) => {
       const m = pbr({ map, side: THREE.DoubleSide, alphaTest: 0.42, alphaToCoverage: true, roughness: 0.92 });
@@ -133,9 +157,12 @@ export class Vegetation {
     };
     const coniferMap = coniferTexture();
     const leafMap = broadleafTexture();
+    const palmMap = palmTexture();
     this.meshes = {
       conifer: mesh(crossedPlanes(8.5, 15, 3), foliage(coniferMap, 0.008), foliageDepth(coniferMap)),
       broadleaf: mesh(crossedPlanes(12, 12, 3), foliage(leafMap, 0.012), foliageDepth(leafMap)),
+      palm: mesh(crossedPlanes(9, 10.5, 3), foliage(palmMap, 0.012), foliageDepth(palmMap)),
+      cactus: mesh(cactusGeometry(), pbr({ vertexColors: true, roughness: 0.8 })),
       rock: mesh(rockGeometry(), pbr({ vertexColors: true, roughness: 0.95 })),
     };
 
@@ -207,7 +234,131 @@ export class Vegetation {
     return { mixte: 0.55, cedre: 0.6, hetre: 0.45, sapin: 0.92, meleze: 1 }[this.biomes.trees];
   }
 
+  /** Même tirage que sur les cols, mais le biome de chaque cellule se tire au sort selon les poids. */
+  private placeWorld(tx: number, tz: number, world: WorldMeta): Placement[] {
+    const out: Placement[] = [];
+    const n = Math.round(TILE_M / CELL_M);
+    // Un nombre entier de cellules par période : le tirage de x + période est celui de x.
+    const period = world.periodM;
+    const cells = Math.round(period / CELL_M);
+    const cellW = period / cells;
+    const weights = new Array<number>(world.zones.length).fill(0);
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const gx = tx * n + i;
+        const gz = tz * n + j;
+        const gh = ((gx % cells) + cells) % cells;
+        const x = (gx + hash(gh, gz, 1)) * cellW;
+        const z = (gz + hash(gh, gz, 2)) * CELL_M;
+        if (this.occupancy.has(x, z) || this.field.exactRoadDistance(x, z) < 10) continue;
+        const y = this.field.height(x, z);
+        if (y < world.seaLevelM + 1.1) continue;
+        const e = 18;
+        const slope = Math.hypot(this.field.height(x + e, z) - y, this.field.height(x, z + e) - y) / e;
+        biomeWeights(x, world, weights);
+        const biome = world.zones[pickZone(weights, hash(gh, gz, 21))].biome;
+        const wx = x - period * Math.floor(x / period);
+        const mx = Math.min(wx, period - wx);
+        const grove = valueNoise(mx / 220, z / 220, 3);
+        const snow = biome === 'montagne' ? snowAmount(y, valueNoise(mx / 400, z / 400, 12)) : 0;
+        const roll = hash(gh, gz, 4);
+        const pick = hash(gh, gz, 7);
+        let species: Species = 'rock';
+        let density = 0;
+        switch (biome) {
+          case 'plage':
+            if (y > 1.8) {
+              species = 'palm';
+              density = grove > 0.5 ? 0.09 : 0.03;
+            }
+            break;
+          case 'prairie':
+            species = pick < 0.8 ? 'broadleaf' : 'conifer';
+            density = grove > 0.68 ? 0.1 : 0.01;
+            break;
+          case 'foret':
+            species = pick < 0.5 ? 'conifer' : 'broadleaf';
+            density = grove < 0.22 ? 0.12 : 0.64;
+            break;
+          case 'montagne':
+            species = 'conifer';
+            density = 0.34 * (1 - 0.8 * snow);
+            break;
+          case 'canyon':
+            species = 'cactus';
+            density = 0.012;
+            break;
+          case 'desert':
+            species = 'cactus';
+            density = grove > 0.5 ? 0.06 : 0.014;
+            break;
+        }
+        const rocks: Record<WorldBiome, number> = { plage: 0.006, prairie: 0.008, foret: 0.02, montagne: 0.05 + 0.1 * snow, canyon: 0.13, desert: 0.02 };
+        const isRock = hash(gh, gz, 31) < rocks[biome] || slope > 1.5;
+        if (!isRock && roll > density) continue;
+        if (isRock && slope <= 1.5 && hash(gh, gz, 32) > 0.9) continue;
+
+        const species_ = isRock ? 'rock' : species;
+        const palette = species_ === 'conifer' ? this.conifers : species_ === 'palm' ? this.palms : species_ === 'cactus' ? this.cacti : this.broadleaves;
+        const color =
+          species_ === 'rock'
+            ? new THREE.Color(WORLD_STYLE[biome].rock).multiplyScalar(0.72 + hash(gh, gz, 8) * 0.4)
+            : new THREE.Color(palette[Math.floor(hash(gh, gz, 8) * palette.length)]);
+        const scale = 0.72 + hash(gh, gz, 5) * 0.75;
+        out.push({
+          species: species_,
+          x,
+          y: species_ === 'rock' ? y : y - 0.2,
+          z,
+          scale: species_ === 'rock' ? 0.22 + hash(gh, gz, 5) ** 4 * 2.8 : scale * (1 - 0.3 * snow) * (species_ === 'cactus' ? 0.85 : 1),
+          girth: species_ === 'cactus' ? 1 : 0.82 + hash(gh, gz, 9) * 0.42,
+          rot: hash(gh, gz, 6) * Math.PI * 2,
+          color,
+        });
+      }
+    }
+    return out;
+  }
+
+  private placeWorldGrass(tx: number, tz: number, world: WorldMeta): Tuft[] {
+    const out: Tuft[] = [];
+    const n = Math.round(GRASS_TILE_M / GRASS_CELL_M);
+    const period = world.periodM;
+    const cells = Math.round(period / GRASS_CELL_M);
+    const cellW = period / cells;
+    const weights = new Array<number>(world.zones.length).fill(0);
+    const tint: Record<WorldBiome, number> = { plage: 0xd9d08c, prairie: 0x7aa83e, foret: 0x4d7238, montagne: 0x86904f, canyon: 0xa5805a, desert: 0xc4ad74 };
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const gx = tx * n + i;
+        const gz = tz * n + j;
+        const gh = ((gx % cells) + cells) % cells;
+        const x = (gx + hash(gh, gz, 11)) * cellW;
+        const z = (gz + hash(gh, gz, 12)) * GRASS_CELL_M;
+        if (hash(gh, gz, 13) > 0.8) continue;
+        const y = this.field.height(x, z);
+        if (y < world.seaLevelM + 1.4) continue;
+        biomeWeights(x, world, weights);
+        const biome = world.zones[pickZone(weights, hash(gh, gz, 19))].biome;
+        const mx = Math.min(x - period * Math.floor(x / period), period - (x - period * Math.floor(x / period)));
+        const snow = biome === 'montagne' ? snowAmount(y, valueNoise(mx / 400, z / 400, 12)) : 0;
+        const amount: Record<WorldBiome, number> = { plage: 0.1, prairie: 1, foret: 0.95, montagne: 0.7 * (1 - snow), canyon: 0.16, desert: 0.12 };
+        if (hash(gh, gz, 22) > amount[biome]) continue;
+        if (this.occupancy.has(x, z) || this.field.exactRoadDistance(x, z) < 5.2) continue;
+        const roll = hash(gh, gz, 14);
+        let kind: Plant = 'grass';
+        if (biome === 'foret' && roll < 0.35) kind = 'fern';
+        else if (biome === 'prairie' && roll < 0.14) kind = 'flower';
+        const shade = 0.82 + hash(gh, gz, 16) * 0.3;
+        const color = kind === 'flower' ? new THREE.Color(0xffffff) : new THREE.Color(tint[biome]).multiplyScalar(shade);
+        out.push({ kind, x, y: y - 0.04, z, scale: 0.75 + hash(gh, gz, 17) * 0.8, rot: hash(gh, gz, 18) * 6.28, color });
+      }
+    }
+    return out;
+  }
+
   private place(tx: number, tz: number): Placement[] {
+    if (this.world) return this.placeWorld(tx, tz, this.world);
     const out: Placement[] = [];
     const b = this.biomes;
     const n = Math.round(TILE_M / CELL_M);
@@ -268,6 +419,7 @@ export class Vegetation {
   }
 
   private placeGrass(tx: number, tz: number): Tuft[] {
+    if (this.world) return this.placeWorldGrass(tx, tz, this.world);
     const out: Tuft[] = [];
     const b = this.biomes;
     const n = Math.round(GRASS_TILE_M / GRASS_CELL_M);
@@ -345,7 +497,7 @@ export class Vegetation {
     if (key === this.currentKey) return;
     this.currentKey = key;
 
-    const counts: Record<Species, number> = { conifer: 0, broadleaf: 0, rock: 0 };
+    const counts: Record<Species, number> = { conifer: 0, broadleaf: 0, palm: 0, cactus: 0, rock: 0 };
     const nearCounts: Record<Tree, number> = { conifer: 0, broadleaf: 0 };
     for (let dz = -RADIUS_TILES; dz <= RADIUS_TILES; dz++) {
       for (let dx = -RADIUS_TILES; dx <= RADIUS_TILES; dx++) {
@@ -359,12 +511,12 @@ export class Vegetation {
         for (const p of tile) {
           this.dummy.position.set(p.x, p.y, p.z);
           this.dummy.rotation.set(0, p.rot, 0);
-          if (p.species === 'rock') this.dummy.scale.setScalar(p.scale);
+          if (p.species === 'rock' || p.species === 'cactus') this.dummy.scale.setScalar(p.scale);
           else this.dummy.scale.set(p.scale * p.girth, p.scale, p.scale * p.girth);
           this.dummy.updateMatrix();
 
           // Les arbres proches passent en version détaillée.
-          if (p.species !== 'rock' && Math.hypot(p.x - x, p.z - z) < NEAR_TREE_M && nearCounts[p.species] < MAX_NEAR_TREES) {
+          if ((p.species === 'conifer' || p.species === 'broadleaf') && Math.hypot(p.x - x, p.z - z) < NEAR_TREE_M && nearCounts[p.species] < MAX_NEAR_TREES) {
             const i = nearCounts[p.species]++;
             const { crown, trunk } = this.near[p.species];
             crown.setMatrixAt(i, this.dummy.matrix);

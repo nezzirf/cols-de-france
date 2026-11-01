@@ -7,7 +7,7 @@ import type { Route } from '../sim/route';
 import { DEFAULT_GEAR, GEAR_COUNT, shiftedGrade } from '../sim/gears';
 import { LocalPrStore, type SegmentResult, type SegmentStatus, SegmentTracker } from '../sim/segments';
 import { totalDuration, type WorkoutStep, workoutStateAt } from '../sim/workout';
-import type { World } from '../world/scene';
+import type { RouteEvent } from '../world/landmarks';
 
 const SIM_INTERVAL_MS = 50;
 const START_OFFSET_M = 12;
@@ -17,6 +17,13 @@ const TRAINER_PERIOD_MS = 1000;
 const FORCE_RESEND_MS = 10000;
 /** Le cycliste sent la pente sous la roue avant : on anticipe d'un demi-empattement. */
 const GRADE_LOOKAHEAD_M = 0.5;
+
+/** Ce que la boucle de jeu demande à l'affichage : un décor 3D, ou rien quand on roule devant un écran. */
+export interface GameWorld {
+  readonly events: RouteEvent[];
+  onBiomeChange: (label: string) => void;
+  render(distM: number, cadenceRpm: number, ghostDistM: number | null, dt: number, now: number): void;
+}
 
 export interface RideSnapshot {
   elapsedS: number;
@@ -35,6 +42,10 @@ export interface RideSnapshot {
   workout: WorkoutSnapshot | null;
   /** Vitesse virtuelle engagée, ou null si elles ne sont pas utilisées. */
   gear: number | null;
+  /** Tour en cours sur un parcours en boucle, 1 sur les autres. */
+  lap: number;
+  /** Distance parcourue depuis le départ, tours compris. */
+  totalM: number;
 }
 
 export interface WorkoutSnapshot {
@@ -69,6 +80,7 @@ export class Game {
   private lastSent: TrainerCommand | null = null;
   private lastSentAt = 0;
   private lastTargetW: number | null = null;
+  private laps = 0;
   private gear = DEFAULT_GEAR;
   private gearsOn = false;
   private trainerSpeedMps: number | null = null;
@@ -91,7 +103,7 @@ export class Game {
 
   constructor(
     private route: Route,
-    private world: World,
+    private world: GameWorld,
     private trainer: Trainer,
     setup: RiderSetup,
     bikeShape = 'route',
@@ -100,7 +112,7 @@ export class Game {
   ) {
     this.physics = new PhysicsEngine({ ...setup, latitudeDeg: route.data.origin.lat });
     // La route commence au premier point du tracé : il faut de l'asphalte derrière la caméra.
-    this.physics.distanceM = START_OFFSET_M;
+    this.physics.distanceM = route.data.loop ? route.data.loop.fromM : START_OFFSET_M;
     this.tracker = new SegmentTracker(route.data.segments, new LocalPrStore(bikeShape));
     this.trainer.onData = (d) => this.receive(d);
     this.world.onBiomeChange = (label) => this.onToast(label);
@@ -212,9 +224,27 @@ export class Game {
       return;
     }
     if (dist >= this.route.lengthM) {
-      if (this.exploring) this.jumpTo(this.route.lengthM);
+      if (this.route.data.loop) this.wrapLap();
+      else if (this.exploring) this.jumpTo(this.route.lengthM);
       else this.finish();
     }
+  }
+
+  /** Fin du tour : le cycliste reprend au départ, là où la route se raccorde exactement à son arrivée. */
+  private wrapLap(): void {
+    const loop = this.route.data.loop!;
+    this.laps++;
+    this.physics.distanceM -= loop.toM - loop.fromM;
+    this.tracker.restartAt(loop.fromM, this.elapsedS);
+    const ev = this.world.events;
+    this.eventIndex = ev.findIndex((e) => e.distM > this.physics.distanceM);
+    if (this.eventIndex < 0) this.eventIndex = ev.length;
+  }
+
+  /** Distance parcourue depuis le départ, tours compris. */
+  private traveledM(dist: number): number {
+    const loop = this.route.data.loop;
+    return loop ? this.laps * (loop.toM - loop.fromM) + dist - loop.fromM : dist;
   }
 
   private fireEvents(dist: number): void {
@@ -290,8 +320,8 @@ export class Game {
     this.stop();
     const summary: RideSummary = {
       elapsedS: this.elapsedS,
-      distanceKm: this.distanceM / 1000,
-      avgSpeedKmh: (this.distanceM / this.elapsedS) * 3.6,
+      distanceKm: this.traveledM(this.distanceM) / 1000,
+      avgSpeedKmh: (this.traveledM(this.distanceM) / this.elapsedS) * 3.6,
       avgPowerW: this.energyJ / this.elapsedS,
       maxPowerW: this.maxPower,
       results: this.results,
@@ -316,7 +346,7 @@ export class Game {
       elapsedS: e,
       distanceM: dist,
       speedKmh: this.physics.speedMps * 3.6,
-      avgSpeedKmh: e > 1 && !this.exploring ? (dist / e) * 3.6 : 0,
+      avgSpeedKmh: e > 1 && !this.exploring ? (this.traveledM(dist) / e) * 3.6 : 0,
       powerW: this.data.powerW,
       avgPowerW: e > 1 ? this.energyJ / e : 0,
       cadenceRpm: this.data.cadenceRpm,
@@ -328,7 +358,14 @@ export class Game {
       sentGradePct: this.lastSent?.gradePct ?? 0,
       workout: this.workoutSnapshot(),
       gear: this.gearsOn && !this.workout ? this.gear : null,
+      lap: this.laps + 1,
+      totalM: this.traveledM(dist),
     };
+  }
+
+  /** État actuel de la sortie, pour un affichage qui ne dépend pas du rythme de l'écran. */
+  currentSnapshot(): RideSnapshot {
+    return this.snapshot(Math.min(this.physics.distanceM, this.route.lengthM));
   }
 
   stop(): void {

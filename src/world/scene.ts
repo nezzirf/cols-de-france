@@ -8,6 +8,9 @@ import { buildCliffRocks } from './cliffs';
 import { ambienceOf, biomeAt, biomeLabel, type BiomeName } from './biomes';
 import { HeightField } from './heightField';
 import { LandCover } from './landCover';
+import { Water } from './water';
+import { WORLD_STYLE, worldAmbience } from './worldStyle';
+import { biomeWeights, dominant, type WorldMeta } from '../sim/worldBiomes';
 import { Landmarks, type RouteEvent } from './landmarks';
 import { Pipeline } from './pipeline';
 import { FreeCamera } from './freeCamera';
@@ -43,6 +46,11 @@ export class World {
   private cameraHeading: number | null = null;
   private lastTerrainUpdate = 0;
   private biome: BiomeName | null = null;
+  private water: Water | null = null;
+  private world: WorldMeta | null;
+  private worldWeights: number[] = [];
+  private worldBiome = '';
+  private worldFog = { color: new THREE.Color(), density: 0 };
   private targetFog = new THREE.Color(0xcad9e2);
   private targetDensity = 0.00009;
   cameraMode: CameraMode = 'poursuite';
@@ -57,6 +65,7 @@ export class World {
     bike: Bike,
     ortho: HTMLImageElement | HTMLCanvasElement,
   ) {
+    this.world = route.data.world ?? null;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -93,13 +102,19 @@ export class World {
     photo.generateMipmaps = true;
     photo.minFilter = THREE.LinearMipmapLinearFilter;
     photo.needsUpdate = true;
-    const ground = groundMaterial(route.data.biomes, photo, route.data.terrain);
+    const ground = groundMaterial(route.data.biomes, photo, route.data.terrain, this.world !== null);
     this.terrain = new TerrainSystem(this.field, ground, this.scene);
     const roadStations = stations(route);
     this.scene.add(buildRoad(route, ground, roadStations));
     this.scene.add(buildCliffRocks(roadStations, route, this.field, route.data.biomes));
     const occupancy = buildBuildings(buildings, route.data.buildingStyle, this.field, this.scene);
-    this.vegetation = new Vegetation(this.field, route.data.biomes, occupancy, new LandCover(ortho, route.data.terrain), this.scene);
+    // Sur le monde d'entraînement, la végétation suit les biomes, pas la photo : le masque de forêt est inutile.
+    const cover = this.world ? { isForest: () => false } : new LandCover(ortho, route.data.terrain);
+    this.vegetation = new Vegetation(this.field, route.data.biomes, occupancy, cover, this.scene, this.world);
+    if (this.world) {
+      this.water = new Water(this.field, this.renderer, this.world.seaLevelM);
+      this.scene.add(this.water.mesh);
+    }
     this.events = new Landmarks(route, this.field, this.scene).events;
 
     this.rider = dressedRider(bike);
@@ -152,7 +167,26 @@ export class World {
     model.rotation.x = Math.atan(p.grade / 100);
   }
 
-  private updateBiome(ele: number): void {
+  /** Brume mélangée selon la position, et annonce du biome quand on passe la frontière. */
+  private updateWorldBiome(x: number): void {
+    const world = this.world!;
+    biomeWeights(x, world, this.worldWeights);
+    worldAmbience(this.worldWeights, world.zones.map((z) => z.biome), this.worldFog);
+    this.targetFog.copy(this.worldFog.color);
+    this.targetDensity = this.worldFog.density;
+    // Le biome, pas la zone : la plage de la fin du tour et celle du début ne sont qu'une.
+    const biome = world.zones[dominant(this.worldWeights)].biome;
+    if (biome === this.worldBiome) return;
+    const first = this.worldBiome === '';
+    this.worldBiome = biome;
+    if (!first) this.onBiomeChange(WORLD_STYLE[biome].label);
+  }
+
+  private updateBiome(ele: number, x: number): void {
+    if (this.world) {
+      this.updateWorldBiome(x);
+      return;
+    }
     const b = biomeAt(ele, this.route.data.biomes);
     if (b === this.biome) return;
     const first = this.biome === null;
@@ -214,7 +248,8 @@ export class World {
     let focus: { x: number; z: number; ele: number } = p;
     if (this.free) focus = this.updateFreeCamera(this.free, dt);
     else this.updateCamera(distM, dt);
-    this.updateBiome(focus.ele);
+    this.updateBiome(focus.ele, focus.x);
+    this.water?.update(dt);
     this.updateSun(focus.x, focus.ele, focus.z);
     this.fog.color.lerp(this.targetFog, Math.min(1, dt * 0.6));
     this.fog.density += (this.targetDensity - this.fog.density) * Math.min(1, dt * 0.6);
@@ -231,6 +266,7 @@ export class World {
   dispose(): void {
     window.removeEventListener('resize', this.resize);
     this.pipeline.dispose();
+    this.water?.dispose();
     this.renderer.dispose();
   }
 

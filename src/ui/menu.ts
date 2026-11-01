@@ -1,8 +1,10 @@
 // Écran d'accueil : profil en haut, trois onglets, et à droite le cycliste avec le récapitulatif
 // de la sortie. Tout ce que le joueur choisit reste dans son profil.
 
-import { CUSTOM_ROUTE_ID, type Profile } from '../app/profile';
+import { type AppOptions, CUSTOM_ROUTE_ID, type Profile, type WorkoutWhere } from '../app/profile';
 import { findBike, findJersey, wearing, type Bike } from '../sim/bikes';
+import { SALON_ROUTE_ID } from '../sim/salonRoute';
+import { WORLD_NAME, WORLD_ROUTE_ID } from '../sim/worldRoute';
 import { loadRouteIndex, type RouteSummary } from '../sim/route';
 import { loadWorkouts, saveWorkouts, WORKOUT_PRESETS, type Workout } from '../sim/workout';
 import { esc, fr, hex } from './format';
@@ -20,7 +22,7 @@ export interface MenuHost {
   /** Rend le message à afficher ; lève une erreur si la connexion échoue. */
   connect(kind: DeviceKind): Promise<string>;
   isConnected(kind: DeviceKind): boolean;
-  start(routeId: string, workout: Workout | null): Promise<void>;
+  start(routeId: string, workout: Workout | null, app: AppOptions | null): Promise<void>;
 }
 
 /** Ce que les onglets partagent avec l'écran. */
@@ -147,7 +149,7 @@ export class Menu {
       this.say(`Données introuvables : ${err instanceof Error ? err.message : err}. Lance « npm run routes ».`, true);
     }
     const known = this.context.routes.some((r) => r.id === this.profile.routeId);
-    if (!known && this.profile.routeId !== CUSTOM_ROUTE_ID) this.profile.routeId = this.context.routes[0]?.id ?? CUSTOM_ROUTE_ID;
+    if (!known && this.profile.routeId !== CUSTOM_ROUTE_ID && this.profile.routeId !== WORLD_ROUTE_ID) this.profile.routeId = this.context.routes[0]?.id ?? CUSTOM_ROUTE_ID;
     this.openTab(this.tab);
     this.changed();
   }
@@ -165,6 +167,8 @@ export class Menu {
     if (tab === 'parcours') renderRoutes(page, this.context);
     else if (tab === 'entrainement') renderWorkouts(page, this.context);
     else renderGarage(page, this.context);
+    // Le résumé dépend de l'onglet : le lieu choisi dans Entraînement ne vaut que là, ou avec une séance.
+    this.changed();
   }
 
   /** Séance retenue pour la prochaine sortie. */
@@ -173,8 +177,26 @@ export class Menu {
     return list.find((w) => w.id === this.profile.workoutId) ?? null;
   }
 
+  /**
+   * Ce que lancera « Rouler ». Dans l'onglet Entraînement, ou dès qu'une séance est choisie, le lieu
+   * choisi là s'applique, séance ou non ; sinon, c'est le parcours choisi dans l'onglet Parcours.
+   */
+  private get launch(): { where: WorkoutWhere; routeId: string; app: AppOptions | null } {
+    const p = this.profile;
+    const training = this.workout !== null || this.tab === 'entrainement';
+    const where: WorkoutWhere = training ? p.workoutWhere : 'parcours';
+    const routeId = where === 'monde' ? WORLD_ROUTE_ID : where === 'app' ? SALON_ROUTE_ID : p.routeId;
+    return { where, routeId, app: where === 'app' ? { mode: p.appMode, bars: p.appBars } : null };
+  }
+
   private routeLabel(): string {
     const p = this.profile;
+    const { where } = this.launch;
+    if (where === 'app') {
+      const how = p.appMode === 'flottante' ? 'barre flottante' : { haut: 'barre en haut', bas: 'barre en bas', 'les-deux': 'barres en haut et en bas' }[p.appBars];
+      return `Application en fond · ${how}`;
+    }
+    if (where === 'monde' || p.routeId === WORLD_ROUTE_ID) return `${WORLD_NAME} · boucle de 6 biomes`;
     if (p.routeId === CUSTOM_ROUTE_ID) return `Personnalisé · ${fr(p.customKm)} km à ${fr(p.customGrade)} %`;
     return this.context.routes.find((r) => r.id === p.routeId)?.name ?? '--';
   }
@@ -238,7 +260,8 @@ export class Menu {
     this.preview?.dispose();
     this.preview = null;
     try {
-      await this.host.start(this.profile.routeId, this.workout);
+      const { routeId, app } = this.launch;
+      await this.host.start(routeId, this.workout, app);
     } catch (err) {
       await this.show();
       this.say(err instanceof Error ? err.message : String(err), true);

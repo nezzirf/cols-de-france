@@ -1,11 +1,12 @@
 ﻿import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { findHairpinApexes, minRadius, roundTightBends } from '../scripts/roadGeometry.mjs';
-import { findBacktracks } from '../scripts/routeChecks.mjs';
+import { findBacktracks, findDetours } from '../scripts/routeChecks.mjs';
 import { gradeColor, gradeRgb, gradeTextColor } from '../src/sim/gradeColor';
 import { Route, type RouteData } from '../src/sim/route';
 import { CHECKPOINT_M, ghostOffset, type PersonalRecord, type PrStore, recordKey, SegmentTracker } from '../src/sim/segments';
 import { isForestPixel } from '../src/world/landCover';
+import { townName } from '../src/world/landmarks';
 
 class MemoryStore implements PrStore {
   data = new Map<string, PersonalRecord>();
@@ -141,6 +142,13 @@ describe('forêt sur la photo aérienne', () => {
   });
 });
 
+describe('panneaux de ville', () => {
+  it('écrit le nom en capitales, accents compris', () => {
+    expect(townName('Saint-Estève')).toBe('SAINT-ESTÈVE');
+    expect(townName('Bédoin')).toBe('BÉDOIN');
+  });
+});
+
 describe('données réelles des cols', () => {
   const ids = ['alpe-dhuez', 'ventoux', 'tourmalet', 'galibier', 'izoard'];
   const load = (id: string) =>
@@ -196,6 +204,9 @@ describe('données réelles des cols', () => {
   });
   it.each(ids)('%s : la route ne fait jamais d’aller-retour', (id) => {
     expect(findBacktracks(load(id).data)).toEqual([]);
+  });
+  it.each(ids)('%s : la route ne fait jamais de boucle sur elle-même', (id) => {
+    expect(findDetours(load(id).data)).toEqual([]);
   });
   it('détecte un demi-tour court dans une rue de village', () => {
     const n = 44;

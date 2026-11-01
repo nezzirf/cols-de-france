@@ -1,0 +1,200 @@
+/* HUD minimal : des barres pleines en haut et/ou en bas, la vidéo entière entre les deux. */
+.mini {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  color: #f4f6f8;
+  font-family: var(--font, Bahnschrift, 'Segoe UI', system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
+}
+
+.mini-floating {
+  position: static;
+  min-height: 100vh;
+  background: #0b0d10;
+}
+
+.mini-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 22px;
+  min-height: 52px;
+  padding: 4px 18px;
+  background: #0b0d10;
+}
+
+.mini-top {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mini-bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mini-floating .mini-bar {
+  min-height: 100vh;
+  border: 0;
+}
+
+.mini-metrics {
+  display: flex;
+  align-items: baseline;
+  gap: 22px;
+}
+
+.mini-metric {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.mini-label {
+  color: rgba(244, 246, 248, 0.55);
+  font-size: 12px;
+}
+
+.mini-metric b {
+  min-width: 2ch;
+  font-size: 22px;
+  font-style: italic;
+  text-align: right;
+}
+
+.mini-metric small {
+  color: rgba(244, 246, 248, 0.55);
+  font-size: 12px;
+}
+
+.mini-power b {
+  min-width: 3ch;
+  font-size: 34px;
+  transition: color 0.3s;
+}
+
+.mini-power b[data-state='ok'] {
+  color: #4ee08a;
+}
+
+.mini-power b[data-state='low'] {
+  color: #6fb2ff;
+}
+
+.mini-power b[data-state='high'] {
+  color: #ff9a4d;
+}
+
+.mini-target b {
+  color: #ff8a2b;
+  font-size: 26px;
+}
+
+.mini-line {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.mini-line canvas {
+  flex: 1;
+  min-width: 80px;
+  height: 36px;
+  border-radius: 6px;
+}
+
+.mini-fill {
+  flex: 1;
+}
+
+.mini-time {
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.mini-status {
+  position: relative;
+  padding-left: 14px;
+  color: rgba(244, 246, 248, 0.55);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.mini-status::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff6b5e;
+}
+
+.mini-status[data-state='connected']::before {
+  background: #4ee08a;
+}
+
+.mini-status[data-state='connecting']::before,
+.mini-status[data-state='reconnecting']::before {
+  background: #ff8a2b;
+}
+
+.mini-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+/* Posée dans la zone du milieu, jamais plus grande qu'elle : l'image ne passe pas sous les barres. */
+.mini-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.mini-say {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: min(520px, 80%);
+  margin: 0;
+  transform: translate(-50%, -50%);
+  color: rgba(244, 246, 248, 0.7);
+  font-size: 16px;
+  text-align: center;
+}
+
+.mini-toast {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  max-width: 70vw;
+  padding: 7px 18px;
+  border-radius: 18px;
+  background: rgba(16, 20, 26, 0.86);
+  font-size: 15px;
+  transform: translateX(-50%);
+}
+
+.mini-toast[hidden] {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .mini-bar {
+    flex-wrap: wrap;
+    gap: 4px 14px;
+  }
+
+  .mini-metrics {
+    gap: 12px;
+  }
+}

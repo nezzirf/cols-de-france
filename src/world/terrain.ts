@@ -21,6 +21,7 @@ const GROUND_FUNCTIONS = /* glsl */ `
   uniform vec3 uBands;
   uniform sampler2D uOrtho;
   uniform vec4 uOrthoRect;
+  uniform float uWorld;
   varying vec3 vWorld;
   varying vec3 vGroundNormal;
   varying float vDistance;
@@ -38,7 +39,30 @@ const GROUND_FUNCTIONS = /* glsl */ `
   }
   vec3 srgb(float r, float g, float b) { return pow(vec3(r, g, b), vec3(2.2)); }
 
+  /** Monde d'entraînement : la couleur vient de la vue aérienne peinte, le shader n'ajoute que le grain. */
+  vec3 worldGround() {
+    vec3 n = normalize(vGroundNormal);
+    float fine = fbm(vWorld.xz * 0.06);
+    float grain = fbm(vWorld.xz * 0.55);
+    float blades = noise(vWorld.xz * 3.1);
+    vec3 base = texture2D(uOrtho, (vWorld.xz - uOrthoRect.xy) / uOrthoRect.zw).rgb;
+    float luma = dot(base, vec3(0.2126, 0.7152, 0.0722));
+    float steep = 1.0 - n.y + (fine - 0.5) * 0.14;
+    float wall = smoothstep(0.24, 0.42, steep);
+    // Les parois montrent la roche du lieu : le même ton, plus sombre et moins saturé.
+    float strata = fract(vWorld.y / 2.6 + vWorld.x * 0.03 + fine * 1.6);
+    float layers = 0.72 + 0.34 * smoothstep(0.0, 0.16, strata) * smoothstep(1.0, 0.7, strata);
+    vec3 rockTone = mix(vec3(luma), base, 0.45) * (0.5 + 0.35 * fine) * layers;
+    vec3 c = base * (0.8 + 0.3 * grain + 0.14 * blades);
+    c = mix(c, rockTone, wall);
+    // Sous les touffes d'herbe le sol est plus sombre ; ni le sable, ni la neige n'en ont.
+    float grassy = smoothstep(0.008, 0.04, base.g - max(base.r, base.b * 0.6));
+    float underGrass = (1.0 - smoothstep(25.0, 120.0, vDistance)) * (1.0 - wall) * grassy;
+    return c * mix(1.0, 0.62, underGrass);
+  }
+
   vec3 groundColor() {
+    if (uWorld > 0.5) return worldGround();
     vec3 n = normalize(vGroundNormal);
     float wide = fbm(vWorld.xz * 0.0035);
     float fine = fbm(vWorld.xz * 0.06);
@@ -93,8 +117,9 @@ interface Chunk {
 }
 
 /** Matière du sol, partagée avec les talus de la route pour qu'ils s'y fondent. */
-export function groundMaterial(biomes: Biomes, photo: THREE.Texture, terrain: TerrainMeta): THREE.MeshStandardMaterial {
+export function groundMaterial(biomes: Biomes, photo: THREE.Texture, terrain: TerrainMeta, world = false): THREE.MeshStandardMaterial {
   const uniforms = {
+    uWorld: { value: world ? 1 : 0 },
     uRock: { value: new THREE.Color(ROCK_COLORS[biomes.rock]) },
     uBands: { value: new THREE.Vector3(biomes.valley, biomes.forest, biomes.alpage) },
     uOrtho: { value: photo },

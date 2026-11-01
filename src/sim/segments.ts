@@ -145,6 +145,14 @@ export class SegmentTracker {
     return finished;
   }
 
+  /** Nouveau tour : les segments peuvent être courus de nouveau, à partir de cette position. */
+  restartAt(distM: number, timeS: number): void {
+    this.active = [];
+    this.done.clear();
+    this.lastDist = distM;
+    this.lastTime = timeS;
+  }
+
   /** Segments en cours, du plus court (le plus précis) au plus long. */
   status(distM: number, timeS: number): SegmentStatus[] {
     return this.active

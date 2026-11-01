@@ -54,9 +54,52 @@ La position exacte (kilomètre, altitude, coordonnées GPS) s'affiche sous la ba
   récupération), en % de FTP, avec des modèles prêts à l'emploi. Les séances sont gardées dans le
   navigateur. Une séance se roule sur le parcours choisi : le home trainer passe en mode ERG et
   impose la puissance, et la sortie s'arrête à la fin de la séance ou au bout du parcours.
+- **Importer une séance** : le bouton « Importer un fichier… » de l'onglet Entraînement (ou un glisser-déposer)
+  lit les fichiers `.zwo` (le format de Zwift, que lisent aussi de nombreux sites d'entraînement), `.mrc`
+  et `.erg`. Les blocs sont convertis en % de FTP. Ce qui n'a pas d'équivalent est signalé : un bloc
+  « roulage libre » devient un palier à 55 %, et les watts d'un `.erg` sans FTP sont convertis avec la tienne.
 - **Garage** : le vélo et le maillot. Le maillot n'a aucun effet sur la vitesse.
 
 La FTP, le poids et le nom se règlent en haut de l'écran.
+
+## Le monde d'entraînement
+
+Une boucle imaginaire de 46 km, de la plage au désert, qui traverse six biomes : plage et mer,
+prairies fleuries, forêt, montagne enneigée, canyon rouge et désert de dunes. Elle sert aux séances
+(onglet Entraînement) et peut aussi se rouler librement depuis l'onglet Parcours.
+
+**Une boucle sans fin.** Le décor est périodique : la fin du tour et son début sont identiques (route,
+altitude, relief, biomes, végétation), si bien qu'on enchaîne les tours sans voir le raccord. Le
+départ est au milieu de la plage, là où le décor est le plus simple. L'écran compte tous les tours
+(« Parcourus ») et la distance avant le suivant ; chaque tour est chronométré comme un segment.
+
+Aucune frontière nette : chaque biome a un poids qui varie sans à-coup sur 1,4 km de part et
+d'autre de la limite (`src/sim/worldBiomes.ts`). Ce poids règle tout à la fois le relief
+(`src/sim/worldRoute.ts`), la couleur du sol (`src/world/worldGround.ts`), la brume, et le choix
+de ce qui pousse à chaque endroit (`src/world/vegetation.ts`), tiré au sort cellule par cellule,
+d'où des lisières mêlées plutôt qu'un fondu uniforme. La mer (`src/world/water.ts`) tire sa couleur
+de la profondeur, avec écume le long du rivage. Tout est généré : aucun lieu réel.
+
+## Rouler devant une série ou un film
+
+Dans l'onglet Entraînement, « Où rouler la séance ? » propose une troisième option, **Application en
+fond**. Le jeu n'affiche alors aucun décor : seulement des barres minimales avec la puissance (en
+vert quand tu tiens la cible), la cible, la cadence, le cardio, la vitesse, le temps du bloc et le
+déroulé de la séance. La route sous-jacente est une boucle plate de 12 km (`src/sim/salonRoute.ts`).
+Elle marche avec une séance (le home trainer tient la puissance, idéal pour un bloc stable) comme sans :
+en « Sortie libre », tu pédales comme tu veux. Le lieu choisi dans l'onglet Entraînement s'applique à
+toute sortie lancée depuis cet onglet.
+
+- **Capturer l'application dans la page** : le navigateur te demande quelle fenêtre ou quel onglet
+  afficher. L'image prend l'espace entre les barres, qui peuvent être en haut, en bas, ou les deux :
+  rien n'est posé sur le film. Seule l'image est capturée, le son reste celui de l'application.
+- **Barre flottante** (Chrome ou Edge sur ordinateur) : une petite fenêtre qui reste au-dessus de
+  toutes les autres, même d'une vidéo en plein écran. Tu ouvres ton application à côté et tu glisses
+  la barre en haut ou en bas.
+
+Limites : Netflix, Disney+ et d'autres services protégés par DRM s'affichent souvent en noir dans une
+capture, ce que le jeu ne peut pas contourner ; la barre flottante est faite pour ce cas. Rien de
+cela n'a été essayé avec Netflix, et la barre flottante n'a pas pu être testée de bout en bout.
 
 ## Choisir son vélo
 

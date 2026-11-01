@@ -51,6 +51,8 @@ export class Hud {
   private doneKm: HTMLElement;
   private leftKm: HTMLElement;
   private progress: HTMLElement;
+  private timeLabel: HTMLElement;
+  private lap = 0;
   private toastEl: HTMLElement;
   private status: HTMLElement;
   private pause: HTMLElement;
@@ -69,11 +71,11 @@ export class Hud {
     this.el.innerHTML = `
       <section class="hud-left panel">
         <div class="hud-time" data-r="time">00:00</div>
-        <div class="hud-time-label">Temps écoulé</div>
+        <div class="hud-time-label" data-r="timeLabel">Temps écoulé</div>
         <div class="hud-route">
           <div class="hud-route-values">
-            <div><b data-r="doneKm">0,0</b> km<span>Réalisés</span></div>
-            <div><b data-r="leftKm">--</b> km<span>Restants</span></div>
+            <div><b data-r="doneKm">0,0</b> km<span data-r="doneLabel">Réalisés</span></div>
+            <div><b data-r="leftKm">--</b> km<span data-r="leftLabel">Restants</span></div>
           </div>
           <div class="hud-track"><i data-r="progress"></i><u data-r="foot" title="Pied du col"></u></div>
         </div>
@@ -114,7 +116,14 @@ export class Hud {
     this.doneKm = q('doneKm');
     this.leftKm = q('leftKm');
     this.progress = q('progress');
+    this.timeLabel = q('timeLabel');
+    // Sur une boucle, on compte tous les tours et on annonce ce qui reste avant le suivant.
+    q('foot').hidden = route.data.loop !== undefined;
     q('foot').style.left = `${(route.data.footM / route.lengthM) * 100}%`;
+    if (route.data.loop) {
+      q('doneLabel').textContent = 'Parcourus';
+      q('leftLabel').textContent = 'Avant le tour suivant';
+    }
     this.profile = q('profile');
     this.strip = q('strip');
     this.toastEl = q('toast');
@@ -141,10 +150,23 @@ export class Hud {
     this.slope.style.background = gradeColor(s.gradePct);
     this.slope.style.color = gradeTextColor(s.gradePct);
     this.altitude.textContent = String(Math.round(s.altitudeM));
-    const done = Math.min(s.distanceM, this.route.lengthM);
-    this.doneKm.textContent = fr1(done / 1000);
-    this.leftKm.textContent = fr1((this.route.lengthM - done) / 1000);
-    this.progress.style.transform = `scaleX(${done / this.route.lengthM})`;
+    const loop = this.route.data.loop;
+    if (loop) {
+      const span = loop.toM - loop.fromM;
+      const inLap = Math.max(0, Math.min(span, s.distanceM - loop.fromM));
+      this.doneKm.textContent = fr1(s.totalM / 1000);
+      this.leftKm.textContent = fr1((span - inLap) / 1000);
+      this.progress.style.transform = `scaleX(${inLap / span})`;
+      if (s.lap !== this.lap) {
+        this.lap = s.lap;
+        this.timeLabel.textContent = `Temps écoulé · Tour ${s.lap}`;
+      }
+    } else {
+      const done = Math.min(s.distanceM, this.route.lengthM);
+      this.doneKm.textContent = fr1(done / 1000);
+      this.leftKm.textContent = fr1((this.route.lengthM - done) / 1000);
+      this.progress.style.transform = `scaleX(${done / this.route.lengthM})`;
+    }
     drawNextKilometer(this.profile, this.route, s.distanceM);
     drawRouteStrip(this.strip, this.route, s.distanceM);
     this.renderSegments(s.segments);

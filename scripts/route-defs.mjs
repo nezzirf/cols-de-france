@@ -66,7 +66,7 @@ export const ROUTES = [
     massif: 'Vaucluse',
     via: [
       [44.1136, 5.1063], // Caromb
-      [44.1240, 5.1800], // Bédoin
+      [44.1238, 5.1825], // Bédoin, sur la route qui traverse le village
       [44.1140, 5.2399], // Saint-Estève
       [44.1697, 5.2860], // Stèle Tom Simpson
       [44.1740, 5.2788], // Sommet
@@ -135,7 +135,6 @@ export const ROUTES = [
     via: [
       [45.2399, 6.4455], // Saint-Martin-de-la-Porte
       [45.2027, 6.4446], // Col du Télégraphe
-      [45.1650, 6.4296], // Valloire
       [45.0641, 6.4077], // Col du Galibier
     ],
     after: [[45.0617, 6.4057]], // versant sud, vers le monument Desgrange

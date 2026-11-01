@@ -1,5 +1,7 @@
 // Accès aux données d'un parcours, indexées par la distance parcourue.
 
+import type { WorldMeta } from './worldBiomes';
+
 export interface Poi {
   name: string;
   type: 'village' | 'eglise' | 'stele' | 'statue' | 'chalet' | 'tour' | 'col';
@@ -88,6 +90,10 @@ export interface RouteData {
   segments: SegmentDef[];
   terrain: TerrainMeta;
   sources: string[];
+  /** Présent seulement pour le monde d'entraînement : ses biomes se suivent le long de la route. */
+  world?: WorldMeta;
+  /** Parcours en boucle : en arrivant à `toM`, le cycliste repart de `fromM`, indéfiniment. */
+  loop?: { fromM: number; toM: number };
 }
 
 export interface RouteSummary {

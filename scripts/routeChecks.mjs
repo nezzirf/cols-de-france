@@ -57,3 +57,29 @@ function scan({ x, z, ele, stepM }, { minLengthM, nearM, spanM }) {
   close(x.length - 1);
   return out;
 }
+
+const DETOUR_NEAR_M = 25;
+const DETOUR_LEVEL_M = 5;
+const DETOUR_MIN_M = 120;
+const DETOUR_MAX_M = 1500;
+
+/**
+ * Cherche les boucles : la route revient à côté d'elle-même, presque à la même altitude, après un
+ * court détour. Un vrai lacet y échappe, car il a pris de la hauteur entre ses deux jambes.
+ * Renvoie les tronçons trouvés sous la forme { fromM, toM }.
+ */
+export function findDetours({ x, z, ele, stepM }) {
+  const out = [];
+  const first = Math.round(DETOUR_MIN_M / stepM);
+  const last = Math.round(DETOUR_MAX_M / stepM);
+  for (let i = 0; i < x.length; i++) {
+    if (out.length && i * stepM <= out[out.length - 1].toM) continue;
+    for (let j = i + first; j <= Math.min(x.length - 1, i + last); j++) {
+      if (Math.hypot(x[i] - x[j], z[i] - z[j]) > DETOUR_NEAR_M) continue;
+      if (Math.abs(ele[i] - ele[j]) > DETOUR_LEVEL_M) continue;
+      out.push({ fromM: i * stepM, toM: j * stepM });
+      break;
+    }
+  }
+  return out;
+}

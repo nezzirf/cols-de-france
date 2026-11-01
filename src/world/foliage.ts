@@ -101,6 +101,58 @@ export function grassTexture(): THREE.CanvasTexture {
   return texture(c);
 }
 
+/** Palmier : un stipe qui se courbe, couronné de palmes arquées dont les folioles pendent. */
+export function palmTexture(): THREE.CanvasTexture {
+  const [c, g] = canvasOf(512, 512);
+  g.lineCap = 'round';
+  const topX = 292;
+  const topY = 196;
+  g.strokeStyle = '#7d6a52';
+  for (let i = 0; i < 44; i++) {
+    const t = i / 44;
+    const x = 252 + (topX - 252) * t * t + Math.sin(t * 3) * 6;
+    g.lineWidth = 17 - 8 * t;
+    g.beginPath();
+    g.moveTo(x, 512 - t * 316);
+    g.lineTo(252 + (topX - 252) * ((i + 1) / 44) ** 2 + Math.sin(((i + 1) / 44) * 3) * 6, 512 - ((i + 1) / 44) * 316);
+    g.stroke();
+    // Anneaux des anciennes palmes : ils marquent l'écorce.
+    g.strokeStyle = i % 2 ? '#6c5a44' : '#8d7a60';
+  }
+  const frond = (angle: number, length: number, droop: number) => {
+    const points: [number, number][] = [];
+    for (let s = 0; s <= 24; s++) {
+      const t = s / 24;
+      points.push([topX + Math.cos(angle) * length * t, topY + Math.sin(angle) * length * t + droop * length * t * t]);
+    }
+    g.strokeStyle = '#4f6b2f';
+    g.lineWidth = 3.2;
+    g.beginPath();
+    points.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+    g.stroke();
+    for (let s = 3; s <= 24; s++) {
+      const [x, y] = points[s];
+      const [px, py] = points[s - 1];
+      const dir = Math.atan2(y - py, x - px);
+      const leaflet = (1 - s / 26) * 52 + 12;
+      for (const side of [-1, 1]) {
+        const tone = random(0.75, 1.15);
+        g.strokeStyle = `rgb(${Math.round(60 * tone)},${Math.round(116 * tone)},${Math.round(52 * tone)})`;
+        g.lineWidth = random(2.2, 3.4);
+        g.beginPath();
+        g.moveTo(x, y);
+        g.lineTo(x + Math.cos(dir + side * 1.05) * leaflet, y + Math.sin(dir + side * 1.05) * leaflet + leaflet * 0.5);
+        g.stroke();
+      }
+    }
+  };
+  for (let i = 0; i < 11; i++) {
+    const angle = -Math.PI + 0.18 + (i / 10) * (Math.PI - 0.36) + random(-0.1, 0.1);
+    frond(angle, random(150, 215), random(0.35, 0.8) * (Math.abs(Math.cos(angle)) + 0.2));
+  }
+  return texture(c);
+}
+
 /** Rameau de sapin : tige, ramilles et aiguilles, tourné de la base (gauche) vers la pointe. */
 export function frondTexture(): THREE.CanvasTexture {
   const [c, g] = canvasOf(512, 256);

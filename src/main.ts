@@ -1,7 +1,8 @@
 // Point d'entrée : menu, appairage du matériel, lancement et fin de sortie.
 
 import { Game, type RideSummary } from './app/game';
-import { CUSTOM_ROUTE_ID, loadProfile, saveProfile } from './app/profile';
+import { type AppOptions, CUSTOM_ROUTE_ID, loadProfile, saveProfile } from './app/profile';
+import { keepAwake, openFloatingBar, startCapture } from './app/castSource';
 import { DemoTrainer } from './hardware/demoTrainer';
 import { BluetoothHeartRate } from './hardware/heartRate';
 import { KickrAnt } from './hardware/antUsb';
@@ -10,20 +11,27 @@ import { type ShiftDirection, ShiftGate, ZwiftPlay } from './hardware/zwiftPlay'
 import type { HeartRateSensor, Trainer } from './hardware/types';
 import { formatTime, Hud } from './hud/hud';
 import './hud/hud.css';
+import { MiniHud } from './hud/miniHud';
 import { findBike, setupFor, wearing, type Bike } from './sim/bikes';
 import { buildCustomRoute } from './sim/customRoute';
 import { loadRoute, Route } from './sim/route';
+import { buildSalonRoute } from './sim/salonRoute';
+import { buildWorldRoute, WORLD_ROUTE_ID } from './sim/worldRoute';
 import { expandBlocks, type Workout } from './sim/workout';
 import { fr } from './ui/format';
 import { type DeviceKind, Menu } from './ui/menu';
 import { paintCustomGround } from './world/customGround';
+import { paintWorldGround } from './world/worldGround';
 import { type FreeCamera, MOVE_KEYS } from './world/freeCamera';
+import { NoWorld } from './world/noWorld';
 import { World } from './world/scene';
 
 const DEMO_HINT = '↑ ↓ puissance · Maj : ±50 W · + − vitesses · F caméra libre · Pg↑ Pg↓ ±1 km · P pause · V caméra · Échap quitter';
 const FREE_HINT = 'ZQSD déplacer · clic + souris regarder · A E descendre, monter · Maj vite · molette vitesse · T poser le cycliste ici · F sortir';
 const JUMP_M = 1000;
 const EXPLORE_REFRESH_MS = 150;
+const MINI_REFRESH_MS = 250;
+const FLOATING_BAR = { width: 980, height: 96 };
 
 class App {
   private root = document.getElementById('app')!;
@@ -40,6 +48,11 @@ class App {
   private bpmBeforeStart: number | null = null;
   private route: Route | null = null;
   private hud: Hud | null = null;
+  private mini: MiniHud | null = null;
+  private miniTimer = 0;
+  private cast: MediaStream | null = null;
+  private pip: Window | null = null;
+  private releaseLock: (() => void) | null = null;
   private lastExplore = 0;
   private looking = false;
 
@@ -52,7 +65,7 @@ class App {
         if (kind === 'play') return this.play.length > 0;
         return kind === 'hr' ? this.hr !== null : this.trainerKind === kind;
       },
-      start: (routeId, workout) => this.startRide(routeId, workout),
+      start: (routeId, workout, app) => (app ? this.startAppRide(workout, app) : this.startRide(routeId, workout)),
     });
     await this.menu.show();
   }
@@ -115,6 +128,10 @@ class App {
   }
 
   private async loadTrack(routeId: string) {
+    if (routeId === WORLD_ROUTE_ID) {
+      const { route, heights } = buildWorldRoute();
+      return { route, heights, buildings: [], ortho: paintWorldGround(route.data.terrain, heights, route.data.world!) };
+    }
     if (routeId !== CUSTOM_ROUTE_ID) return loadRoute(routeId);
     const { customKm: climbKm, customGrade: gradePct } = this.profile;
     const { route, heights } = buildCustomRoute({ climbKm, gradePct });
@@ -154,7 +171,10 @@ class App {
       this.canvas.addEventListener('pointerup', this.onPointerUp);
       this.canvas.addEventListener('wheel', this.onWheel, { passive: true });
     }
-    hud.toast(workout ? `${workout.name} · ${route.data.name}` : `${route.data.name} · ${fr(route.data.footM / 1000)} km d'approche avant le pied du col`);
+    const intro = route.data.world
+      ? `${route.data.name} · boucle de ${fr(route.data.climb.lengthKm, 0)} km, de la plage au désert, à répéter sans fin`
+      : `${route.data.name} · ${fr(route.data.footM / 1000)} km d'approche avant le pied du col`;
+    hud.toast(workout ? `${workout.name} · ${route.data.name}` : intro);
 
     game.onFrame = (s) => {
       hud.update(s, performance.now());
@@ -169,6 +189,90 @@ class App {
     window.addEventListener('keydown', this.onKey);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
+    this.releaseLock = keepAwake();
+    game.start();
+    if (import.meta.env.DEV) (window as unknown as { __game: Game }).__game = game;
+  }
+
+  /**
+   * Sortie devant un écran : pas de décor, seulement des barres. L'image vient d'une application
+   * capturée dans la page, ou bien la barre flotte seule par-dessus l'application.
+   */
+  private async startAppRide(workout: Workout | null, app: AppOptions): Promise<void> {
+    // Capture et fenêtre flottante exigent un geste récent du joueur : on les demande avant tout le reste.
+    let stream: MediaStream | null = null;
+    let pip: Window | null = null;
+    if (app.mode === 'capture') {
+      const fake = import.meta.env.DEV ? (window as unknown as { __fakeCast?: () => MediaStream }).__fakeCast : undefined;
+      stream = fake ? fake() : await startCapture();
+    } else {
+      pip = await openFloatingBar(FLOATING_BAR.width, FLOATING_BAR.height);
+    }
+
+    const demo = this.trainer === null;
+    if (demo) {
+      this.trainer = new DemoTrainer();
+      await this.trainer.connect();
+    }
+    const trainer = this.trainer!;
+    const route = buildSalonRoute();
+    const steps = workout ? expandBlocks(workout.blocks) : null;
+    const game = new Game(route, new NoWorld(), trainer, setupFor(this.bike, this.profile.riderKg), this.bike.shape, steps, this.profile.ftp);
+    game.difficulty = this.profile.difficulty / 100;
+    this.game = game;
+    this.route = route;
+    if (this.bpmBeforeStart !== null) game.receiveHeartRate(this.bpmBeforeStart);
+    if (this.play.length > 0) game.enableGears();
+
+    this.canvas.style.display = 'none';
+    this.root.innerHTML = '';
+    let mini: MiniHud;
+    if (pip) {
+      mini = new MiniHud(pip.document.body, { placement: 'haut', steps, floating: true });
+      this.pip = pip;
+      this.root.innerHTML = `<div class="screen"><div class="result">
+        <h2>Barre flottante active</h2>
+        <p>${workout ? `Ta séance « ${workout.name} » suit son cours` : 'Ta sortie suit son cours'} dans la petite fenêtre. Ouvre ton application en plein écran et glisse la barre en haut ou en bas de l'écran.</p>
+        <button class="btn primary" data-a="stop">Terminer la sortie</button>
+      </div></div>`;
+      this.root.querySelector('[data-a="stop"]')!.addEventListener('click', () => void this.quit());
+      pip.addEventListener('keydown', this.onKey);
+      // Fermer la barre met fin à la sortie, comme Échap.
+      pip.addEventListener('pagehide', () => {
+        if (this.pip) void this.quit();
+      });
+    } else {
+      mini = new MiniHud(this.root, { placement: app.bars, steps });
+      const video = document.createElement('video');
+      video.className = 'mini-video';
+      video.muted = true;
+      video.autoplay = true;
+      video.playsInline = true;
+      video.srcObject = stream;
+      mini.stage!.appendChild(video);
+      this.cast = stream;
+      stream!.getVideoTracks()[0]?.addEventListener('ended', () => {
+        video.remove();
+        mini.say("Le partage est arrêté. Termine la sortie avec Échap, ou relance-la pour choisir une autre application.");
+      });
+      void video.play().catch(() => {});
+    }
+    this.mini = mini;
+    mini.setConnection(trainer.label, trainer.state);
+    trainer.onState = (state) => mini.setConnection(trainer.label, state);
+
+    game.onToast = (t) => mini.toast(t);
+    game.onSegmentDone = (r) => mini.toast(`${r.def.name} : ${formatTime(r.timeS)}`);
+    game.onTrainerError = (m) => mini.toast(`Home trainer : ${m}`);
+    game.onFinish = (s) => {
+      mini.toast('Séance terminée');
+      this.showResult(workout?.name ?? 'Sortie libre', s);
+    };
+    // Le rafraîchissement ne suit pas l'écran : si le jeu passe au second plan, la barre doit continuer.
+    this.miniTimer = window.setInterval(() => mini.update(game.currentSnapshot(), performance.now()), MINI_REFRESH_MS);
+
+    window.addEventListener('keydown', this.onKey);
+    this.releaseLock = keepAwake();
     game.start();
     if (import.meta.env.DEV) (window as unknown as { __game: Game }).__game = game;
   }
@@ -333,6 +437,17 @@ class App {
     window.removeEventListener('blur', this.onBlur);
     this.route = null;
     this.hud = null;
+    clearInterval(this.miniTimer);
+    this.mini?.dispose();
+    this.mini = null;
+    this.cast?.getTracks().forEach((t) => t.stop());
+    this.cast = null;
+    const pip = this.pip;
+    this.pip = null;
+    pip?.close();
+    this.releaseLock?.();
+    this.releaseLock = null;
+    this.canvas.style.display = '';
     this.game?.stop();
     this.world?.dispose();
     this.game = null;

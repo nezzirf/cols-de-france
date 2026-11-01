@@ -14,9 +14,24 @@ export interface Profile {
   customKm: number;
   customGrade: number;
   workoutId: string | null;
+  /** Où rouler une séance. */
+  workoutWhere: WorkoutWhere;
+  appMode: AppMode;
+  appBars: AppBars;
 }
 
 export const CUSTOM_ROUTE_ID = 'perso';
+
+/** Le monde d'entraînement, le parcours choisi dans l'onglet Parcours, ou une application en fond. */
+export type WorkoutWhere = 'monde' | 'parcours' | 'app';
+/** Capturer l'application dans la page, ou la laisser à part sous une barre flottante. */
+export type AppMode = 'capture' | 'flottante';
+export type AppBars = 'haut' | 'bas' | 'les-deux';
+
+export interface AppOptions {
+  mode: AppMode;
+  bars: AppBars;
+}
 
 const PROFILE_KEY = 'cols.profile';
 const DEFAULT_PROFILE: Profile = {
@@ -30,6 +45,9 @@ const DEFAULT_PROFILE: Profile = {
   customKm: 10,
   customGrade: 7,
   workoutId: null,
+  workoutWhere: 'monde',
+  appMode: 'capture',
+  appBars: 'les-deux',
 };
 
 export function loadProfile(): Profile {

@@ -12,12 +12,39 @@ import {
   type WorkoutBlock,
   zoneColor,
 } from '../sim/workout';
+import type { AppBars, AppMode, WorkoutWhere } from '../app/profile';
+import { importWorkout } from '../sim/workoutImport';
+import { WORLD_NAME } from '../sim/worldRoute';
 import { drawWorkout } from './charts';
 import { duration, esc } from './format';
 import type { MenuContext } from './menu';
 
 const PRESET_PREFIX = 'preset-';
 const KINDS = Object.keys(BLOCK_LABELS) as BlockKind[];
+
+const WHERE: { id: WorkoutWhere; title: string; hint: string }[] = [
+  { id: 'monde', title: WORLD_NAME, hint: 'Boucle de 46 km, six paysages' },
+  { id: 'parcours', title: 'Parcours choisi', hint: "Celui de l'onglet Parcours" },
+  { id: 'app', title: 'Application en fond', hint: 'Netflix, YouTube… avec des barres minimales' },
+];
+
+const APP_MODES: { id: AppMode; title: string; hint: string }[] = [
+  { id: 'capture', title: 'Capturer dans la page', hint: "L'application s'affiche entre les barres" },
+  { id: 'flottante', title: 'Barre flottante', hint: 'Une petite fenêtre au-dessus de tout (Chrome, Edge)' },
+];
+
+const APP_BARS: { id: AppBars; label: string }[] = [
+  { id: 'haut', label: 'En haut' },
+  { id: 'bas', label: 'En bas' },
+  { id: 'les-deux', label: 'En haut et en bas' },
+];
+
+const APP_NOTES: Record<AppMode, string> = {
+  capture:
+    "Au lancement, ton navigateur te demande quelle fenêtre ou quel onglet afficher en fond. Le film reste entier, entre les barres. Netflix et d'autres services protégés peuvent apparaître en noir : dans ce cas, choisis la barre flottante.",
+  flottante:
+    "Le jeu ouvre une barre qui reste au-dessus de toutes tes fenêtres, même d'une vidéo en plein écran (Chrome ou Edge sur ordinateur). Ouvre ton application en plein écran, puis glisse la barre en haut ou en bas.",
+};
 
 type NumberField = 'durationS' | 'fromPct' | 'toPct' | 'repeat' | 'restS';
 
@@ -30,8 +57,8 @@ interface Field {
   unit: 'time' | 'pct' | 'count';
 }
 
-const TIME = { min: 15, max: 3600, step: 15, unit: 'time' } as const;
-const POWER = { min: 30, max: 200, step: 1, unit: 'pct' } as const;
+const TIME = { min: 15, max: 10800, step: 15, unit: 'time' } as const;
+const POWER = { min: 20, max: 200, step: 1, unit: 'pct' } as const;
 
 function fieldsOf(kind: BlockKind): Field[] {
   switch (kind) {
@@ -77,27 +104,86 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
   let selected = 0;
 
   page.innerHTML = `
+    <section class="m-panel" aria-label="Lieu de la sortie">
+      <h3 class="m-caption">Où rouler la séance ?</h3>
+      <div class="m-options">
+        ${WHERE.map((w) => `<button class="m-option" data-where="${w.id}"><b>${w.title}</b><span>${w.hint}</span></button>`).join('')}
+      </div>
+      <div class="m-panel-sub" data-r="app" hidden>
+        <div class="m-group">
+          <h4 class="m-caption">Affichage de l'application</h4>
+          <div class="m-options">
+            ${APP_MODES.map((m) => `<button class="m-option" data-app-mode="${m.id}"><b>${m.title}</b><span>${m.hint}</span></button>`).join('')}
+          </div>
+        </div>
+        <div class="m-group" data-r="barsRow">
+          <h4 class="m-caption">Position des barres</h4>
+          <div class="m-segment">${APP_BARS.map((b) => `<button class="m-seg" data-app-bars="${b.id}">${b.label}</button>`).join('')}</div>
+        </div>
+        <p class="m-note" data-r="appNote"></p>
+      </div>
+    </section>
+    <input type="file" data-r="file" accept=".zwo,.mrc,.erg,.xml,.txt" multiple hidden>
     <div class="m-wk">
-      <aside class="m-wk-list" data-r="list"></aside>
+      <div class="m-wk-side">
+        <div class="m-wk-list" data-r="list"></div>
+        <p class="m-note" data-r="importNote" role="status"></p>
+      </div>
       <section class="m-card m-wk-editor">
         <div class="m-wk-head">
-          <input class="m-wk-name" data-r="wkName" maxlength="40" aria-label="Nom de la séance">
+          <label class="m-field">
+            <span class="m-caption">Nom de la séance</span>
+            <input class="m-wk-name" data-r="wkName" maxlength="40" aria-label="Nom de la séance">
+          </label>
           <div class="m-wk-stats" data-r="wkStats"></div>
         </div>
-        <canvas class="m-wk-chart" data-r="chart" aria-label="Déroulé de la séance : clique sur un bloc pour le modifier"></canvas>
-        <div class="m-wk-palette">
-          ${KINDS.map((k) => `<button class="m-add" data-k="${k}">+ ${BLOCK_LABELS[k]}</button>`).join('')}
+        <div class="m-wk-section">
+          <canvas class="m-wk-chart" data-r="chart" aria-label="Déroulé de la séance : clique sur un bloc pour le modifier"></canvas>
+          <p class="m-note">Clique sur le graphique pour choisir un bloc.</p>
         </div>
-        <div class="m-wk-blocks" data-r="blocks"></div>
-        <div class="m-wk-form" data-r="form"></div>
+        <div class="m-wk-section">
+          <h4 class="m-caption">Ajouter un bloc</h4>
+          <div class="m-wk-palette">
+            ${KINDS.map((k) => `<button class="m-add" data-k="${k}">+ ${BLOCK_LABELS[k]}</button>`).join('')}
+          </div>
+        </div>
+        <div class="m-wk-section">
+          <h4 class="m-caption">Blocs de la séance</h4>
+          <div class="m-wk-blocks" data-r="blocks"></div>
+        </div>
+        <div class="m-wk-section m-wk-form" data-r="form"></div>
         <div class="m-wk-actions">
           <button class="m-ghost" data-a="delete">Supprimer</button>
           <button class="m-ghost" data-a="save">Enregistrer</button>
-          <button class="m-select" data-a="use"></button>
+          <button class="m-primary" data-a="use"></button>
         </div>
-        <p class="m-note">Pendant la séance, le home trainer impose la puissance (mode ERG) sur le parcours choisi. La sortie s'arrête à la fin de la séance, ou au bout du parcours s'il est plus court.</p>
+        <p class="m-note">Pendant la séance, le home trainer impose la puissance (mode ERG). La sortie s'arrête à la fin de la séance.</p>
       </section>
     </div>`;
+
+  const showWhere = () => {
+    const mark = (selector: string, key: string, value: string) =>
+      page.querySelectorAll<HTMLElement>(selector).forEach((x) => x.setAttribute('aria-pressed', String(x.dataset[key] === value)));
+    mark('[data-where]', 'where', p.workoutWhere);
+    mark('[data-app-mode]', 'appMode', p.appMode);
+    mark('[data-app-bars]', 'appBars', p.appBars);
+    (page.querySelector('[data-r="app"]') as HTMLElement).hidden = p.workoutWhere !== 'app';
+    // La barre flottante est une seule fenêtre : choisir sa place est l'affaire du joueur.
+    (page.querySelector('[data-r="barsRow"]') as HTMLElement).hidden = p.appMode === 'flottante';
+    (page.querySelector('[data-r="appNote"]') as HTMLElement).textContent = APP_NOTES[p.appMode];
+  };
+  const onChoice = (selector: string, apply: (value: string) => void, key: string) =>
+    page.querySelectorAll<HTMLElement>(selector).forEach((b) =>
+      b.addEventListener('click', () => {
+        apply(b.dataset[key]!);
+        showWhere();
+        ctx.changed();
+      }),
+    );
+  onChoice('[data-where]', (v) => (p.workoutWhere = v as WorkoutWhere), 'where');
+  onChoice('[data-app-mode]', (v) => (p.appMode = v as AppMode), 'appMode');
+  onChoice('[data-app-bars]', (v) => (p.appBars = v as AppBars), 'appBars');
+  showWhere();
 
   const q = <T extends HTMLElement>(name: string) => page.querySelector(`[data-r="${name}"]`) as T;
   const chart = q<HTMLCanvasElement>('chart');
@@ -134,7 +220,7 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
   const showActions = () => {
     const used = p.workoutId === draft.id;
     const use = page.querySelector('[data-a="use"]') as HTMLElement;
-    use.textContent = used ? 'Séance choisie' : 'Choisir pour la sortie';
+    use.textContent = used ? '✓ Séance choisie' : 'Choisir pour la sortie';
     use.dataset.on = String(used);
     const preset = draft.id.startsWith(PRESET_PREFIX);
     (page.querySelector('[data-a="save"]') as HTMLButtonElement).disabled = preset;
@@ -169,11 +255,11 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
     }
     form.innerHTML = `
       <div class="m-form-head">
-        <b>${BLOCK_LABELS[block.kind]}</b>
-        <span>
-          <button class="m-icon" data-m="-1" aria-label="Avancer le bloc" title="Avancer le bloc">←</button>
-          <button class="m-icon" data-m="1" aria-label="Reculer le bloc" title="Reculer le bloc">→</button>
-          <button class="m-icon" data-m="0" aria-label="Retirer le bloc" title="Retirer le bloc">✕</button>
+        <h4 class="m-caption">Réglages · ${BLOCK_LABELS[block.kind]}</h4>
+        <span class="m-form-tools">
+          <button class="m-ghost m-small" data-m="-1">← Avancer</button>
+          <button class="m-ghost m-small" data-m="1">Reculer →</button>
+          <button class="m-ghost m-small" data-m="0">Retirer</button>
         </span>
       </div>
       <div class="m-form-fields">
@@ -225,14 +311,19 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
       const steps = expandBlocks(w.blocks);
       return `<button class="m-wk-item" data-w="${w.id}" aria-pressed="${w.id === draft.id}">
         <b>${esc(w.name)}</b><span>${duration(totalDuration(steps))} · ${Math.round(trainingLoad(steps))} TSS</span>
+        ${w.id === p.workoutId ? '<em class="m-wk-chosen">✓ Pour la sortie</em>' : ''}
       </button>`;
     };
     q('list').innerHTML = `
-      <button class="m-new" data-a="new">+ Nouvelle séance</button>
-      <button class="m-wk-item" data-w="" aria-pressed="false" data-free="${p.workoutId === null}"><b>Sortie libre</b><span>Sans séance imposée</span></button>
-      ${ctx.workouts.length ? `<h4>Mes séances</h4>${ctx.workouts.map(item).join('')}` : ''}
-      <h4>Modèles</h4>
+      <button class="m-add m-wide" data-a="new">+ Nouvelle séance</button>
+      <button class="m-add m-wide" data-a="import">Importer un fichier…</button>
+      <button class="m-wk-item" data-w="" aria-pressed="false"><b>Sortie libre</b><span>Sans séance imposée</span>${p.workoutId === null ? '<em class="m-wk-chosen">✓ Pour la sortie</em>' : ''}</button>
+      ${ctx.workouts.length ? `<h4 class="m-caption">Mes séances</h4>${ctx.workouts.map(item).join('')}` : ''}
+      <h4 class="m-caption">Modèles</h4>
       ${WORKOUT_PRESETS.map(item).join('')}`;
+    q('list')
+      .querySelector('[data-a="import"]')!
+      .addEventListener('click', () => q<HTMLInputElement>('file').click());
     q('list')
       .querySelector('[data-a="new"]')!
       .addEventListener('click', () => {
@@ -313,6 +404,62 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
     showAll();
     ctx.changed();
   });
+
+  const say = (text: string, error = false) => {
+    const note = q('importNote');
+    note.textContent = text;
+    note.classList.toggle('is-error', error);
+  };
+
+  /** Lit chaque fichier déposé ou choisi ; une séance qui échoue n'empêche pas les autres. */
+  const importFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    const done: string[] = [];
+    const problems: string[] = [];
+    for (const file of files) {
+      try {
+        const { workout, notes } = importWorkout(file.name, await file.text(), p.ftp);
+        ctx.workouts.unshift(workout);
+        draft = clone(workout);
+        const blocks = `${workout.blocks.length} bloc${workout.blocks.length > 1 ? 's' : ''}`;
+        const time = duration(totalDuration(expandBlocks(workout.blocks)));
+        done.push(`« ${workout.name} » · ${time} · ${blocks}${notes.length ? ` (${notes.join(' ; ')})` : ''}`);
+      } catch (err) {
+        problems.push(`${file.name} : ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    if (done.length > 0) {
+      ctx.saveWorkouts();
+      selected = 0;
+      showAll();
+      ctx.changed();
+    }
+    const imported = done.length > 0 ? `Importée${done.length > 1 ? 's' : ''} : ${done.join(' — ')}. Clique sur « Choisir pour la sortie » pour la rouler.` : '';
+    say([imported, ...problems].filter(Boolean).join(' '), done.length === 0);
+  };
+
+  const fileInput = q<HTMLInputElement>('file');
+  fileInput.addEventListener('change', () => {
+    void importFiles([...(fileInput.files ?? [])]);
+    fileInput.value = '';
+  });
+  // Sans ce garde-fou, un fichier lâché à côté de la zone serait ouvert à la place du jeu.
+  const carriesFiles = (e: DragEvent) => [...(e.dataTransfer?.types ?? [])].includes('Files');
+  page.addEventListener('dragover', (e) => {
+    if (!carriesFiles(e)) return;
+    e.preventDefault();
+    page.classList.add('m-dropping');
+  });
+  page.addEventListener('dragleave', (e) => {
+    if (!page.contains(e.relatedTarget as Node | null)) page.classList.remove('m-dropping');
+  });
+  page.addEventListener('drop', (e) => {
+    if (!carriesFiles(e)) return;
+    e.preventDefault();
+    page.classList.remove('m-dropping');
+    void importFiles([...(e.dataTransfer?.files ?? [])]);
+  });
+  say('Importe un fichier .zwo (Zwift), .mrc ou .erg, ou glisse-le ici.');
 
   showAll();
 }
