@@ -201,19 +201,25 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
     })),
   };
 
-  const pole = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  // Les cibles sont données dans le repère du cycliste ; dans le jeu, il est posé et orienté sur la route,
+  // donc on les convertit dans le repère du monde, où se calculent les os.
+  const world = (p: THREE.Vector3) => group.localToWorld(p.clone());
+  const around = new THREE.Quaternion();
+  const pole = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z).applyQuaternion(around);
 
   const pose = (crankAngle: number) => {
     // Repart de la pose du torse : les jambes et les bras sont recalculés depuis elle.
     for (const [o, q] of base) o.quaternion.copy(q);
+    group.updateWorldMatrix(true, false);
+    group.getWorldQuaternion(around);
     rig.updateMatrixWorld(true);
 
     limbs.legs.forEach((leg, i) => {
       const angle = crankAngle + i * Math.PI;
       const px = fit.bb[0] + Math.cos(angle) * fit.crank;
       const py = fit.bb[1] + Math.sin(angle) * fit.crank;
-      const ankle = at(px - 0.09, py + 0.09, leg.side * PEDAL_SIDE);
-      const ball = at(px + 0.02, py + 0.01, leg.side * PEDAL_SIDE);
+      const ankle = world(at(px - 0.09, py + 0.09, leg.side * PEDAL_SIDE));
+      const ball = world(at(px + 0.02, py + 0.01, leg.side * PEDAL_SIDE));
       const knee = joint(worldPos(leg.hip), ankle, thigh, shin, pole(leg.side * 0.25, 0, -1));
       aim(leg.hip, leg.knee, knee);
       aim(leg.knee, leg.ankle, ankle);
@@ -221,8 +227,8 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
     });
 
     for (const arm of limbs.arms) {
-      const grip = at(fit.hand[0], fit.hand[1], arm.side * fit.handSide);
-      const wrist = grip.clone().add(at(-0.075, 0.025, 0));
+      const grip = world(at(fit.hand[0], fit.hand[1], arm.side * fit.handSide));
+      const wrist = world(at(fit.hand[0] - 0.075, fit.hand[1] + 0.025, arm.side * fit.handSide));
       const elbow = joint(worldPos(arm.shoulder), wrist, upper, fore, pole(arm.side * 0.55, -0.8, 0.1));
       aim(arm.shoulder, arm.elbow, elbow);
       aim(arm.elbow, arm.wrist, wrist);
@@ -231,8 +237,7 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
 
     // La tête : l'inclinaison voulue par rapport au monde, quel que soit l'angle du cou.
     const parent = head.parent!.getWorldQuaternion(new THREE.Quaternion());
-    const restWorld = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0));
-    head.quaternion.copy(parent.invert().multiply(headLook.clone().multiply(restWorld)));
+    head.quaternion.copy(parent.invert().multiply(around.clone().multiply(headLook).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)))));
     head.updateWorldMatrix(false, true);
   };
 
