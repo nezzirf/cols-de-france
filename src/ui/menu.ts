@@ -44,7 +44,7 @@ const TABS: { id: TabId; label: string }[] = [
 ];
 
 const CREDITS =
-  'Tracés © contributeurs OpenStreetMap (ODbL) · Altitudes IGN RGE ALTI · Relief Mapzen Terrain Tiles · Bâtiments IGN BD TOPO · Photos IGN BD ORTHO';
+  'Tracés © contributeurs OpenStreetMap (ODbL) · Altitudes IGN RGE ALTI · Relief Mapzen Terrain Tiles · Bâtiments IGN BD TOPO · Photos IGN BD ORTHO · Vélo de route « Canyon Aeroad » par hipoojan (Sketchfab)';
 
 const DEVICES: { kind: DeviceKind; label: string; title: string }[] = [
   { kind: 'ble', label: 'Bluetooth', title: 'Connecter le KICKR Core en Bluetooth' },
@@ -168,6 +168,12 @@ export class Menu {
     else if (tab === 'entrainement') renderWorkouts(page, this.context);
     else renderGarage(page, this.context);
     // Le résumé dépend de l'onglet : le lieu choisi dans Entraînement ne vaut que là, ou avec une séance.
+    this.changed();
+  }
+
+  /** Redessine l'aperçu du cycliste, par exemple quand un modèle vient d'être chargé. */
+  refreshPreview(): void {
+    this.shownBike = '';
     this.changed();
   }
 

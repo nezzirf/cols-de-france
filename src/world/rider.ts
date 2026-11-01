@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import type { BikeShape } from '../sim/bikes';
-import { BB as BB_POINT, type BikeLook, buildBike } from './bikeModel';
+import { BB as BB_POINT, type BikeLook, buildBike, WHEEL_TURNS_PER_CRANK } from './bikeModel';
 import { pbr, skinMaterial } from './materials';
 import { at, ball, place, type Point, sculpt, turned, weldNormals } from './modelParts';
 import { bibTexture } from './riderTextures';
@@ -16,7 +16,6 @@ const CRANK = 0.172;
 const PEDAL_SIDE = 0.1;
 const HIP = new THREE.Vector2(-0.12, 0.98); // x vers l'avant (+) dans le plan du vélo, y vers le haut
 const BB = new THREE.Vector2(BB_POINT[0], BB_POINT[1]);
-const WHEEL_TURNS_PER_CRANK = 2.6;
 const HIP_SIDE = 0.088;
 const VENT_PIECES = 5;
 
@@ -138,10 +137,18 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
   const accent = look.accent ?? jersey;
   const dark = kit;
   const tt = look.shape === 'clm';
-  const posture = POSTURES[look.shape];
 
   // --- Vélo ---
   const bike = buildBike(look, jersey, mono);
+  // Sur le vélo modélisé, le cycliste se cale sur sa selle et ses cocottes ; sinon, sur les cotes du vélo dessiné.
+  const fit = bike.fit;
+  const posture: Posture = fit
+    ? { ...POSTURES.route, shoulder: fit.shoulder, neck: fit.neck, head: fit.head, hand: fit.hand, handSide: fit.handSide }
+    : POSTURES[look.shape];
+  const hipPt = fit ? new THREE.Vector2(fit.hip[0], fit.hip[1]) : HIP;
+  const bbPt = fit ? new THREE.Vector2(fit.bb[0], fit.bb[1]) : BB;
+  const thigh = fit?.thigh ?? THIGH;
+  const shin = fit?.shin ?? SHIN;
   group.add(bike.group);
   const wheels = bike.wheels;
 
@@ -152,11 +159,12 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
     p.scale.set(0.05, 0.012, 0.045);
     return p;
   });
-  group.add(...cranks, ...pedals);
+  // Le vélo modélisé a déjà ses manivelles et ses pédales, que son squelette fait tourner.
+  if (!fit) group.add(...cranks, ...pedals);
 
   // --- Corps ---
   const shoulderC = at(posture.shoulder[0], posture.shoulder[1]);
-  const pelvis = at(HIP.x, HIP.y);
+  const pelvis = at(hipPt.x, hipPt.y);
 
   const torsoProfile = [0.15, 0.156, 0.16, 0.163, 0.166, 0.172, 0.18, 0.188, 0.193, 0.19, 0.17, 0.135, 0.085];
   const torsoGeo = turned(torsoProfile, 28);
@@ -207,7 +215,7 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
   for (const side of [-1, 1]) {
     const glute = ball(1, kit);
     glute.scale.set(0.098, 0.098, 0.108);
-    glute.position.copy(at(HIP.x - 0.012, HIP.y - 0.03, side * (HIP_SIDE - 0.012)));
+    glute.position.copy(at(hipPt.x - 0.012, hipPt.y - 0.03, side * (HIP_SIDE - 0.012)));
     group.add(glute);
   }
 
@@ -350,7 +358,7 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
     return leg;
   };
   const legs = [makeLeg(), makeLeg()];
-  const hip: Point = [HIP.x, HIP.y];
+  const hip: Point = [hipPt.x, hipPt.y];
   const a = new THREE.Vector3();
   const b = new THREE.Vector3();
 
@@ -358,14 +366,14 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
     legs.forEach((leg, i) => {
       const angle = crankAngle + i * Math.PI;
       const side = i === 0 ? -1 : 1;
-      const px = BB.x + Math.cos(angle) * CRANK;
-      const py = BB.y + Math.sin(angle) * CRANK;
+      const px = bbPt.x + Math.cos(angle) * CRANK;
+      const py = bbPt.y + Math.sin(angle) * CRANK;
       const pedal = at(px, py, side * PEDAL_SIDE);
       pedals[i].position.copy(pedal);
-      place(cranks[i], a.copy(at(BB.x, BB.y, side * 0.06)), b.copy(at(px, py, side * 0.06)));
+      place(cranks[i], a.copy(at(bbPt.x, bbPt.y, side * 0.06)), b.copy(at(px, py, side * 0.06)));
 
       const ankle: Point = [px - 0.075, py + 0.075];
-      const knee2d = solveJoint(hip, ankle, THIGH, SHIN, 1);
+      const knee2d = solveJoint(hip, ankle, thigh, shin, 1);
       const hipPos = at(hip[0], hip[1] - 0.02, side * HIP_SIDE);
       leg.hip.position.copy(hipPos);
       const kneePos = at(knee2d[0], knee2d[1], side * 0.11);
