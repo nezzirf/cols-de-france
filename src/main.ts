@@ -40,7 +40,7 @@ function saveProfile(p: Profile): void {
   }
 }
 
-const DEMO_HINT = '↑ ↓ puissance · Maj : ±50 W · F caméra libre · Pg↑ Pg↓ ±1 km · P pause · V caméra · G style · Échap quitter';
+const DEMO_HINT = '↑ ↓ puissance · Maj : ±50 W · F caméra libre · Pg↑ Pg↓ ±1 km · P pause · V caméra · Échap quitter';
 const FREE_HINT = 'ZQSD déplacer · clic + souris regarder · A E descendre, monter · Maj vite · molette vitesse · T poser le cycliste ici · F sortir';
 const JUMP_M = 1000;
 const EXPLORE_REFRESH_MS = 150;
@@ -254,7 +254,7 @@ class App {
     trainer.onState = (state) => hud.setConnection(trainer.label, state);
     this.route = route;
     this.hud = hud;
-    hud.setHint(demo ? DEMO_HINT : 'P pause · V caméra · G style · Échap quitter');
+    hud.setHint(demo ? DEMO_HINT : 'P pause · V caméra · Échap quitter');
     if (demo) {
       hud.enableExplore((d) => game.jumpTo(d));
       this.canvas.addEventListener('pointerdown', this.onPointerDown);
@@ -396,10 +396,6 @@ class App {
           e.preventDefault();
           this.game.jumpTo(this.game.distanceM - JUMP_M);
         }
-        break;
-      case 'g':
-      case 'G':
-        this.world?.setStyle(this.world.style === 'cartoon' ? 'doux' : 'cartoon');
         break;
       case 'Escape':
         void this.quit();

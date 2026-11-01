@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import type { BikeShape } from '../sim/bikes';
 import type { FrameDesign } from '../sim/bikeDesigns';
-import { toon } from './materials';
+import { pbr } from './materials';
 import { at, ball, link, place, type Point, profiled, turned } from './modelParts';
 
 export const BB: Point = [0.03, 0.29];
@@ -151,14 +151,14 @@ export function buildBike(look: BikeLook, base: THREE.Material, mono: boolean): 
   const group = new THREE.Group();
   const design = look.design ?? DEFAULT_DESIGN;
   const frame = look.frame ?? base;
-  const shade = (color: number) => (mono ? base : toon({ color }));
+  const shade = (color: number, roughness: number, metalness = 0) => (mono ? base : pbr({ color, roughness, metalness }));
   const mats: Mats = {
     frame,
     paint: look.paint ?? frame,
-    carbon: shade(0x1b1d21),
-    rubber: shade(0x111214),
-    metal: shade(0xa9adb2),
-    bottle: shade(0xe9e6df),
+    carbon: shade(0x1b1d21, 0.38, 0.1),
+    rubber: shade(0x141517, 0.95),
+    metal: shade(0xb4b8bd, 0.32, 0.9),
+    bottle: shade(0xe9e6df, 0.55),
   };
   const wheelR = look.wheelRadiusM;
   const tt = look.shape === 'clm';

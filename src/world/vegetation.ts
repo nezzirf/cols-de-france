@@ -1,13 +1,13 @@
 // Arbres, rochers et herbe placés sur le relief par tuiles déterministes autour du cycliste.
 
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Biomes } from '../sim/route';
 import { ROCK_COLORS } from './biomes';
 import type { Occupancy } from './buildings';
 import type { LandCover } from './landCover';
+import { broadleafTexture, coniferTexture, crossedPlanes, foliageDepth, grassTexture } from './foliage';
 import type { HeightField } from './heightField';
-import { toon } from './materials';
+import { pbr } from './materials';
 
 const TILE_M = 160;
 const CELL_M = 11;
@@ -46,61 +46,8 @@ function lumpy(geo: THREE.BufferGeometry, amount: number, seed: number): THREE.B
   return geo;
 }
 
-function coniferGeometry(): THREE.BufferGeometry {
-  const parts = [painted(new THREE.CylinderGeometry(0.14, 0.3, 3, 6).translate(0, 1.5, 0), 0x4a3524)];
-  [
-    [2.9, 4.6, 3.2, 0xffffff],
-    [2.5, 4.4, 5.4, 0xf0f0f0],
-    [2.0, 4, 7.6, 0xffffff],
-    [1.5, 3.4, 9.6, 0xf4f4f4],
-    [0.9, 2.8, 11.4, 0xffffff],
-  ].forEach(([r, h, y, tone], i) => {
-    const cone = new THREE.ConeGeometry(r, h, 9, 2).translate(0, y, 0);
-    parts.push(painted(lumpy(cone, 0.16, i * 1.9), tone));
-  });
-  return mergeGeometries(parts)!;
-}
-
-function broadleafGeometry(): THREE.BufferGeometry {
-  const parts = [painted(new THREE.CylinderGeometry(0.17, 0.36, 3.8, 7).translate(0, 1.9, 0), 0x56422f)];
-  [
-    [2.9, 0, 5.6, 0],
-    [2.3, 1.7, 4.9, 0.8],
-    [2.2, -1.5, 5.1, -0.9],
-    [2.0, 0.4, 7.4, -0.5],
-    [1.7, -0.7, 6.8, 1.3],
-  ].forEach(([r, x, y, z], i) => {
-    const blob = new THREE.IcosahedronGeometry(r, 2);
-    parts.push(painted(lumpy(blob, 0.13, i * 2.4).translate(x, y, z), 0xffffff));
-  });
-  return mergeGeometries(parts)!;
-}
-
 export function rockGeometry(): THREE.BufferGeometry {
   return painted(lumpy(new THREE.DodecahedronGeometry(1, 1), 0.2, 3).scale(1.25, 0.7, 1), 0xffffff);
-}
-
-/** Touffe : quelques brins effilés, sans transparence pour rester peu coûteuse. */
-function tuftGeometry(): THREE.BufferGeometry {
-  const pos: number[] = [];
-  const colors: number[] = [];
-  const blades = 5;
-  for (let i = 0; i < blades; i++) {
-    const a = (i / blades) * Math.PI * 2;
-    const r = 0.13 + (i % 2) * 0.09;
-    const x = Math.cos(a) * r;
-    const z = Math.sin(a) * r;
-    const wx = -z * 0.5;
-    const wz = x * 0.5;
-    const h = 0.42 + (i % 3) * 0.1;
-    pos.push(x - wx, 0, z - wz, x + wx, 0, z + wz, x * 2.1, h, z * 2.1);
-    colors.push(0.62, 0.62, 0.62, 0.62, 0.62, 0.62, 1, 1, 1);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  g.computeVertexNormals();
-  return g;
 }
 
 const hash = (x: number, y: number, s: number): number => {
@@ -147,33 +94,39 @@ export class Vegetation {
     private cover: LandCover,
     scene: THREE.Scene,
   ) {
-    const material = toon({ vertexColors: true });
-    const swaying = toon({ vertexColors: true });
-    this.addWind(swaying, 0.012);
-    const mesh = (geo: THREE.BufferGeometry, mat: THREE.Material) => {
+    const foliage = (map: THREE.Texture, wind: number) => {
+      const m = pbr({ map, side: THREE.DoubleSide, alphaTest: 0.42, alphaToCoverage: true, roughness: 0.92 });
+      this.addWind(m, wind);
+      return m;
+    };
+    const mesh = (geo: THREE.BufferGeometry, mat: THREE.Material, depth?: THREE.Material) => {
       const m = new THREE.InstancedMesh(geo, mat, MAX_INSTANCES);
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       m.frustumCulled = false;
       m.castShadow = true;
+      m.receiveShadow = true;
+      m.customDepthMaterial = depth;
       m.count = 0;
       scene.add(m);
       return m;
     };
+    const coniferMap = coniferTexture();
+    const leafMap = broadleafTexture();
     this.meshes = {
-      conifer: mesh(coniferGeometry(), swaying),
-      broadleaf: mesh(broadleafGeometry(), swaying),
-      rock: mesh(rockGeometry(), material),
+      conifer: mesh(crossedPlanes(8.5, 15, 3), foliage(coniferMap, 0.008), foliageDepth(coniferMap)),
+      broadleaf: mesh(crossedPlanes(12, 12, 3), foliage(leafMap, 0.012), foliageDepth(leafMap)),
+      rock: mesh(rockGeometry(), pbr({ vertexColors: true, roughness: 0.95 })),
     };
-    const grassMaterial = toon({ vertexColors: true });
-    this.addWind(grassMaterial, 0.2);
-    this.grass = new THREE.InstancedMesh(tuftGeometry(), grassMaterial, MAX_TUFTS);
+    const grassMaterial = foliage(grassTexture(), 0.16);
+    this.grass = new THREE.InstancedMesh(crossedPlanes(1.1, 0.62, 2), grassMaterial, MAX_TUFTS);
     this.grass.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.grass.frustumCulled = false;
     this.grass.count = 0;
     this.grass.receiveShadow = true;
     scene.add(this.grass);
-    this.conifers = biomes.trees === 'meleze' ? [0x7f9a3e, 0x8fa444, 0x6e8a3e] : [0x2c5a35, 0x37683c, 0x264d31, 0x427544];
-    this.broadleaves = [0x4f8038, 0x5e8f40, 0x447033, 0x6c9344];
+    // Teintes multipliées à la texture : de légères variations d'un arbre à l'autre.
+    this.conifers = biomes.trees === 'meleze' ? [0xe8f0a8, 0xf4f0a0, 0xd8e49c] : [0xffffff, 0xe4ecdc, 0xd4e0cc, 0xf0f4e8];
+    this.broadleaves = [0xffffff, 0xf0f4d4, 0xdce8c4, 0xfff6cc];
     this.rockColor = new THREE.Color(ROCK_COLORS[biomes.rock]);
   }
 
@@ -272,20 +225,9 @@ export class Vegetation {
         const y = this.field.height(x, z);
         if (y > b.alpage + 40 || hash(gx, gz, 13) > 0.8) continue;
         if (this.occupancy.has(x, z) || this.field.exactRoadDistance(x, z) < 5.2) continue;
-        const roll = hash(gx, gz, 14);
         const inForest = y > b.valley && y < b.forest;
-        // Fleurs des prés : des touches de couleur, surtout en alpage.
-        const flowers = y > b.forest ? 0.1 : 0.035;
-        let color: THREE.Color;
-        if (roll < flowers && !inForest) {
-          color = new THREE.Color([0xf4e04d, 0xffffff, 0xc95ad1, 0xe8603c][Math.floor(hash(gx, gz, 15) * 4)]);
-        } else if (inForest) {
-          color = new THREE.Color(0x3c6a2c).multiplyScalar(0.8 + hash(gx, gz, 16) * 0.4);
-        } else if (y > b.forest) {
-          color = new THREE.Color(0x7d8c42).multiplyScalar(0.85 + hash(gx, gz, 16) * 0.3);
-        } else {
-          color = new THREE.Color(0x5e8a34).multiplyScalar(0.85 + hash(gx, gz, 16) * 0.3);
-        }
+        const shade = 0.82 + hash(gx, gz, 16) * 0.3;
+        const color = new THREE.Color(inForest ? 0x4d7038 : y > b.forest ? 0x8c9450 : 0x6f9440).multiplyScalar(shade);
         out.push({ x, y: y - 0.04, z, scale: 0.8 + hash(gx, gz, 17) * 0.9, rot: hash(gx, gz, 18) * 6.28, color });
       }
     }

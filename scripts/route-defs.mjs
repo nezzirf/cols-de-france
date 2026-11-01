@@ -68,7 +68,6 @@ export const ROUTES = [
       [44.1136, 5.1063], // Caromb
       [44.1240, 5.1800], // Bédoin
       [44.1140, 5.2399], // Saint-Estève
-      [44.1524, 5.3189], // Chalet Reynard
       [44.1697, 5.2860], // Stèle Tom Simpson
       [44.1740, 5.2788], // Sommet
     ],
@@ -168,7 +167,6 @@ export const ROUTES = [
       [44.6700, 6.6260], // Eygliers
       [44.6590, 6.6480], // Guillestre
       [44.7650, 6.7390], // Arvieux
-      [44.7935, 6.7294], // Brunissard
       [44.8113, 6.7368], // Casse Déserte
       [44.8197, 6.7350], // Col
     ],

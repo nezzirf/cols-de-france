@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { Biomes, Route } from '../sim/route';
 import { ROCK_COLORS } from './biomes';
 import type { HeightField } from './heightField';
-import { toon } from './materials';
+import { pbr } from './materials';
 import { ROAD_HALF_WIDTH_M, shoulderDrop, talusOffset, type Station } from './road';
 import { rockGeometry } from './vegetation';
 
@@ -22,7 +22,7 @@ const hash = (a: number, b: number): number => {
 };
 
 export function buildCliffRocks(list: Station[], route: Route, field: HeightField, biomes: Biomes): THREE.InstancedMesh {
-  const mesh = new THREE.InstancedMesh(rockGeometry(), toon({ vertexColors: true }), MAX_ROCKS);
+  const mesh = new THREE.InstancedMesh(rockGeometry(), pbr({ vertexColors: true }), MAX_ROCKS);
   const dummy = new THREE.Object3D();
   const base = new THREE.Color(ROCK_COLORS[biomes.rock]);
   const color = new THREE.Color();

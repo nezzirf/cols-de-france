@@ -20,7 +20,6 @@ Sans home trainer, « Rouler » démarre le mode démo.
 | ↑ / ↓ | Puissance ±10 W, ±50 W avec Maj (mode démo) |
 | P | Pause |
 | V | Caméra poursuite / embarquée |
-| G | Style graphique cartoon / doux |
 
 En mode démo, tu peux aussi explorer librement, sans influence sur les records (ils sont coupés
 pour la sortie dès la première utilisation) :
@@ -116,8 +115,8 @@ Ce qui est calculé plutôt qu'observé :
 
 - **Bornes kilométriques** : placées à chaque kilomètre depuis le sommet, avec la pente mesurée
   sur le profil. Leur emplacement peut différer de quelques mètres des vraies bornes.
-- **Style graphique** : rendu cartoon par défaut, choix assumé car le décor est généré ; `G` passe en
-  rendu doux. La définition baisse seule si la machine descend sous 42 images/s.
+- **Rendu** : réaliste, avec lumière physique et reflets du ciel. La définition baisse seule si la
+  machine descend sous 42 images/s.
 - **Épingles** : OSM les décrit par deux jambes collées, en pointe. Elles sont évasées à 9 m de
   rayon, ce qui déplace la route de 4 à 8 m au sommet des virages. Le tracé reste réel ailleurs.
 - **Lacets de l'Alpe** : détectés par géométrie, numérotés de 21 à 1 depuis le bas. Les noms

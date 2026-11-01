@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import type { BikeShape } from '../sim/bikes';
 import { BB as BB_POINT, type BikeLook, buildBike } from './bikeModel';
-import { toon } from './materials';
+import { pbr } from './materials';
 import { at, ball, place, type Point, turned } from './modelParts';
 
 const THIGH = 0.43;
@@ -102,9 +102,9 @@ function helmetGeometry(tail: number): THREE.BufferGeometry {
 export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, look: RiderLook = ROAD_LOOK): RiderModel {
   const group = new THREE.Group();
   const mono = look.mono === true || kit === jersey;
-  const skin = mono ? jersey : toon({ color: 0xd9a884 });
-  const sock = mono ? jersey : toon({ color: 0xf1efe9 });
-  const shoeMat = mono ? jersey : toon({ color: 0xf3f3f0 });
+  const skin = mono ? jersey : pbr({ color: 0xd9a884 });
+  const sock = mono ? jersey : pbr({ color: 0xf1efe9 });
+  const shoeMat = mono ? jersey : pbr({ color: 0xf3f3f0 });
   const accent = look.accent ?? jersey;
   const dark = kit;
   const tt = look.shape === 'clm';

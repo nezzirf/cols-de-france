@@ -197,6 +197,12 @@ describe('données réelles des cols', () => {
   it.each(ids)('%s : la route ne fait jamais d’aller-retour', (id) => {
     expect(findBacktracks(load(id).data)).toEqual([]);
   });
+  it('détecte un demi-tour court dans une rue de village', () => {
+    const n = 44;
+    const x = Array.from({ length: n }, (_, i) => (i < 22 ? i * 10 : (43 - i) * 10));
+    const z = Array.from({ length: n }, (_, i) => (i < 22 ? 0 : 5));
+    expect(findBacktracks({ x, z, ele: new Array(n).fill(1700), stepM: 10 }).length).toBeGreaterThan(0);
+  });
   it('détecte un aller-retour sur le plat, mais pas un lacet qui monte', () => {
     const n = 120;
     const x = Array.from({ length: n }, (_, i) => (i < 60 ? i * 10 : (119 - i) * 10));

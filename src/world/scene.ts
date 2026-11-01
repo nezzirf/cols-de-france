@@ -9,7 +9,7 @@ import { ambienceOf, biomeAt, biomeLabel, type BiomeName } from './biomes';
 import { HeightField } from './heightField';
 import { LandCover } from './landCover';
 import { Landmarks, type RouteEvent } from './landmarks';
-import { setRamp, toon } from './materials';
+import { pbr } from './materials';
 import { Pipeline } from './pipeline';
 import { FreeCamera } from './freeCamera';
 import { createRiderModel, type RiderModel } from './rider';
@@ -24,7 +24,6 @@ const SHADOW_RANGE_M = 130;
 const SHADOW_TEXEL_M = (SHADOW_RANGE_M * 2) / 3072;
 
 export type CameraMode = 'poursuite' | 'embarquée';
-export type GraphicStyle = 'cartoon' | 'doux';
 
 export class World {
   readonly events: RouteEvent[];
@@ -32,7 +31,7 @@ export class World {
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(62, 1, 0.3, 60000);
   private fog = new THREE.FogExp2(0xcad9e2, 0.00009);
-  private sun = new THREE.DirectionalLight(0xfff0d4, 2.5);
+  private sun = new THREE.DirectionalLight(0xfff3e2, 3.0);
   private pipeline: Pipeline;
   private skyTime: { value: number };
   private terrain: TerrainSystem;
@@ -47,7 +46,6 @@ export class World {
   private targetFog = new THREE.Color(0xcad9e2);
   private targetDensity = 0.00009;
   cameraMode: CameraMode = 'poursuite';
-  style: GraphicStyle = 'cartoon';
   free: FreeCamera | null = null;
   onBiomeChange: (label: string) => void = () => {};
 
@@ -68,7 +66,14 @@ export class World {
     const sky = createSky(this.fog, SUN_DIRECTION);
     this.skyTime = sky.time;
     this.scene.add(sky.mesh);
-    this.scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x8a7a5a, 1.1));
+    // Reflets du ciel sur les matières : ce qui fait briller un cadre ou un toit comme en vrai.
+    const skyOnly = new THREE.Scene();
+    skyOnly.add(createSky(this.fog, SUN_DIRECTION).mesh);
+    const reflections = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = reflections.fromScene(skyOnly, 0, 0.1, 100).texture;
+    this.scene.environmentIntensity = 0.42;
+    reflections.dispose();
+    this.scene.add(new THREE.HemisphereLight(0xeef1f2, 0x9a8a6a, 1.05));
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(3072, 3072);
     const c = this.sun.shadow.camera;
@@ -98,11 +103,11 @@ export class World {
     this.events = new Landmarks(route, this.field, this.scene).events;
 
     const shape = { shape: bike.shape, tyreM: bike.tyreM, wheelRadiusM: bike.wheelRadiusM, design: bike.design };
-    this.rider = createRiderModel(toon({ color: bike.jersey }), toon({ color: 0x16181c }), {
+    this.rider = createRiderModel(pbr({ color: bike.jersey, roughness: 0.72 }), pbr({ color: 0x16181c, roughness: 0.62 }), {
       ...shape,
-      frame: toon({ color: bike.frame }),
-      paint: toon({ color: bike.accent }),
-      accent: toon({ color: bike.accent }),
+      frame: pbr({ color: bike.frame, roughness: 0.28, metalness: 0.2 }),
+      paint: pbr({ color: bike.accent, roughness: 0.28, metalness: 0.2 }),
+      accent: pbr({ color: bike.accent, roughness: 0.34 }),
       brand: bike.brand ?? undefined,
     });
     this.rider.group.traverse((o) => (o.castShadow = true));
@@ -116,14 +121,6 @@ export class World {
     this.resize();
     const p = route.at(0);
     this.terrain.update(p.x, p.z, 1000);
-    this.setStyle(this.style);
-  }
-
-  /** Cartoon : aplats de lumière et contours. Doux : lumière progressive, sans contours. */
-  setStyle(style: GraphicStyle): void {
-    this.style = style;
-    setRamp(style === 'cartoon');
-    this.pipeline.setInk(style === 'cartoon' ? 1 : 0);
   }
 
   /** Démarre la caméra libre à l'endroit et dans la direction de la caméra actuelle. */

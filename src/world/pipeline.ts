@@ -1,5 +1,5 @@
 // Rendu en deux temps : la scène dans une texture (avec sa profondeur), puis une passe finale
-// qui trace les contours, règle l'exposition et les couleurs.
+// qui ajoute les ombres de contact et règle l'exposition et les couleurs.
 
 import * as THREE from 'three';
 
@@ -18,7 +18,6 @@ const FRAGMENT = /* glsl */ `
   uniform vec2 uTexel;
   uniform float uNear;
   uniform float uFar;
-  uniform float uInk;
   const int AO_SAMPLES = 10;
   varying vec2 vUv;
 
@@ -48,24 +47,11 @@ const FRAGMENT = /* glsl */ `
       c *= 1.0 - 0.6 * fade * occlusion / float(AO_SAMPLES);
     }
 
-    // Contour : le laplacien de la profondeur s'annule sur un plan, même rasant,
-    // et ne réagit donc qu'aux vraies ruptures entre objets.
-    if (uInk > 0.0) {
-      float z = viewZ(vUv);
-      vec2 t = uTexel * 1.25;
-      float sum = viewZ(vUv + vec2(t.x, 0.0)) + viewZ(vUv - vec2(t.x, 0.0))
-                + viewZ(vUv + vec2(0.0, t.y)) + viewZ(vUv - vec2(0.0, t.y));
-      float edge = abs(sum - 4.0 * z) / z;
-      float fade = 1.0 - smoothstep(120.0, 750.0, z);
-      float ink = smoothstep(0.05, 0.14, edge) * fade * uInk;
-      c = mix(c, c * vec3(0.16, 0.17, 0.22), ink);
-    }
-
-    c = aces(c * 1.08);
+    c = aces(c);
     float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
-    c = mix(vec3(luma), c, 1.08);
+    c = mix(vec3(luma), c, 1.05);
     float d = distance(vUv, vec2(0.5));
-    c *= 1.0 - 0.3 * smoothstep(0.45, 0.85, d);
+    c *= 1.0 - 0.16 * smoothstep(0.5, 0.9, d);
     gl_FragColor = vec4(pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
   }
 `;
@@ -107,16 +93,11 @@ export class Pipeline {
         uTexel: { value: new THREE.Vector2() },
         uNear: { value: camera.near },
         uFar: { value: camera.far },
-        uInk: { value: 1 },
       },
     });
     const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.material);
     quad.frustumCulled = false;
     this.quadScene.add(quad);
-  }
-
-  setInk(strength: number): void {
-    this.material.uniforms.uInk.value = strength;
   }
 
   resize(width: number, height: number): void {

@@ -1,4 +1,4 @@
-// Ciel peint : dégradé, soleil et nuages dessinés au pixel, qui dérivent lentement.
+// Ciel : dégradé, soleil et nuages calculés au pixel, qui dérivent lentement.
 
 import * as THREE from 'three';
 
@@ -46,9 +46,9 @@ export function createSky(fog: THREE.FogExp2, sun: THREE.Vector3): { mesh: THREE
         if (d.y > 0.015) {
           vec2 uv = d.xz / (d.y + 0.16) * 1.5 + vec2(uTime * 0.006, uTime * 0.002);
           float n = fbm(uv);
-          float cover = smoothstep(0.5, 0.56, n);
-          float shade = smoothstep(0.5, 0.68, fbm(uv + uSun.xz * 0.12));
-          vec3 cloud = mix(vec3(1.25, 1.22, 1.18), vec3(0.66, 0.72, 0.84), shade);
+          float cover = smoothstep(0.46, 0.7, n);
+          float shade = smoothstep(0.42, 0.72, fbm(uv + uSun.xz * 0.12));
+          vec3 cloud = mix(vec3(1.3, 1.27, 1.22), vec3(0.72, 0.77, 0.86), shade);
           c = mix(c, cloud, cover * smoothstep(0.015, 0.14, d.y) * 0.95);
         }
         c += vec3(1.0, 0.93, 0.8) * smoothstep(0.9993, 0.9996, s) * 4.0;

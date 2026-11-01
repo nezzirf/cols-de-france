@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import type { Biomes, TerrainMeta } from '../sim/route';
 import { ROCK_COLORS } from './biomes';
 import type { HeightField } from './heightField';
-import { toon } from './materials';
+import { pbr } from './materials';
 
 const CHUNK_CELLS = 64;
 const LOD_STEPS = [1, 2, 4, 8];
@@ -69,9 +69,10 @@ const GROUND_FUNCTIONS = /* glsl */ `
     // parois y échappent, la photo n'y montre que le sommet de la pente.
     vec3 photo = texture2D(uOrtho, (vWorld.xz - uOrthoRect.xy) / uOrthoRect.zw).rgb;
     float photoLuma = dot(photo, vec3(0.2126, 0.7152, 0.0722));
-    photo = mix(vec3(photoLuma), photo, 1.35) * 1.42;
+    // Éclaircit les tons moyens sans brûler la roche claire, que le soleil ferait passer pour de la neige.
+    photo = mix(vec3(photoLuma), photo, 1.2) * mix(1.3, 0.82, smoothstep(0.25, 0.7, photoLuma));
     float wall = smoothstep(0.24, 0.4, steep);
-    float distant = mix(0.22, 0.97, smoothstep(45.0, 240.0, vDistance));
+    float distant = mix(0.3, 1.0, smoothstep(40.0, 200.0, vDistance));
     return mix(c, photo, distant * (1.0 - wall * 0.85));
   }
 
@@ -89,7 +90,7 @@ interface Chunk {
 }
 
 /** Matière du sol, partagée avec les talus de la route pour qu'ils s'y fondent. */
-export function groundMaterial(biomes: Biomes, photo: THREE.Texture, terrain: TerrainMeta): THREE.MeshToonMaterial {
+export function groundMaterial(biomes: Biomes, photo: THREE.Texture, terrain: TerrainMeta): THREE.MeshStandardMaterial {
   const uniforms = {
     uRock: { value: new THREE.Color(ROCK_COLORS[biomes.rock]) },
     uBands: { value: new THREE.Vector3(biomes.valley, biomes.forest, biomes.alpage) },
@@ -98,7 +99,7 @@ export function groundMaterial(biomes: Biomes, photo: THREE.Texture, terrain: Te
       value: new THREE.Vector4(terrain.x0, terrain.z0, (terrain.cols - 1) * terrain.stepM, (terrain.rows - 1) * terrain.stepM),
     },
   };
-  const material = toon({ color: 0xffffff });
+  const material = pbr({ color: 0xffffff, roughness: 1 });
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader

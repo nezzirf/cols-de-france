@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Route } from '../sim/route';
-import { toon } from './materials';
+import { pbr } from './materials';
 
 export const ROAD_HALF_WIDTH_M = 3;
 const VERGE_M = 1.6;
@@ -253,7 +253,7 @@ export function buildRoad(route: Route, ground: THREE.Material, list: Station[])
       { o: ROAD_HALF_WIDTH_M, y: 0, u: 1 - share },
       { o: outer, y: -0.4, u: 1 },
     ]),
-    toon({ map: roadTexture(), polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
+    pbr({ map: roadTexture(), roughness: 0.93, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
   );
   surface.frustumCulled = false;
   surface.receiveShadow = true;
@@ -276,7 +276,7 @@ export function buildRoad(route: Route, ground: THREE.Material, list: Station[])
 /** Murets de pierre à l'extérieur des virages serrés, comme sur les routes de montagne. */
 function parapets(list: Station[]): THREE.InstancedMesh {
   const block = new THREE.BoxGeometry(1.55, 0.62, 0.42).translate(0, 0.2, 0);
-  const mesh = new THREE.InstancedMesh(block, toon({ color: 0xffffff }), PARAPET_MAX);
+  const mesh = new THREE.InstancedMesh(block, pbr({ color: 0xffffff }), PARAPET_MAX);
   const m = new THREE.Object3D();
   const color = new THREE.Color();
   let count = 0;
@@ -315,7 +315,7 @@ function delineators(route: Route): THREE.InstancedMesh {
     paint(new THREE.BoxGeometry(0.12, 0.08, 0.09).translate(0, 0.96, 0), 1),
   ])!;
   const posts = Math.floor(route.pathM / POST_SPACING_M);
-  const mesh = new THREE.InstancedMesh(post, toon({ vertexColors: true }), posts);
+  const mesh = new THREE.InstancedMesh(post, pbr({ vertexColors: true }), posts);
   const m = new THREE.Object3D();
   for (let i = 0; i < posts; i++) {
     const p = route.at(i * POST_SPACING_M);

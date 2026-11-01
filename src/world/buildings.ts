@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import type { BuildingData, BuildingStyle } from '../sim/route';
 import { buildShell, ringOf } from './buildingGeometry';
 import type { HeightField } from './heightField';
-import { toon } from './materials';
+import { pbr } from './materials';
 
 const TILE_M = 400;
 const OCCUPANCY_CELL_M = 8;
@@ -135,8 +135,8 @@ export function buildBuildings(list: BuildingData[], style: BuildingStyle, field
     pushColor(tile.wallColor, wall, shell.gables.length / 3);
   }
 
-  const wallMaterial = toon({ map: facadeTexture(), vertexColors: true, side: THREE.DoubleSide });
-  const roofMaterial = toon({ vertexColors: true, side: THREE.DoubleSide });
+  const wallMaterial = pbr({ map: facadeTexture(), vertexColors: true, side: THREE.DoubleSide, roughness: 0.9 });
+  const roofMaterial = pbr({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.7 });
   const group = new THREE.Group();
   const mesh = (pos: number[], color: number[], material: THREE.Material, uv?: number[]) => {
     if (pos.length === 0) return;

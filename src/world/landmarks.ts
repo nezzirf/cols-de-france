@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import type { Poi, Route } from '../sim/route';
 import type { HeightField } from './heightField';
-import { toon } from './materials';
+import { pbr } from './materials';
 import { createRiderModel, ROAD_LOOK } from './rider';
 import { shoulderDrop } from './road';
 
@@ -14,8 +14,8 @@ export interface RouteEvent {
 }
 
 const FONT = 'Bahnschrift, "Segoe UI", sans-serif';
-const stone = toon({ color: 0x9a968c });
-const metal = toon({ color: 0x70757a });
+const stone = pbr({ color: 0x9a968c });
+const metal = pbr({ color: 0x70757a });
 
 function box(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = h / 2, z = 0): THREE.Mesh {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -87,7 +87,7 @@ function stele(name: string): THREE.Group {
 function statue(name: string): THREE.Group {
   const g = new THREE.Group();
   g.add(box(2.6, 1.4, 4.2, stone));
-  const rider = createRiderModel(toon({ color: 0x4a4f54 }), toon({ color: 0x3c4044 }), { ...ROAD_LOOK, mono: true });
+  const rider = createRiderModel(pbr({ color: 0x4a4f54 }), pbr({ color: 0x3c4044 }), { ...ROAD_LOOK, mono: true });
   rider.group.scale.setScalar(1.7);
   rider.group.position.y = 1.4;
   rider.group.rotation.x = 0.3;
@@ -102,8 +102,8 @@ function statue(name: string): THREE.Group {
 /** Émetteur du Ventoux : la tour blanche et son mât rouge et blanc, visibles de très loin. */
 function tower(): THREE.Group {
   const g = new THREE.Group();
-  const white = toon({ color: 0xece9e2 });
-  const red = toon({ color: 0xc63a2d });
+  const white = pbr({ color: 0xece9e2 });
+  const red = pbr({ color: 0xc63a2d });
   const cyl = (r: number, h: number, y: number, m: THREE.Material) => {
     const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.04, h, 18), m);
     c.position.y = y + h / 2;
@@ -139,8 +139,8 @@ function colPanel(name: string, altitude: number): THREE.Group {
 /** Borne cycliste : hauteur restante, altitude et pente moyenne du kilomètre suivant. */
 function bollard(colName: string, kmLeft: number, altitude: number, gradeNext: number): THREE.Group {
   const g = new THREE.Group();
-  g.add(post(0.5, 1.5, toon({ color: 0xf2f0ea }), 0, 0.28));
-  g.add(box(0.52, 0.24, 0.3, toon({ color: 0xe5b90e }), 0, 1.6));
+  g.add(post(0.5, 1.5, pbr({ color: 0xf2f0ea }), 0, 0.28));
+  g.add(box(0.52, 0.24, 0.3, pbr({ color: 0xe5b90e }), 0, 1.6));
   const p = plate({
     width: 0.48,
     height: 1.2,
