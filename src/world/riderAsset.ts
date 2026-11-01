@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { fitBodyInside, loadSuit, skinSuit } from './riderSuit';
 
 export const RIDER_ASSET_URL = `${import.meta.env.BASE_URL}models/rider/Superhero_Male_FullBody.gltf`;
 
@@ -28,20 +29,24 @@ export interface HeadFrame {
 let asset: THREE.Object3D | null = null;
 let head: HeadFrame | null = null;
 let loading: Promise<void> | null = null;
+let suited = false;
 
 /**
  * Part du corps que l'on garde autour de l'axe de l'os : 1 laisse le volume tel quel, moins de 1 l'affine.
  * Le personnage est un « superhéros » très musclé ; un coureur est plus mince, surtout en haut du corps.
  */
 const SLIM: [bone: string, child: string, keep: number][] = [
-  ['spine_01', 'spine_02', 0.93],
-  ['spine_02', 'spine_03', 0.8],
-  ['spine_03', 'neck_01', 0.76],
+  ['pelvis', 'spine_01', 0.82],
+  ['spine_01', 'spine_02', 0.86],
+  ['spine_02', 'spine_03', 0.84],
+  ['spine_03', 'neck_01', 0.82],
   ['neck_01', 'Head', 0.86],
   ...(['l', 'r'] as const).flatMap((side): [string, string, number][] => [
-    [`clavicle_${side}`, `upperarm_${side}`, 0.78],
-    [`upperarm_${side}`, `lowerarm_${side}`, 0.7],
+    [`clavicle_${side}`, `upperarm_${side}`, 0.82],
+    [`upperarm_${side}`, `lowerarm_${side}`, 0.74],
     [`lowerarm_${side}`, `hand_${side}`, 0.8],
+    [`thigh_${side}`, `calf_${side}`, 0.7],
+    [`calf_${side}`, `foot_${side}`, 0.9],
   ]),
 ];
 
@@ -87,6 +92,44 @@ function slimUpperBody(mesh: THREE.SkinnedMesh): void {
     position.setXYZ(v, p.x, p.y, p.z);
   }
   position.needsUpdate = true;
+}
+
+/** Position de chaque point du corps au repos, et nom de l'os qui le porte le plus. */
+function bodyAtRest(mesh: THREE.SkinnedMesh): { rest: THREE.Vector3[]; bone: string[] } {
+  const geometry = mesh.geometry;
+  const joints = geometry.getAttribute('skinIndex');
+  const weights = geometry.getAttribute('skinWeight');
+  const names = mesh.skeleton.bones.map((b) => b.name);
+  mesh.skeleton.update();
+  const rest: THREE.Vector3[] = [];
+  const bone: string[] = [];
+  for (let i = 0; i < geometry.getAttribute('position').count; i++) {
+    let best = 0;
+    for (let k = 1; k < 4; k++) if (weights.getComponent(i, k) > weights.getComponent(i, best)) best = k;
+    const p = new THREE.Vector3().fromBufferAttribute(geometry.getAttribute('position'), i);
+    mesh.applyBoneTransform(i, p);
+    rest.push(p.applyMatrix4(mesh.matrixWorld));
+    bone.push(names[joints.getComponent(i, best)]);
+  }
+  return { rest, bone };
+}
+
+/**
+ * Enfile la combinaison : le corps se glisse sous le tissu, qui garde sa forme, puis la combinaison prend
+ * les os et les poids du corps pour le suivre. Renvoie ses deux ou trois pièces.
+ */
+function putOnSuit(body: THREE.SkinnedMesh, suit: Awaited<ReturnType<typeof loadSuit>>): THREE.SkinnedMesh[] {
+  const { rest, bone } = bodyAtRest(body);
+  // La tête, les mains et les pieds ne sont pas couverts : ils restent tels quels.
+  fitBodyInside(rest, suit, (i) => /^(Head|hand|index|middle|pinky|ring|thumb|foot|ball)/.test(bone[i]));
+  const toLocal = body.matrixWorld.clone().invert();
+  const position = body.geometry.getAttribute('position');
+  rest.forEach((p, i) => {
+    const local = p.clone().applyMatrix4(toLocal);
+    position.setXYZ(i, local.x, local.y, local.z);
+  });
+  position.needsUpdate = true;
+  return skinSuit(body, rest, suit);
 }
 
 /**
@@ -203,18 +246,20 @@ function measureHead(mesh: THREE.SkinnedMesh, eyesMesh: THREE.SkinnedMesh, headB
 
 /** Lance le chargement ; en cas d'échec, le jeu garde son cycliste dessiné par le code. */
 export function preloadRiderAsset(): Promise<void> {
-  loading ??= new GLTFLoader()
-    .loadAsync(RIDER_ASSET_URL)
-    .then((gltf) => {
+  loading ??= Promise.all([new GLTFLoader().loadAsync(RIDER_ASSET_URL), loadSuit().catch(() => null)])
+    .then(([gltf, suit]) => {
       gltf.scene.updateMatrixWorld(true);
-      let body: THREE.SkinnedMesh | null = null;
-      let eyes: THREE.SkinnedMesh | null = null;
+      const found: { body?: THREE.SkinnedMesh; eyes?: THREE.SkinnedMesh } = {};
       gltf.scene.traverse((o) => {
-        if (o instanceof THREE.SkinnedMesh && o.name === 'SuperHero_Male') body = o;
-        if (o instanceof THREE.SkinnedMesh && o.name === 'Eyes') eyes = o;
+        if (o instanceof THREE.SkinnedMesh && o.name === 'SuperHero_Male') found.body = o;
+        if (o instanceof THREE.SkinnedMesh && o.name === 'Eyes') found.eyes = o;
       });
+      const { body, eyes } = found;
       if (body && eyes) {
         slimUpperBody(body);
+        const parts = suit ? putOnSuit(body, suit) : [];
+        for (const part of parts) body.parent!.add(part);
+        suited = parts.length > 0;
         keepRestPositions(body);
         head = measureHead(body, eyes, gltf.scene.getObjectByName('Head')!);
       }
@@ -227,6 +272,9 @@ export function preloadRiderAsset(): Promise<void> {
 }
 
 export const riderAssetReady = (): boolean => asset !== null;
+
+/** La combinaison modélisée a été enfilée : le maillot et le cuissard ne sont plus peints sur la peau. */
+export const riderIsSuited = (): boolean => suited;
 
 /** Copie indépendante du personnage, avec son propre squelette. */
 export function cloneRiderAsset(): THREE.Object3D {

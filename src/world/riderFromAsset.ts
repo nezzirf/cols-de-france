@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import type { RiderFit } from './bikeFromAsset';
 import { at } from './modelParts';
-import { cloneRiderAsset, type HeadFrame, riderHead } from './riderAsset';
+import { cloneRiderAsset, type HeadFrame, riderHead, riderIsSuited } from './riderAsset';
 import { addGlasses } from './riderGear';
 import { place, turned } from './modelParts';
 import { pbr } from './materials';
@@ -73,6 +73,8 @@ function dressSkin(source: THREE.MeshStandardMaterial, outfit: Outfit): THREE.Me
     uShoes: new THREE.Color(0xeeeeea),
     uSocks: new THREE.Color(0xf4f4f1),
   };
+  // Une valeur décimale : le shader compare ce nombre à 0.5, et GLSL n'accepte pas un entier là.
+  skin.defines = { SUITED: riderIsSuited() ? '1.0' : '0.0' };
   skin.onBeforeCompile = (shader) => {
     for (const name of CLOTH_UNIFORMS) shader.uniforms[name] = { value: colors[name] };
     shader.vertexShader = shader.vertexShader
@@ -89,10 +91,10 @@ function dressSkin(source: THREE.MeshStandardMaterial, outfit: Outfit): THREE.Me
         float w = 0.004;
         float ax = abs(vRest.x);
         float y = vRest.y;
-        float shorts = smoothstep(0.66 - w, 0.66 + w, y) * (1.0 - smoothstep(1.03 - w, 1.03 + w, y));
+        float shorts = SUITED > 0.5 ? 0.0 : smoothstep(0.66 - w, 0.66 + w, y) * (1.0 - smoothstep(1.03 - w, 1.03 + w, y));
         float collar = 1.555 + 0.045 * smoothstep(0.05, 0.11, ax);
         float torso = smoothstep(1.03 - w, 1.03 + w, y) * (1.0 - smoothstep(collar - w, collar + w, y));
-        float jersey = torso * (1.0 - smoothstep(0.36 - w, 0.36 + w, ax));
+        float jersey = SUITED > 0.5 ? 0.0 : torso * (1.0 - smoothstep(0.36 - w, 0.36 + w, ax));
         float gloves = smoothstep(0.7 - w, 0.7 + w, ax) * step(1.2, y);
         float shoes = 1.0 - smoothstep(0.115 - w, 0.115 + w, y);
         float socks = (1.0 - smoothstep(0.3 - w, 0.3 + w, y)) * (1.0 - shoes);
