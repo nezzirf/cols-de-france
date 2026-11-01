@@ -45,6 +45,10 @@ export class DemoTrainer implements Trainer {
     this.lastCommand = command;
   }
 
+  async setTargetPower(watts: number): Promise<void> {
+    this.targetPowerW = watts;
+  }
+
   async disconnect(): Promise<void> {
     clearInterval(this.timer);
     this.state = 'disconnected';

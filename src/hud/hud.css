@@ -332,6 +332,40 @@ body {
   user-select: text;
 }
 
+.hud-workout {
+  top: auto;
+  left: 50%;
+  bottom: 78px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(620px, 56vw);
+  padding: 8px 12px;
+  transform: translateX(-50%);
+}
+
+.hud-workout-values {
+  display: flex;
+  gap: 14px;
+}
+
+.hud-workout-values b {
+  display: block;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.hud-workout-values span {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.hud-workout canvas {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+}
+
 .hud-pause {
   position: absolute;
   top: 22%;
@@ -362,6 +396,10 @@ body {
 
   .hud-explore {
     bottom: 104px;
+  }
+
+  .hud-workout {
+    bottom: 152px;
   }
 }
 
@@ -424,180 +462,10 @@ body {
   backdrop-filter: blur(5px);
 }
 
-.menu {
-  max-width: 1120px;
-  margin: 0 auto;
-}
-
-.menu h1 {
-  margin: 0;
-  font-size: 44px;
-  letter-spacing: 0.01em;
-}
-
-.menu-sub {
-  margin: 4px 0 26px;
-  color: var(--dim);
-  font-size: 16px;
-}
-
-.menu-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 24px;
-  align-items: start;
-}
-
-.cols {
-  display: grid;
-  gap: 10px;
-}
-
-.col-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px 14px;
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.col-card:hover {
-  background: rgba(255, 255, 255, 0.09);
-}
-
-.col-card:focus-visible,
 .btn:focus-visible,
 input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-}
-
-.col-card[aria-pressed='true'] {
-  border-color: var(--accent);
-  background: rgba(255, 203, 46, 0.1);
-}
-
-.col-card h2 {
-  margin: 0;
-  font-size: 21px;
-}
-
-.col-card p {
-  margin: 0;
-  color: var(--dim);
-  font-size: 14px;
-}
-
-.col-stats {
-  grid-row: 1 / 3;
-  grid-column: 2;
-  text-align: right;
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-}
-
-.col-stats .dim {
-  font-size: 13px;
-}
-
-.col-card canvas {
-  grid-column: 1 / 3;
-  width: 100%;
-  height: 32px;
-  margin-top: 8px;
-}
-
-.side {
-  display: grid;
-  gap: 16px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.side h3 {
-  margin: 0 0 8px;
-  font-size: 14px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--dim);
-}
-
-.field {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-  font-size: 15px;
-}
-
-.field input[type='number'] {
-  width: 84px;
-  padding: 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.25);
-  color: inherit;
-  font: inherit;
-  text-align: right;
-}
-
-.field input[type='range'] {
-  width: 130px;
-  accent-color: var(--accent);
-}
-
-.bike-select {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #1a2129;
-  color: inherit;
-  font: inherit;
-  font-size: 15px;
-}
-
-.bike-select:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.bike-card {
-  margin-top: 8px;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.bike-card .dim {
-  color: var(--dim);
-}
-
-.bike-head {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 14px;
-}
-
-.bike-head span:last-child {
-  margin-left: 4px;
-}
-
-.swatch {
-  width: 13px;
-  height: 13px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
 }
 
 .btn {
@@ -645,23 +513,6 @@ input:focus-visible {
   cursor: wait;
 }
 
-.msg {
-  min-height: 18px;
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: var(--dim);
-}
-
-.msg.error {
-  color: #ff9a90;
-}
-
-.credits {
-  margin-top: 22px;
-  font-size: 12px;
-  color: var(--dim);
-}
-
 .result {
   max-width: 560px;
   margin: 8vh auto 0;
@@ -706,10 +557,4 @@ input:focus-visible {
 
 .result .btn.primary {
   margin-top: 16px;
-}
-
-@media (max-width: 860px) {
-  .menu-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }

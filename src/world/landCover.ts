@@ -15,12 +15,12 @@ export class LandCover {
   private height = 0;
 
   constructor(
-    image: HTMLImageElement,
+    image: HTMLImageElement | HTMLCanvasElement,
     private terrain: TerrainMeta,
   ) {
     const canvas = document.createElement('canvas');
-    this.width = canvas.width = image.naturalWidth;
-    this.height = canvas.height = image.naturalHeight;
+    this.width = canvas.width = 'naturalWidth' in image ? image.naturalWidth : image.width;
+    this.height = canvas.height = 'naturalHeight' in image ? image.naturalHeight : image.height;
     const g = canvas.getContext('2d', { willReadFrequently: true });
     if (!g) return;
     g.drawImage(image, 0, 0);

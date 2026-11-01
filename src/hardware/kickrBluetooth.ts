@@ -8,6 +8,8 @@ import {
   CYCLING_POWER_MEASUREMENT,
   CYCLING_POWER_SERVICE,
   encodeSimulation,
+  encodeTargetPower,
+  encodeWahooErg,
   encodeWahooGrade,
   encodeWahooSimMode,
   FTMS_CONTROL_POINT,
@@ -28,6 +30,7 @@ const RECONNECT_ATTEMPTS = 5;
 
 interface Control {
   send(cmd: TrainerCommand): Promise<void>;
+  power(watts: number): Promise<void>;
 }
 
 export class KickrBluetooth implements Trainer {
@@ -100,7 +103,10 @@ export class KickrBluetooth implements Trainer {
     await this.writeFtms(point, new Uint8Array([FtmsOp.RequestControl]));
     await this.writeFtms(point, new Uint8Array([FtmsOp.Start]));
     this.protocol = 'FTMS';
-    this.control = { send: (cmd) => this.writeFtms(point, encodeSimulation(cmd)) };
+    this.control = {
+      send: (cmd) => this.writeFtms(point, encodeSimulation(cmd)),
+      power: (watts) => this.writeFtms(point, encodeTargetPower(watts)),
+    };
   }
 
   /** Écrit sur le point de contrôle FTMS et attend l'indication de réponse. */
@@ -155,6 +161,10 @@ export class KickrBluetooth implements Trainer {
         }
         await point.writeValueWithResponse(encodeWahooGrade(cmd.gradePct));
       },
+      power: async (watts) => {
+        modeSet = false;
+        await point.writeValueWithResponse(encodeWahooErg(watts));
+      },
     };
   }
 
@@ -182,6 +192,11 @@ export class KickrBluetooth implements Trainer {
   async setSimulation(command: TrainerCommand): Promise<void> {
     this.lastCommand = command;
     await this.control?.send(command);
+  }
+
+  async setTargetPower(watts: number): Promise<void> {
+    this.lastCommand = null;
+    await this.control?.power(watts);
   }
 
   async disconnect(): Promise<void> {

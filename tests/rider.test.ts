@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { turned } from '../src/world/modelParts';
 import { createRiderModel, helmetPoint, ROAD_LOOK, solveJoint } from '../src/world/rider';
 
 const length = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -44,6 +45,18 @@ describe('casque', () => {
   });
   it('a une pointe plus longue en contre-la-montre', () => {
     expect(helmetPoint(dir(0, 0, 1), 2.3).z).toBeGreaterThan(helmetPoint(dir(0, 0, 1), 1.65).z);
+  });
+});
+
+describe('surfaces', () => {
+  it('ne laisse pas de couture sur un volume fermé', () => {
+    const g = turned([0.1, 0.12, 0.1], 16);
+    const n = g.getAttribute('normal');
+    const rows = 3;
+    // La dernière colonne de sommets rejoint la première : leurs normales doivent coïncider.
+    const last = 16 * rows;
+    expect(n.getX(last + 1)).toBeCloseTo(n.getX(1), 5);
+    expect(n.getZ(last + 1)).toBeCloseTo(n.getZ(1), 5);
   });
 });
 

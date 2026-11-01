@@ -19,6 +19,8 @@ export interface Trainer {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   setSimulation(command: TrainerCommand): Promise<void>;
+  /** Mode ERG : impose la puissance, quelle que soit la cadence. */
+  setTargetPower(watts: number): Promise<void>;
   onData: (data: TrainerData) => void;
   onState: (state: ConnectionState) => void;
 }

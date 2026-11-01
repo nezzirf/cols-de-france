@@ -5,21 +5,38 @@ import type { Biomes } from '../sim/route';
 import { ROCK_COLORS } from './biomes';
 import type { Occupancy } from './buildings';
 import type { LandCover } from './landCover';
-import { broadleafTexture, coniferTexture, crossedPlanes, foliageDepth, grassTexture } from './foliage';
+import {
+  barkTexture,
+  broadleafTexture,
+  coniferTexture,
+  crossedPlanes,
+  fernTexture,
+  flowerTexture,
+  foliageDepth,
+  frondTexture,
+  grassTexture,
+  leafClusterTexture,
+} from './foliage';
 import type { HeightField } from './heightField';
 import { pbr } from './materials';
+import { broadleafCrown, broadleafTrunk, coniferCrown, coniferTrunk } from './treeGeometry';
 
 const TILE_M = 160;
 const CELL_M = 11;
 const RADIUS_TILES = 5;
 const MAX_INSTANCES = 16000;
+/** Rayon des arbres détaillés ; au-delà, des plans croisés suffisent et coûtent 40 fois moins. */
+const NEAR_TREE_M = 240;
+const MAX_NEAR_TREES = 2400;
 
 const GRASS_TILE_M = 24;
-const GRASS_CELL_M = 1.5;
+const GRASS_CELL_M = 1.05;
 const GRASS_RADIUS_TILES = 3;
-const MAX_TUFTS = 9000;
+const MAX_TUFTS = 24000;
 
 type Species = 'conifer' | 'broadleaf' | 'rock';
+type Tree = 'conifer' | 'broadleaf';
+type Plant = 'grass' | 'fern' | 'flower';
 
 function painted(geo: THREE.BufferGeometry, color: number): THREE.BufferGeometry {
   const g = geo.index ? geo.toNonIndexed() : geo;
@@ -61,11 +78,14 @@ interface Placement {
   y: number;
   z: number;
   scale: number;
+  /** Corpulence : deux arbres de même hauteur ne sont pas aussi larges. */
+  girth: number;
   rot: number;
   color: THREE.Color;
 }
 
 interface Tuft {
+  kind: Plant;
   x: number;
   y: number;
   z: number;
@@ -76,7 +96,8 @@ interface Tuft {
 
 export class Vegetation {
   private meshes: Record<Species, THREE.InstancedMesh>;
-  private grass: THREE.InstancedMesh;
+  private near: Record<Tree, { crown: THREE.InstancedMesh; trunk: THREE.InstancedMesh }>;
+  private plants: Record<Plant, THREE.InstancedMesh>;
   private tiles = new Map<string, Placement[]>();
   private grassTiles = new Map<string, Tuft[]>();
   private currentKey = '';
@@ -117,13 +138,46 @@ export class Vegetation {
       broadleaf: mesh(crossedPlanes(12, 12, 3), foliage(leafMap, 0.012), foliageDepth(leafMap)),
       rock: mesh(rockGeometry(), pbr({ vertexColors: true, roughness: 0.95 })),
     };
-    const grassMaterial = foliage(grassTexture(), 0.16);
-    this.grass = new THREE.InstancedMesh(crossedPlanes(1.1, 0.62, 2), grassMaterial, MAX_TUFTS);
-    this.grass.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.grass.frustumCulled = false;
-    this.grass.count = 0;
-    this.grass.receiveShadow = true;
-    scene.add(this.grass);
+
+    const detailed = (crown: THREE.BufferGeometry, trunk: THREE.BufferGeometry, map: THREE.Texture, bark: THREE.Texture, wind: number) => {
+      const leaves = pbr({ map, side: THREE.DoubleSide, alphaTest: 0.42, alphaToCoverage: true, vertexColors: true, roughness: 0.78 });
+      this.addWind(leaves, wind);
+      const wood = pbr({ map: bark, bumpMap: bark, bumpScale: 2.5, roughness: 0.96 });
+      this.addWind(wood, wind);
+      const parts = {
+        crown: new THREE.InstancedMesh(crown, leaves, MAX_NEAR_TREES),
+        trunk: new THREE.InstancedMesh(trunk, wood, MAX_NEAR_TREES),
+      };
+      parts.crown.customDepthMaterial = foliageDepth(map);
+      for (const m of [parts.crown, parts.trunk]) {
+        m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        m.frustumCulled = false;
+        m.castShadow = true;
+        m.receiveShadow = true;
+        m.count = 0;
+        scene.add(m);
+      }
+      return parts;
+    };
+    this.near = {
+      conifer: detailed(coniferCrown(), coniferTrunk(), frondTexture(), barkTexture([84, 62, 46]), 0.008),
+      broadleaf: detailed(broadleafCrown(), broadleafTrunk(), leafClusterTexture(), barkTexture([104, 94, 80]), 0.012),
+    };
+
+    const plant = (geometry: THREE.BufferGeometry, map: THREE.Texture, wind: number, count: number) => {
+      const m = new THREE.InstancedMesh(geometry, foliage(map, wind), count);
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      m.frustumCulled = false;
+      m.receiveShadow = true;
+      m.count = 0;
+      scene.add(m);
+      return m;
+    };
+    this.plants = {
+      grass: plant(crossedPlanes(1.25, 0.72, 2), grassTexture(), 0.17, MAX_TUFTS),
+      fern: plant(crossedPlanes(1.5, 0.82, 3), fernTexture(), 0.09, MAX_TUFTS),
+      flower: plant(crossedPlanes(0.95, 0.62, 2), flowerTexture(), 0.2, MAX_TUFTS),
+    };
     // Teintes multipliées à la texture : de légères variations d'un arbre à l'autre.
     this.conifers = biomes.trees === 'meleze' ? [0xe8f0a8, 0xf4f0a0, 0xd8e49c] : [0xffffff, 0xe4ecdc, 0xd4e0cc, 0xf0f4e8];
     this.broadleaves = [0xffffff, 0xf0f4d4, 0xdce8c4, 0xfff6cc];
@@ -204,6 +258,7 @@ export class Vegetation {
           y: isRock ? y : y - 0.2,
           z,
           scale: isRock ? 0.22 + hash(gx, gz, 5) ** 4 * 2.8 : scale * (y > b.forest - 120 ? 0.72 : 1),
+          girth: 0.82 + hash(gx, gz, 9) * 0.42,
           rot,
           color,
         });
@@ -225,10 +280,18 @@ export class Vegetation {
         const y = this.field.height(x, z);
         if (y > b.alpage + 40 || hash(gx, gz, 13) > 0.8) continue;
         if (this.occupancy.has(x, z) || this.field.exactRoadDistance(x, z) < 5.2) continue;
-        const inForest = y > b.valley && y < b.forest;
+        const wooded = this.cover.isForest(x, z);
+        const roll = hash(gx, gz, 14);
+        const high = y > b.forest;
         const shade = 0.82 + hash(gx, gz, 16) * 0.3;
-        const color = new THREE.Color(inForest ? 0x4d7038 : y > b.forest ? 0x8c9450 : 0x6f9440).multiplyScalar(shade);
-        out.push({ x, y: y - 0.04, z, scale: 0.8 + hash(gx, gz, 17) * 0.9, rot: hash(gx, gz, 18) * 6.28, color });
+        let kind: Plant = 'grass';
+        if (wooded && roll < 0.3) kind = 'fern';
+        else if (!wooded && roll < (high ? 0.1 : 0.05)) kind = 'flower';
+        const color =
+          kind === 'flower'
+            ? new THREE.Color(0xffffff)
+            : new THREE.Color(wooded ? 0x577a3e : high ? 0x8c9450 : 0x6f9440).multiplyScalar(shade);
+        out.push({ kind, x, y: y - 0.04, z, scale: 0.75 + hash(gx, gz, 17) * 0.8, rot: hash(gx, gz, 18) * 6.28, color });
       }
     }
     return out;
@@ -240,7 +303,7 @@ export class Vegetation {
     const key = `${cx}/${cz}`;
     if (key === this.grassKey) return;
     this.grassKey = key;
-    let count = 0;
+    const counts: Record<Plant, number> = { grass: 0, fern: 0, flower: 0 };
     for (let dz = -GRASS_RADIUS_TILES; dz <= GRASS_RADIUS_TILES; dz++) {
       for (let dx = -GRASS_RADIUS_TILES; dx <= GRASS_RADIUS_TILES; dx++) {
         const k = `${cx + dx}/${cz + dz}`;
@@ -250,20 +313,25 @@ export class Vegetation {
           this.grassTiles.set(k, tile);
         }
         for (const t of tile) {
-          if (count >= MAX_TUFTS) break;
+          const i = counts[t.kind];
+          if (i >= MAX_TUFTS) continue;
           this.dummy.position.set(t.x, t.y, t.z);
           this.dummy.rotation.set(0, t.rot, 0);
           this.dummy.scale.setScalar(t.scale);
           this.dummy.updateMatrix();
-          this.grass.setMatrixAt(count, this.dummy.matrix);
-          this.grass.setColorAt(count, t.color);
-          count++;
+          const mesh = this.plants[t.kind];
+          mesh.setMatrixAt(i, this.dummy.matrix);
+          mesh.setColorAt(i, t.color);
+          counts[t.kind]++;
         }
       }
     }
-    this.grass.count = count;
-    this.grass.instanceMatrix.needsUpdate = true;
-    if (this.grass.instanceColor) this.grass.instanceColor.needsUpdate = true;
+    for (const kind of Object.keys(this.plants) as Plant[]) {
+      const m = this.plants[kind];
+      m.count = counts[kind];
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    }
     // Les tuiles lointaines ne reservent plus : on évite que le cache grossisse sans fin.
     if (this.grassTiles.size > 600) this.grassTiles.clear();
   }
@@ -278,6 +346,7 @@ export class Vegetation {
     this.currentKey = key;
 
     const counts: Record<Species, number> = { conifer: 0, broadleaf: 0, rock: 0 };
+    const nearCounts: Record<Tree, number> = { conifer: 0, broadleaf: 0 };
     for (let dz = -RADIUS_TILES; dz <= RADIUS_TILES; dz++) {
       for (let dx = -RADIUS_TILES; dx <= RADIUS_TILES; dx++) {
         if (dx * dx + dz * dz > RADIUS_TILES * RADIUS_TILES + 2) continue;
@@ -288,18 +357,36 @@ export class Vegetation {
           this.tiles.set(k, tile);
         }
         for (const p of tile) {
-          const i = counts[p.species];
-          if (i >= MAX_INSTANCES) continue;
           this.dummy.position.set(p.x, p.y, p.z);
           this.dummy.rotation.set(0, p.rot, 0);
-          this.dummy.scale.setScalar(p.scale);
+          if (p.species === 'rock') this.dummy.scale.setScalar(p.scale);
+          else this.dummy.scale.set(p.scale * p.girth, p.scale, p.scale * p.girth);
           this.dummy.updateMatrix();
+
+          // Les arbres proches passent en version détaillée.
+          if (p.species !== 'rock' && Math.hypot(p.x - x, p.z - z) < NEAR_TREE_M && nearCounts[p.species] < MAX_NEAR_TREES) {
+            const i = nearCounts[p.species]++;
+            const { crown, trunk } = this.near[p.species];
+            crown.setMatrixAt(i, this.dummy.matrix);
+            crown.setColorAt(i, p.color);
+            trunk.setMatrixAt(i, this.dummy.matrix);
+            continue;
+          }
+          const i = counts[p.species];
+          if (i >= MAX_INSTANCES) continue;
           const mesh = this.meshes[p.species];
           mesh.setMatrixAt(i, this.dummy.matrix);
           mesh.setColorAt(i, p.color);
           counts[p.species]++;
         }
       }
+    }
+    for (const tree of Object.keys(this.near) as Tree[]) {
+      const { crown, trunk } = this.near[tree];
+      crown.count = trunk.count = nearCounts[tree];
+      crown.instanceMatrix.needsUpdate = true;
+      trunk.instanceMatrix.needsUpdate = true;
+      if (crown.instanceColor) crown.instanceColor.needsUpdate = true;
     }
     for (const s of Object.keys(this.meshes) as Species[]) {
       const m = this.meshes[s];

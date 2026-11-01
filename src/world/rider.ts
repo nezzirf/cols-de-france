@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import type { BikeShape } from '../sim/bikes';
 import { BB as BB_POINT, type BikeLook, buildBike } from './bikeModel';
 import { pbr } from './materials';
-import { at, ball, place, type Point, turned } from './modelParts';
+import { at, ball, place, type Point, sculpt, turned, weldNormals } from './modelParts';
+import { bibTexture } from './riderTextures';
 
 const THIGH = 0.43;
 const SHIN = 0.42;
@@ -98,13 +99,42 @@ function helmetGeometry(tail: number): THREE.BufferGeometry {
   return g;
 }
 
+/** Crâne, mâchoire et menton : une sphère resserrée vers le bas, le front en retrait. */
+function headGeometry(): THREE.BufferGeometry {
+  const g = new THREE.SphereGeometry(1, 32, 24);
+  const p = g.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    const jaw = y < 0 ? 1 - 0.42 * y * y : 1;
+    const eyes = z < -0.55 && y > 0 && y < 0.34 ? 0.95 : 1;
+    const chin = y < -0.7 && z < 0 ? 1.08 : 1;
+    p.setXYZ(i, x * 0.086 * jaw, y * 0.118, z * 0.102 * jaw * eyes * chin);
+  }
+  g.computeVertexNormals();
+  weldNormals(g);
+  return g;
+}
+
+/** Point d'un profil de révolution, interpolé. */
+function radiusAt(profile: number[], t: number): number {
+  const f = t * (profile.length - 1);
+  const i = Math.min(profile.length - 2, Math.floor(f));
+  return profile[i] + (profile[i + 1] - profile[i]) * (f - i);
+}
+
 /** Modèle orienté vers -Z, posé sur le sol en y = 0. */
 export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, look: RiderLook = ROAD_LOOK): RiderModel {
   const group = new THREE.Group();
   const mono = look.mono === true || kit === jersey;
-  const skin = mono ? jersey : pbr({ color: 0xd9a884 });
-  const sock = mono ? jersey : pbr({ color: 0xf1efe9 });
-  const shoeMat = mono ? jersey : pbr({ color: 0xf3f3f0 });
+  const skin = mono ? jersey : pbr({ color: 0xc99672, roughness: 0.52 });
+  const sock = mono ? jersey : pbr({ color: 0xf1efe9, roughness: 0.8 });
+  const shoeMat = mono ? jersey : pbr({ color: 0xf1f1ee, roughness: 0.32 });
+  const soleMat = mono ? jersey : pbr({ color: 0x17181b, roughness: 0.4 });
+  const lens = mono ? jersey : pbr({ color: 0x0b1118, roughness: 0.08, metalness: 0.95 });
+  const hair = mono ? jersey : pbr({ color: 0x2c2118, roughness: 0.75 });
+  const lips = mono ? jersey : pbr({ color: 0xa96a5c, roughness: 0.5 });
   const accent = look.accent ?? jersey;
   const dark = kit;
   const tt = look.shape === 'clm';
@@ -128,12 +158,35 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
   const shoulderC = at(posture.shoulder[0], posture.shoulder[1]);
   const pelvis = at(HIP.x, HIP.y);
 
-  const torsoProfile = [0.15, 0.158, 0.164, 0.17, 0.178, 0.19, 0.19, 0.16, 0.08];
-  const torsoGeo = turned(torsoProfile, 18);
+  const torsoProfile = [0.15, 0.156, 0.16, 0.163, 0.166, 0.172, 0.18, 0.188, 0.193, 0.19, 0.17, 0.135, 0.085];
+  const torsoGeo = turned(torsoProfile, 28);
   torsoGeo.scale(1.12, 1, 0.74);
+  // Le dos se creuse à la colonne et se bombe aux omoplates.
+  sculpt(torsoGeo, (x, y, z) => {
+    if (z <= 0) return [0, y > 0.55 ? 0.012 : 0];
+    const blades = Math.exp(-((y - 0.72) ** 2) / 0.02) * 0.022 * Math.min(1, Math.abs(x) / 0.07);
+    const spine = Math.exp(-(x * x) / 0.0012) * -0.009;
+    return [0, blades + spine];
+  });
   const torso = new THREE.Mesh(torsoGeo, jersey);
   place(torso, pelvis, at(posture.neck[0], posture.neck[1]));
   group.add(torso);
+
+  const collar = new THREE.Mesh(turned([0.074, 0.07], 18), accent);
+  place(collar, at(posture.neck[0], posture.neck[1]).lerp(at(posture.head[0], posture.head[1]), 0.05), at(posture.neck[0], posture.neck[1]).lerp(at(posture.head[0], posture.head[1]), 0.24));
+  group.add(collar);
+
+  // Dossard épinglé : un morceau de la surface du dos, juste au-dessus du maillot.
+  const bib = bibTexture('127');
+  if (bib && !mono) {
+    const points = [0.13, 0.22, 0.31, 0.4].map((t) => new THREE.Vector2(radiusAt(torsoProfile, t) + 0.004, t));
+    const patch = new THREE.LatheGeometry(points, 12, -0.62, 1.24);
+    patch.scale(1.12, 1, 0.74);
+    patch.computeVertexNormals();
+    const paper = new THREE.Mesh(patch, pbr({ map: bib, roughness: 0.7 }));
+    place(paper, pelvis, at(posture.neck[0], posture.neck[1]));
+    group.add(paper);
+  }
 
   // Bande de couleur sur le maillot, comme les tenues d'équipe.
   const bandGeo = turned([0.181, 0.19, 0.196, 0.196], 18);
@@ -164,13 +217,24 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
   headGroup.position.copy(at(posture.head[0], posture.head[1]));
   headGroup.rotation.x = posture.headTilt;
   group.add(headGroup);
-  const skull = ball(1, skin);
-  skull.scale.set(0.088, 0.108, 0.102);
-  headGroup.add(skull);
-  const jaw = ball(1, skin);
-  jaw.scale.set(0.066, 0.07, 0.07);
-  jaw.position.set(0, -0.052, -0.022);
-  headGroup.add(jaw);
+  headGroup.add(new THREE.Mesh(headGeometry(), skin));
+  const nose = new THREE.Mesh(turned([0.012, 0.015, 0.018, 0.016, 0.004], 10), skin);
+  place(nose, new THREE.Vector3(0, 0.012, -0.096), new THREE.Vector3(0, -0.03, -0.116));
+  headGroup.add(nose);
+  const mouth = ball(1, lips);
+  mouth.scale.set(0.024, 0.0055, 0.008);
+  mouth.position.set(0, -0.063, -0.083);
+  headGroup.add(mouth);
+  for (const side of [-1, 1]) {
+    const ear = ball(1, skin);
+    ear.scale.set(0.009, 0.03, 0.019);
+    ear.position.set(side * 0.086, -0.012, 0.01);
+    headGroup.add(ear);
+  }
+  const nape = ball(1, hair);
+  nape.scale.set(0.083, 0.066, 0.062);
+  nape.position.set(0, -0.012, 0.05);
+  headGroup.add(nape);
   const tail = tt ? 2.3 : 1.65;
   const helmet = new THREE.Mesh(helmetGeometry(tail), accent);
   const shellY = 0.024;
@@ -201,48 +265,81 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
     place(strap, new THREE.Vector3(side * 0.09, 0.0, 0.01), new THREE.Vector3(side * 0.012, -0.115, -0.04));
     headGroup.add(strap);
   }
-  const glasses = ball(1, dark);
-  glasses.scale.set(0.082, 0.025, 0.05);
-  glasses.position.set(0, 0.0, -0.068);
+  // Lunettes enveloppantes : un écran courbe et brillant, qui reflète le ciel.
+  const shield = new THREE.SphereGeometry(1, 24, 8, Math.PI * 1.5 - 1.1, 2.2, 1.28, 0.62);
+  const glasses = new THREE.Mesh(shield, lens);
+  (lens as THREE.Material).side = THREE.DoubleSide;
+  glasses.scale.set(0.098, 0.082, 0.117);
+  glasses.position.set(0, 0.018, 0);
   headGroup.add(glasses);
+  for (const side of [-1, 1]) {
+    const temple = new THREE.Mesh(turned([0.0035, 0.0035], 6), dark);
+    place(temple, new THREE.Vector3(side * 0.09, 0.018, -0.05), new THREE.Vector3(side * 0.09, 0.014, 0.03));
+    headGroup.add(temple);
+  }
 
   for (const side of [-1, 1]) {
     const sh = at(posture.shoulder[0], posture.shoulder[1], side * 0.17);
     const handPos = at(posture.hand[0], posture.hand[1], side * posture.handSide);
     const elbow2d = solveJoint(posture.shoulder, posture.hand, UPPER_ARM, FOREARM, -1);
     const elbow = at(elbow2d[0], elbow2d[1], side * (0.17 + posture.handSide) * 0.55);
-    const deltoid = ball(0.074, jersey);
+    const deltoid = ball(1, jersey);
+    deltoid.scale.set(0.078, 0.082, 0.082);
     deltoid.position.copy(sh);
-    const upper = new THREE.Mesh(turned([0.066, 0.062, 0.05, 0.043]), jersey);
+    const upperGeo = turned([0.066, 0.066, 0.062, 0.054, 0.046, 0.042], 18);
+    sculpt(upperGeo, (_x, y, z) => [0, z > 0 ? 0.012 * Math.sin(y * Math.PI) : 0]);
+    const upper = new THREE.Mesh(upperGeo, jersey);
     place(upper, sh, elbow);
-    const cuff = new THREE.Mesh(turned([0.047, 0.047]), accent);
-    place(cuff, sh.clone().lerp(elbow, 0.84), elbow);
-    const fore = new THREE.Mesh(turned([0.04, 0.042, 0.034, 0.026]), skin);
+    const cuff = new THREE.Mesh(turned([0.046, 0.045], 16), accent);
+    place(cuff, sh.clone().lerp(elbow, 0.68), sh.clone().lerp(elbow, 0.76));
+    const skinArm = new THREE.Mesh(turned([0.043, 0.04], 16), skin);
+    place(skinArm, sh.clone().lerp(elbow, 0.74), elbow);
+    const foreGeo = turned([0.038, 0.044, 0.043, 0.036, 0.029, 0.024], 18);
+    const fore = new THREE.Mesh(foreGeo, skin);
     place(fore, elbow, handPos);
     const elbowBall = ball(0.04, skin);
     elbowBall.position.copy(elbow);
-    const glove = ball(1, dark);
-    glove.scale.set(0.034, 0.03, 0.044);
-    glove.position.copy(handPos);
-    group.add(deltoid, upper, cuff, fore, elbowBall, glove);
+    const palm = ball(1, dark);
+    palm.scale.set(0.038, 0.024, 0.048);
+    palm.position.copy(handPos);
+    group.add(deltoid, upper, cuff, skinArm, fore, elbowBall, palm);
+    // Doigts refermés sur le cintre, et le pouce de l'autre côté.
+    for (let k = 0; k < 4; k++) {
+      const finger = new THREE.Mesh(turned([0.0095, 0.0095, 0.008], 8), dark);
+      const offset = side * (0.022 - k * 0.0145);
+      place(finger, handPos.clone().add(new THREE.Vector3(offset, 0.014, -0.035)), handPos.clone().add(new THREE.Vector3(offset, -0.03, -0.062)));
+      group.add(finger);
+    }
+    const thumb = new THREE.Mesh(turned([0.011, 0.01, 0.008], 8), dark);
+    place(thumb, handPos.clone().add(new THREE.Vector3(-side * 0.03, 0.005, -0.01)), handPos.clone().add(new THREE.Vector3(-side * 0.036, -0.03, -0.05)));
+    group.add(thumb);
   }
 
   // --- Jambes : géométries unitaires, étirées à chaque image ---
-  const thighGeo = turned([0.1, 0.098, 0.086, 0.07, 0.058]);
-  const calfGeo = turned([0.052, 0.06, 0.056, 0.044, 0.036]);
-  const sockGeo = turned([0.04, 0.038, 0.036]);
-  const footGeo = turned([0, 0.032, 0.042, 0.04, 0.03, 0]);
-  footGeo.scale(1.05, 1, 0.8);
+  const thighGeo = turned([0.1, 0.098, 0.092, 0.084, 0.074, 0.064, 0.056], 20);
+  sculpt(thighGeo, (_x, y, z) => [0, z > 0 ? 0.02 * Math.sin(Math.min(1, y * 1.3) * Math.PI) : -0.008 * Math.sin(y * Math.PI)]);
+  const shortsGeo = turned([0.104, 0.102, 0.097, 0.089, 0.08], 20);
+  sculpt(shortsGeo, (_x, y, z) => [0, z > 0 ? 0.021 * Math.sin(y * 0.92 * Math.PI) : -0.008 * Math.sin(y * Math.PI)]);
+  // Mollet : le muscle est à l'arrière de la jambe et s'affine vers la cheville.
+  const calfGeo = turned([0.05, 0.054, 0.056, 0.05, 0.043, 0.037, 0.032], 20);
+  sculpt(calfGeo, (_x, y, z) => [0, z < 0 ? -0.024 * Math.exp(-((y - 0.3) ** 2) / 0.04) : 0.004 * Math.sin(y * Math.PI)]);
+  const sockGeo = turned([0.042, 0.04, 0.038, 0.037], 16);
+  const footGeo = turned([0, 0.03, 0.04, 0.043, 0.038, 0.027, 0], 16);
+  footGeo.scale(1.08, 1, 0.82);
+  const soleGeo = turned([0, 0.03, 0.038, 0.04, 0.036, 0.024, 0], 12);
+  soleGeo.scale(1.12, 1, 0.22);
   const makeLeg = () => {
     const leg = {
       hip: ball(0.102, kit),
-      thigh: new THREE.Mesh(thighGeo, kit),
+      thigh: new THREE.Mesh(thighGeo, skin),
+      shorts: new THREE.Mesh(shortsGeo, kit),
       knee: ball(0.056, skin),
       calf: new THREE.Mesh(calfGeo, skin),
       sock: new THREE.Mesh(sockGeo, sock),
       foot: new THREE.Mesh(footGeo, shoeMat),
+      sole: new THREE.Mesh(soleGeo, soleMat),
     };
-    group.add(leg.hip, leg.thigh, leg.knee, leg.calf, leg.sock, leg.foot);
+    group.add(leg.hip, leg.thigh, leg.shorts, leg.knee, leg.calf, leg.sock, leg.foot, leg.sole);
     return leg;
   };
   const legs = [makeLeg(), makeLeg()];
@@ -267,10 +364,16 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
       const kneePos = at(knee2d[0], knee2d[1], side * 0.11);
       const anklePos = at(ankle[0], ankle[1], side * PEDAL_SIDE);
       place(leg.thigh, hipPos, kneePos);
+      place(leg.shorts, hipPos, a.copy(hipPos).lerp(kneePos, 0.82));
       leg.knee.position.copy(kneePos);
       place(leg.calf, kneePos, anklePos);
-      place(leg.sock, a.copy(kneePos).lerp(anklePos, 0.72), anklePos);
-      place(leg.foot, a.copy(at(ankle[0] - 0.05, ankle[1] - 0.045, side * PEDAL_SIDE)), b.copy(at(px + 0.13, py + 0.012, side * PEDAL_SIDE)));
+      place(leg.sock, a.copy(kneePos).lerp(anklePos, 0.66), anklePos);
+      const heelX = ankle[0] - 0.05;
+      const heelY = ankle[1] - 0.045;
+      const toeX = px + 0.13;
+      const toeY = py + 0.012;
+      place(leg.foot, a.copy(at(heelX, heelY, side * PEDAL_SIDE)), b.copy(at(toeX, toeY, side * PEDAL_SIDE)));
+      place(leg.sole, a.copy(at(heelX, heelY - 0.026, side * PEDAL_SIDE)), b.copy(at(toeX, toeY - 0.024, side * PEDAL_SIDE)));
     });
     for (const wheel of wheels) wheel.rotation.x = crankAngle * WHEEL_TURNS_PER_CRANK;
   };

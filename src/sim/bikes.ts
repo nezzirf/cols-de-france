@@ -175,6 +175,43 @@ export function findBike(id: string): Bike {
   return ALL_BIKES.find((b) => b.id === id) ?? ALL_BIKES.find((b) => b.id === DEFAULT_BIKE_ID)!;
 }
 
+export interface Jersey {
+  id: string;
+  name: string;
+  color: number;
+  accent: number;
+  team: boolean;
+}
+
+/** Garde la tenue liée au vélo choisi. */
+export const BIKE_JERSEY = 'velo';
+
+const PLAIN_JERSEYS: [string, string, number, number][] = [
+  ['blanc', 'Blanc', 0xf2f3f5, 0x1d2329],
+  ['noir', 'Noir', 0x17191d, 0xff6a1a],
+  ['rouge', 'Rouge', 0xd8232a, 0xf2f3f5],
+  ['bleu', 'Bleu', 0x1c4fa1, 0xf2f3f5],
+  ['vert', 'Vert', 0x1f8a4d, 0xf2f3f5],
+  ['jaune', 'Jaune', 0xf6d31f, 0x1d2329],
+  ['orange', 'Orange', 0xf26522, 0x1d2329],
+  ['rose', 'Rose', 0xe8348b, 0xf2f3f5],
+];
+
+export const JERSEYS: Jersey[] = [
+  ...PLAIN_JERSEYS.map(([id, name, color, accent]) => ({ id, name, color, accent, team: false })),
+  ...TEAMS.map((t) => ({ id: t.id, name: t.name, color: t.jersey, accent: t.accent, team: true })),
+];
+
+export function findJersey(id: string): Jersey | null {
+  return JERSEYS.find((j) => j.id === id) ?? null;
+}
+
+/** Le vélo avec le maillot choisi : le cadre et ses couleurs ne changent pas. */
+export function wearing(bike: Bike, jerseyId: string): Bike {
+  const jersey = findJersey(jerseyId);
+  return jersey ? { ...bike, jersey: jersey.color } : bike;
+}
+
 export function setupFor(bike: Bike, riderKg: number): RiderSetup {
   return {
     ...DEFAULT_SETUP,

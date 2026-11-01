@@ -10,6 +10,7 @@ import {
   AntMsg,
   FEC_DEVICE_TYPE,
   FEC_PERIOD,
+  fecTargetPower,
   fecTrackResistance,
   fecUserConfig,
   fecWindResistance,
@@ -131,6 +132,11 @@ export class KickrAnt implements Trainer {
       page = fecUserConfig(p.riderKg, p.bikeKg, p.wheelRadiusM * 2);
     }
     await this.send(AntMsg.AcknowledgedData, [FEC_CHANNEL, ...page]);
+  }
+
+  async setTargetPower(watts: number): Promise<void> {
+    if (!this.device || !this.running) return;
+    await this.send(AntMsg.AcknowledgedData, [FEC_CHANNEL, ...fecTargetPower(watts)]);
   }
 
   async disconnect(): Promise<void> {

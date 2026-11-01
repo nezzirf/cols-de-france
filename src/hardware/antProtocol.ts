@@ -108,6 +108,12 @@ export function fecTrackResistance(gradePct: number, crr: number): number[] {
   return [0x33, 0xff, 0xff, 0xff, 0xff, raw & 0xff, (raw >> 8) & 0xff, Math.min(254, Math.round(crr / 5e-5))];
 }
 
+/** Page 49 : puissance cible du mode ERG, par quarts de watt. */
+export function fecTargetPower(watts: number): number[] {
+  const raw = Math.max(0, Math.min(4000, Math.round(watts))) * 4;
+  return [0x31, 0xff, 0xff, 0xff, 0xff, 0xff, raw & 0xff, (raw >> 8) & 0xff];
+}
+
 /** Page 50 : CwR en 0,01 kg/m, vent en km/h décalé de 127, pas d'aspiration. */
 export function fecWindResistance(cmd: TrainerCommand): number[] {
   const cw = Math.min(254, Math.round(cmd.cwKgPerM * 100));

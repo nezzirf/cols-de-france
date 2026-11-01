@@ -73,7 +73,10 @@ const GROUND_FUNCTIONS = /* glsl */ `
     photo = mix(vec3(photoLuma), photo, 1.2) * mix(1.3, 0.82, smoothstep(0.25, 0.7, photoLuma));
     float wall = smoothstep(0.24, 0.4, steep);
     float distant = mix(0.3, 1.0, smoothstep(40.0, 200.0, vDistance));
-    return mix(c, photo, distant * (1.0 - wall * 0.85));
+    vec3 ground = mix(c, photo, distant * (1.0 - wall * 0.85));
+    // De près, le sol passe sous l'herbe : plus sombre, il ne ressort pas entre les touffes.
+    float underGrass = (1.0 - smoothstep(25.0, 120.0, vDistance)) * (1.0 - wall) * (1.0 - smoothstep(uBands.z - 40.0, uBands.z + 40.0, h));
+    return ground * mix(1.0, 0.56, underGrass);
   }
 
   /** Relief de surface : pierres et mottes que le maillage de 20 m ne peut pas porter. */

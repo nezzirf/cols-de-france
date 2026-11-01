@@ -79,6 +79,13 @@ describe('KickrBluetooth sur un KICKR simulé', () => {
     await k.setSimulation(CMD);
     expect(point.written[2].slice(0, 5)).toEqual([0x11, 0, 0, 0x20, 0x03]);
   });
+  it('passe en mode ERG avec la puissance demandée', async () => {
+    const { point } = fakeKickr();
+    const k = new KickrBluetooth(() => 80);
+    await k.connect();
+    await k.setTargetPower(250);
+    expect(point.written[2]).toEqual([0x05, 0xfa, 0x00]);
+  });
   it('sérialise les écritures : FTMS refuse deux commandes simultanées', async () => {
     const { point } = fakeKickr();
     const k = new KickrBluetooth(() => 80);

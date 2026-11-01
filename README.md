@@ -38,9 +38,22 @@ pour la sortie dès la première utilisation) :
 La position exacte (kilomètre, altitude, coordonnées GPS) s'affiche sous la barre.
 | Échap | Quitter |
 
+## Le menu
+
+- **Parcours** : les cols réels, et un parcours personnalisé dont on choisit la distance et la pente.
+  Il commence toujours par 5 km de plat pour s'échauffer ; sa route et son paysage sont générés, ils
+  ne représentent aucun lieu réel.
+- **Entraînement** : un créateur de séances par blocs (échauffement, stable, rampe, intervalles,
+  récupération), en % de FTP, avec des modèles prêts à l'emploi. Les séances sont gardées dans le
+  navigateur. Une séance se roule sur le parcours choisi : le home trainer passe en mode ERG et
+  impose la puissance, et la sortie s'arrête à la fin de la séance ou au bout du parcours.
+- **Garage** : le vélo et le maillot. Le maillot n'a aucun effet sur la vitesse.
+
+La FTP, le poids et le nom se règlent en haut de l'écran.
+
 ## Choisir son vélo
 
-Le menu propose des vélos sans équipe (route, endurance, contre-la-montre, gravel, VTT, ville) et
+Le garage propose des vélos sans équipe (route, endurance, contre-la-montre, gravel, VTT, ville) et
 tous les vélos des 18 équipes WorldTour masculines 2026, avec leurs couleurs. Le vélo change le
 poids, l'aérodynamique et la résistance au roulement : la vitesse à l'écran, et la résistance
 envoyée au home trainer. Le catalogue est dans `src/sim/bikes.ts`.

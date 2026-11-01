@@ -9,10 +9,10 @@ import { ambienceOf, biomeAt, biomeLabel, type BiomeName } from './biomes';
 import { HeightField } from './heightField';
 import { LandCover } from './landCover';
 import { Landmarks, type RouteEvent } from './landmarks';
-import { pbr } from './materials';
 import { Pipeline } from './pipeline';
 import { FreeCamera } from './freeCamera';
 import { createRiderModel, type RiderModel } from './rider';
+import { bikeShape, dressedRider } from './riderSetup';
 import { buildRoad, stations } from './road';
 import { createSky } from './sky';
 import { groundMaterial, SUN_DIRECTION, TerrainSystem } from './terrain';
@@ -55,7 +55,7 @@ export class World {
     rawHeights: Float32Array,
     buildings: BuildingData[],
     bike: Bike,
-    ortho: HTMLImageElement,
+    ortho: HTMLImageElement | HTMLCanvasElement,
   ) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.renderer.shadowMap.enabled = true;
@@ -102,18 +102,11 @@ export class World {
     this.vegetation = new Vegetation(this.field, route.data.biomes, occupancy, new LandCover(ortho, route.data.terrain), this.scene);
     this.events = new Landmarks(route, this.field, this.scene).events;
 
-    const shape = { shape: bike.shape, tyreM: bike.tyreM, wheelRadiusM: bike.wheelRadiusM, design: bike.design };
-    this.rider = createRiderModel(pbr({ color: bike.jersey, roughness: 0.72 }), pbr({ color: 0x16181c, roughness: 0.62 }), {
-      ...shape,
-      frame: pbr({ color: bike.frame, roughness: 0.28, metalness: 0.2 }),
-      paint: pbr({ color: bike.accent, roughness: 0.28, metalness: 0.2 }),
-      accent: pbr({ color: bike.accent, roughness: 0.34 }),
-      brand: bike.brand ?? undefined,
-    });
+    this.rider = dressedRider(bike);
     this.rider.group.traverse((o) => (o.castShadow = true));
     this.scene.add(this.rider.group);
     const ghostMat = new THREE.MeshBasicMaterial({ color: 0x7fd8ff, transparent: true, opacity: 0.42, depthWrite: false });
-    this.ghost = createRiderModel(ghostMat, ghostMat, shape);
+    this.ghost = createRiderModel(ghostMat, ghostMat, bikeShape(bike));
     this.ghost.group.visible = false;
     this.scene.add(this.ghost.group);
 

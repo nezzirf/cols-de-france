@@ -19,12 +19,51 @@ export function place(mesh: THREE.Object3D, a: THREE.Vector3, b: THREE.Vector3):
   mesh.scale.set(1, length, 1);
 }
 
+/**
+ * Moyenne les normales des points confondus. Une surface fermée a deux rangées de sommets au même
+ * endroit : sans cela, l'éclairage y dessine une couture.
+ */
+export function weldNormals(g: THREE.BufferGeometry): void {
+  const p = g.getAttribute('position') as THREE.BufferAttribute;
+  const n = g.getAttribute('normal') as THREE.BufferAttribute;
+  const groups = new Map<string, number[]>();
+  for (let i = 0; i < p.count; i++) {
+    const key = `${Math.round(p.getX(i) * 1e4)}/${Math.round(p.getY(i) * 1e4)}/${Math.round(p.getZ(i) * 1e4)}`;
+    const list = groups.get(key);
+    if (list) list.push(i);
+    else groups.set(key, [i]);
+  }
+  const sum = new THREE.Vector3();
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    sum.set(0, 0, 0);
+    for (const i of list) sum.add(new THREE.Vector3(n.getX(i), n.getY(i), n.getZ(i)));
+    sum.normalize();
+    for (const i of list) n.setXYZ(i, sum.x, sum.y, sum.z);
+  }
+}
+
 /** Volume de révolution de longueur 1 à partir d'un profil de rayons régulièrement espacés. */
 export function turned(radii: number[], segments = 14): THREE.BufferGeometry {
   const points = radii.map((r, i) => new THREE.Vector2(Math.max(r, 1e-4), i / (radii.length - 1)));
   const g = new THREE.LatheGeometry(points, segments);
   g.computeVertexNormals();
+  weldNormals(g);
   return g;
+}
+
+/**
+ * Déforme une pièce de longueur 1 selon sa position : renvoie le décalage [x, z] de chaque point.
+ * Sert à poser les volumes que la révolution ne donne pas : muscles, omoplates.
+ */
+export function sculpt(g: THREE.BufferGeometry, shift: (x: number, y: number, z: number) => [number, number]): void {
+  const p = g.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const [dx, dz] = shift(p.getX(i), p.getY(i), p.getZ(i));
+    p.setXYZ(i, p.getX(i) + dx, p.getY(i), p.getZ(i) + dz);
+  }
+  g.computeVertexNormals();
+  weldNormals(g);
 }
 
 export function ball(radius: number, mat: THREE.Material): THREE.Mesh {

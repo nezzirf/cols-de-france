@@ -4,8 +4,10 @@
 import type { RideSnapshot } from '../app/game';
 import type { ConnectionState } from '../hardware/types';
 import { gradeColor, gradeTextColor } from '../sim/gradeColor';
+import type { WorkoutStep } from '../sim/workout';
 import type { Route } from '../sim/route';
 import type { SegmentStatus } from '../sim/segments';
+import { drawWorkout } from '../ui/charts';
 import { drawNextKilometer, drawRouteStrip } from './minimap';
 
 const UPDATE_MS = 100;
@@ -53,6 +55,7 @@ export class Hud {
   private exploreInfo: HTMLElement | null = null;
   private slider: HTMLInputElement | null = null;
   private dragging = false;
+  private workout: { steps: WorkoutStep[]; chart: HTMLCanvasElement; target: HTMLElement; left: HTMLElement } | null = null;
 
   constructor(
     parent: HTMLElement,
@@ -126,6 +129,11 @@ export class Hud {
     drawRouteStrip(this.strip, this.route, s.distanceM);
     this.renderSegments(s.segments);
     this.pause.hidden = !s.paused;
+    if (this.workout && s.workout) {
+      this.workout.target.textContent = String(s.workout.targetW);
+      this.workout.left.textContent = formatTime(Math.ceil(s.workout.stepLeftS));
+      drawWorkout(this.workout.chart, this.workout.steps, { elapsedS: s.workout.elapsedS, line: 'rgba(255,255,255,0.5)' });
+    }
   }
 
   private set(id: string, text: string): void {
@@ -148,6 +156,24 @@ export class Hud {
         </div>`;
       })
       .join('');
+  }
+
+  /** Bandeau de séance : consigne, temps restant dans le bloc et déroulé complet. */
+  showWorkout(steps: WorkoutStep[]): void {
+    const box = document.createElement('section');
+    box.className = 'hud-workout panel';
+    box.innerHTML = `<div class="hud-workout-values">
+        <div><b data-w="target">--</b><span>W cible</span></div>
+        <div><b data-w="left">--</b><span>Reste</span></div>
+      </div>
+      <canvas aria-label="Déroulé de la séance"></canvas>`;
+    this.el.appendChild(box);
+    this.workout = {
+      steps,
+      chart: box.querySelector('canvas')!,
+      target: box.querySelector('[data-w="target"]')!,
+      left: box.querySelector('[data-w="left"]')!,
+    };
   }
 
   toast(text: string, strong = false): void {

@@ -1,6 +1,7 @@
 // Point d'entrée : menu, appairage du matériel, lancement et fin de sortie.
 
 import { Game, type RideSummary } from './app/game';
+import { CUSTOM_ROUTE_ID, loadProfile, saveProfile } from './app/profile';
 import { DemoTrainer } from './hardware/demoTrainer';
 import { BluetoothHeartRate } from './hardware/heartRate';
 import { KickrAnt } from './hardware/antUsb';
@@ -8,75 +9,27 @@ import { KickrBluetooth } from './hardware/kickrBluetooth';
 import type { HeartRateSensor, Trainer } from './hardware/types';
 import { formatTime, Hud } from './hud/hud';
 import './hud/hud.css';
-import { drawClimbCard } from './hud/minimap';
-import { ALL_BIKES, DEFAULT_BIKE_ID, findBike, GENERIC_BIKES, setupFor, TEAMS, type Bike } from './sim/bikes';
-import { steadySpeed } from './sim/physicsEngine';
-import { loadRoute, loadRouteIndex, Route, type RouteData, type RouteSummary } from './sim/route';
+import { findBike, setupFor, wearing, type Bike } from './sim/bikes';
+import { buildCustomRoute } from './sim/customRoute';
+import { loadRoute, Route } from './sim/route';
+import { expandBlocks, type Workout } from './sim/workout';
+import { fr } from './ui/format';
+import { type DeviceKind, Menu } from './ui/menu';
+import { paintCustomGround } from './world/customGround';
 import { type FreeCamera, MOVE_KEYS } from './world/freeCamera';
 import { World } from './world/scene';
-
-interface Profile {
-  riderKg: number;
-  bikeId: string;
-  difficulty: number;
-}
-
-const PROFILE_KEY = 'cols.profile';
-const DEFAULT_PROFILE: Profile = { riderKg: 75, bikeId: DEFAULT_BIKE_ID, difficulty: 100 };
-
-function loadProfile(): Profile {
-  try {
-    return { ...DEFAULT_PROFILE, ...JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}') };
-  } catch {
-    return DEFAULT_PROFILE;
-  }
-}
-
-function saveProfile(p: Profile): void {
-  try {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
-  } catch {
-    // Sans stockage, le profil reste valable pour la séance.
-  }
-}
 
 const DEMO_HINT = '↑ ↓ puissance · Maj : ±50 W · F caméra libre · Pg↑ Pg↓ ±1 km · P pause · V caméra · Échap quitter';
 const FREE_HINT = 'ZQSD déplacer · clic + souris regarder · A E descendre, monter · Maj vite · molette vitesse · T poser le cycliste ici · F sortir';
 const JUMP_M = 1000;
 const EXPLORE_REFRESH_MS = 150;
 
-function bikeOptions(): string {
-  const option = (b: Bike, label: string) => `<option value="${b.id}">${label}</option>`;
-  const generic = GENERIC_BIKES.map((b) => option(b, b.name)).join('');
-  const teams = TEAMS.map((t) => {
-    const bikes = ALL_BIKES.filter((b) => b.team === t);
-    return `<optgroup label="${t.name}">${bikes.map((b) => option(b, `${b.name} · ${b.label}`)).join('')}</optgroup>`;
-  }).join('');
-  return `<optgroup label="Vélos sans équipe">${generic}</optgroup>${teams}`;
-}
-
-const css = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
-
-/** Résumé du vélo choisi : son effet se lit directement en vitesse. */
-function bikeSummary(bike: Bike, riderKg: number): string {
-  const setup = setupFor(bike, riderKg);
-  const speed = (grade: number) => fr(steadySpeed(250, grade, 1000, setup) * 3.6);
-  return `<div class="bike-head">
-      <span class="swatch" style="background:${css(bike.jersey)}"></span><span class="swatch" style="background:${css(bike.accent)}"></span><span class="swatch" style="background:${css(bike.frame)}"></span>
-      <span>${bike.team ? bike.team.name : 'Sans équipe'}</span>
-    </div>
-    <div class="dim">${bike.label} · ${fr(bike.kg)} kg · CdA ${fr(bike.cda, 3)} · Crr ${fr(bike.crr, 4)}</div>
-    <div>À 250 W : ${speed(0)} km/h sur le plat · ${speed(8)} km/h à 8 %</div>`;
-}
-
-const fr = (v: number, digits = 1): string => v.toFixed(digits).replace('.', ',');
-
 class App {
   private root = document.getElementById('app')!;
   private canvas = document.getElementById('view') as HTMLCanvasElement;
   private profile = loadProfile();
-  private selected = '';
   private trainer: Trainer | null = null;
+  private trainerKind: DeviceKind | null = null;
   private hr: HeartRateSensor | null = null;
   private game: Game | null = null;
   private world: World | null = null;
@@ -87,153 +40,61 @@ class App {
   private looking = false;
 
   async showMenu(): Promise<void> {
-    this.root.innerHTML = `<div class="screen"><div class="menu">
-      <h1>Cols de France</h1>
-      <p class="menu-sub">Les grands cols sur leurs routes réelles, depuis la vallée, sur home trainer.</p>
-      <div class="menu-grid">
-        <div class="cols" data-r="cols" aria-label="Choix du col"></div>
-        <aside class="side">
-          <div>
-            <h3>Cycliste</h3>
-            <label class="field">Poids (kg)<input type="number" min="35" max="150" step="0.5" data-p="riderKg" value="${this.profile.riderKg}"></label>
-            <label class="field"><span>Pente ressentie <span data-r="diffLabel">${this.profile.difficulty} %</span></span><input type="range" min="25" max="100" step="5" data-p="difficulty" value="${this.profile.difficulty}"></label>
-          </div>
-          <div>
-            <h3>Vélo</h3>
-            <select class="bike-select" data-r="bike" aria-label="Choix du vélo">${bikeOptions()}</select>
-            <div class="bike-card" data-r="bikeCard"></div>
-          </div>
-          <div>
-            <h3>Matériel</h3>
-            <button class="btn" data-a="ble">Connecter le KICKR Core (Bluetooth)</button>
-            <button class="btn" data-a="ant">Connecter le KICKR Core (ANT+ USB)</button>
-            <button class="btn" data-a="hr">Connecter une ceinture cardio</button>
-            <p class="msg" data-r="msg">Sans home trainer connecté, la sortie démarre en mode démo au clavier.</p>
-          </div>
-          <button class="btn primary" data-a="start" disabled>Rouler</button>
-        </aside>
-      </div>
-      <p class="credits">Tracés © contributeurs OpenStreetMap (ODbL) · Altitudes IGN RGE ALTI · Relief Mapzen Terrain Tiles · Bâtiments IGN BD TOPO · Photos IGN BD ORTHO</p>
-    </div></div>`;
-
-    const q = <T extends HTMLElement>(sel: string) => this.root.querySelector(sel) as T;
-    const msg = q<HTMLElement>('[data-r="msg"]');
-    const start = q<HTMLButtonElement>('[data-a="start"]');
-    const say = (text: string, error = false) => {
-      msg.textContent = text;
-      msg.classList.toggle('error', error);
-    };
-
-    this.root.querySelectorAll<HTMLInputElement>('[data-p]').forEach((input) => {
-      input.addEventListener('input', () => {
-        const key = input.dataset.p as 'riderKg' | 'difficulty';
-        const value = Number(input.value);
-        if (Number.isFinite(value)) this.profile[key] = value;
-        q('[data-r="diffLabel"]').textContent = `${this.profile.difficulty} %`;
-        saveProfile(this.profile);
-      });
-    });
-
-    const bikeSelect = q<HTMLSelectElement>('[data-r="bike"]');
-    const bikeCard = q<HTMLElement>('[data-r="bikeCard"]');
-    const showBike = () => {
-      const bike = findBike(this.profile.bikeId);
-      bikeSelect.value = bike.id;
-      bikeCard.innerHTML = bikeSummary(bike, this.profile.riderKg);
-    };
-    bikeSelect.addEventListener('change', () => {
-      this.profile.bikeId = bikeSelect.value;
-      saveProfile(this.profile);
-      showBike();
-    });
-    q<HTMLInputElement>('[data-p="riderKg"]').addEventListener('input', showBike);
-    showBike();
-
-    const connect = async (button: HTMLElement, make: () => Trainer) => {
-      await this.trainer?.disconnect();
-      const trainer = make();
-      say('Connexion…');
-      try {
-        await trainer.connect();
-        this.trainer = trainer;
-        this.root.querySelectorAll<HTMLElement>('[data-a="ble"],[data-a="ant"]').forEach((b) => (b.dataset.on = 'false'));
-        button.dataset.on = 'true';
-        say(`${trainer.label} connecté (${trainer.protocol}).`);
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'NotFoundError') say('Aucun appareil choisi.');
-        else say(err instanceof Error ? err.message : String(err), true);
-      }
-    };
-    const bleBtn = q<HTMLElement>('[data-a="ble"]');
-    bleBtn.addEventListener('click', () => void connect(bleBtn, () => new KickrBluetooth(() => this.profile.riderKg + this.bike.kg)));
-    const antBtn = q<HTMLElement>('[data-a="ant"]');
-    antBtn.addEventListener('click', () =>
-      void connect(antBtn, () => new KickrAnt(() => ({ riderKg: this.profile.riderKg, bikeKg: this.bike.kg, wheelRadiusM: this.bike.wheelRadiusM }))),
-    );
-    const hrBtn = q<HTMLElement>('[data-a="hr"]');
-    hrBtn.addEventListener('click', async () => {
-      await this.hr?.disconnect();
-      const sensor = new BluetoothHeartRate();
-      sensor.onBpm = (bpm) => {
-        this.bpmBeforeStart = bpm;
-        this.game?.receiveHeartRate(bpm);
-      };
-      try {
-        await sensor.connect();
-        this.hr = sensor;
-        hrBtn.dataset.on = 'true';
-        say('Ceinture cardio connectée.');
-      } catch (err) {
-        if (!(err instanceof DOMException && err.name === 'NotFoundError')) {
-          say(err instanceof Error ? err.message : String(err), true);
-        }
-      }
-    });
-    start.addEventListener('click', () => void this.startRide());
-
-    let routes: RouteSummary[];
-    try {
-      routes = await loadRouteIndex();
-    } catch (err) {
-      say(`Données introuvables : ${err instanceof Error ? err.message : err}. Lance « npm run routes ».`, true);
-      return;
-    }
-    const list = q<HTMLElement>('[data-r="cols"]');
-    list.innerHTML = routes
-      .map(
-        (r) => `<button class="col-card" data-id="${r.id}" aria-pressed="false">
-          <h2>${r.name}</h2>
-          <div class="col-stats">${fr(r.climb.lengthKm)} km à ${fr(r.climb.avgGradePct)} %<br><span class="dim">${r.climb.topM} m · +${r.climb.gainM} m</span></div>
-          <p>${r.subtitle} · ${fr(r.warmupKm)} km d'approche · ${r.massif}</p>
-          <canvas width="760" height="64" data-c="${r.id}"></canvas>
-        </button>`,
-      )
-      .join('');
-    const pick = (id: string) => {
-      this.selected = id;
-      list.querySelectorAll<HTMLElement>('.col-card').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.id === id)));
-      start.disabled = false;
-    };
-    list.querySelectorAll<HTMLElement>('.col-card').forEach((c) => c.addEventListener('click', () => pick(c.dataset.id!)));
-    pick(this.selected || routes[0].id);
-
-    await Promise.all(
-      routes.map(async (r) => {
-        const data = (await fetch(`data/${r.id}/route.json`).then((x) => x.json())) as RouteData;
-        drawClimbCard(q<HTMLCanvasElement>(`[data-c="${r.id}"]`), new Route(data));
-      }),
-    );
+    await new Menu(this.root, {
+      profile: this.profile,
+      saveProfile: () => saveProfile(this.profile),
+      connect: (kind) => this.connect(kind),
+      isConnected: (kind) => (kind === 'hr' ? this.hr !== null : this.trainerKind === kind),
+      start: (routeId, workout) => this.startRide(routeId, workout),
+    }).show();
   }
 
   private get bike(): Bike {
-    return findBike(this.profile.bikeId);
+    return wearing(findBike(this.profile.bikeId), this.profile.jerseyId);
   }
 
-  private async startRide(): Promise<void> {
-    const button = this.root.querySelector('[data-a="start"]') as HTMLButtonElement;
-    button.disabled = true;
-    button.textContent = 'Chargement du relief…';
-    const { route, heights, buildings, ortho } = await loadRoute(this.selected);
+  private async connect(kind: DeviceKind): Promise<string> {
+    try {
+      if (kind === 'hr') return await this.connectHeartRate();
+      await this.trainer?.disconnect();
+      this.trainer = null;
+      this.trainerKind = null;
+      const trainer =
+        kind === 'ble'
+          ? new KickrBluetooth(() => this.profile.riderKg + this.bike.kg)
+          : new KickrAnt(() => ({ riderKg: this.profile.riderKg, bikeKg: this.bike.kg, wheelRadiusM: this.bike.wheelRadiusM }));
+      await trainer.connect();
+      this.trainer = trainer;
+      this.trainerKind = kind;
+      return `${trainer.label} connecté (${trainer.protocol}).`;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'NotFoundError') return 'Aucun appareil choisi.';
+      throw err;
+    }
+  }
+
+  private async connectHeartRate(): Promise<string> {
+    await this.hr?.disconnect();
+    this.hr = null;
+    const sensor = new BluetoothHeartRate();
+    sensor.onBpm = (bpm) => {
+      this.bpmBeforeStart = bpm;
+      this.game?.receiveHeartRate(bpm);
+    };
+    await sensor.connect();
+    this.hr = sensor;
+    return 'Ceinture cardio connectée.';
+  }
+
+  private async loadTrack(routeId: string) {
+    if (routeId !== CUSTOM_ROUTE_ID) return loadRoute(routeId);
+    const { customKm: climbKm, customGrade: gradePct } = this.profile;
+    const { route, heights } = buildCustomRoute({ climbKm, gradePct });
+    return { route, heights, buildings: [], ortho: paintCustomGround(route.data.terrain) };
+  }
+
+  private async startRide(routeId: string, workout: Workout | null): Promise<void> {
+    const { route, heights, buildings, ortho } = await this.loadTrack(routeId);
 
     const demo = this.trainer === null;
     if (demo) {
@@ -243,13 +104,15 @@ class App {
     const trainer = this.trainer!;
 
     this.world = new World(this.canvas, route, heights, buildings, this.bike, ortho);
-    const game = new Game(route, this.world, trainer, setupFor(this.bike, this.profile.riderKg), this.bike.shape);
+    const steps = workout ? expandBlocks(workout.blocks) : null;
+    const game = new Game(route, this.world, trainer, setupFor(this.bike, this.profile.riderKg), this.bike.shape, steps, this.profile.ftp);
     game.difficulty = this.profile.difficulty / 100;
     this.game = game;
     if (this.bpmBeforeStart !== null) game.receiveHeartRate(this.bpmBeforeStart);
 
     this.root.innerHTML = '';
     const hud = new Hud(this.root, route);
+    if (steps) hud.showWorkout(steps);
     hud.setConnection(trainer.label, trainer.state);
     trainer.onState = (state) => hud.setConnection(trainer.label, state);
     this.route = route;
@@ -262,7 +125,7 @@ class App {
       this.canvas.addEventListener('pointerup', this.onPointerUp);
       this.canvas.addEventListener('wheel', this.onWheel, { passive: true });
     }
-    hud.toast(`${route.data.name} · ${fr(route.data.footM / 1000)} km d'approche avant le pied du col`);
+    hud.toast(workout ? `${workout.name} · ${route.data.name}` : `${route.data.name} · ${fr(route.data.footM / 1000)} km d'approche avant le pied du col`);
 
     game.onFrame = (s) => {
       hud.update(s, performance.now());
@@ -272,7 +135,7 @@ class App {
     game.onSegmentDone = (r) =>
       hud.toast(`${r.def.name} : ${formatTime(r.timeS)}${r.isNewPr ? ' · nouveau record' : ''}`, true);
     game.onTrainerError = (m) => hud.toast(`Home trainer : ${m}`);
-    game.onFinish = (s) => this.showResult(route.data.name, s);
+    game.onFinish = (s) => this.showResult(workout?.name ?? route.data.name, s);
 
     window.addEventListener('keydown', this.onKey);
     window.addEventListener('keyup', this.onKeyUp);

@@ -17,6 +17,7 @@ export const HEART_RATE_MEASUREMENT = 0x2a37;
 export const FtmsOp = {
   RequestControl: 0x00,
   Reset: 0x01,
+  SetTargetPower: 0x05,
   Start: 0x07,
   SetSimulation: 0x11,
   Response: 0x80,
@@ -64,6 +65,14 @@ export function encodeSimulation(cmd: TrainerCommand): Uint8Array {
   return new Uint8Array(buf.buffer);
 }
 
+/** Mode ERG : le frein ajuste sa résistance pour maintenir cette puissance. */
+export function encodeTargetPower(watts: number): Uint8Array {
+  const buf = new DataView(new ArrayBuffer(3));
+  buf.setUint8(0, FtmsOp.SetTargetPower);
+  buf.setInt16(1, Math.max(0, Math.round(watts)), true);
+  return new Uint8Array(buf.buffer);
+}
+
 export interface FtmsResponse {
   requestOp: number;
   result: number;
@@ -105,6 +114,7 @@ export function parseCyclingPower(view: DataView, crank: CrankCadence): TrainerD
 
 export const WahooOp = {
   Unlock: 0x20,
+  SetErg: 0x42,
   SetSimMode: 0x43,
   SetGrade: 0x46,
   SetWind: 0x47,
@@ -125,6 +135,13 @@ export function encodeWahooGrade(gradePct: number): Uint8Array {
   const buf = new DataView(new ArrayBuffer(3));
   buf.setUint8(0, WahooOp.SetGrade);
   buf.setUint16(1, Math.round(32768 + gradePct * 327.68), true);
+  return new Uint8Array(buf.buffer);
+}
+
+export function encodeWahooErg(watts: number): Uint8Array {
+  const buf = new DataView(new ArrayBuffer(3));
+  buf.setUint8(0, WahooOp.SetErg);
+  buf.setUint16(1, Math.max(0, Math.round(watts)), true);
   return new Uint8Array(buf.buffer);
 }
 

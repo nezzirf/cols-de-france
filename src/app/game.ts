@@ -5,6 +5,7 @@ import { commandChanged } from '../hardware/types';
 import { PhysicsEngine, type RiderSetup, trainerCommand, type TrainerCommand } from '../sim/physicsEngine';
 import type { Route } from '../sim/route';
 import { LocalPrStore, type SegmentResult, type SegmentStatus, SegmentTracker } from '../sim/segments';
+import { totalDuration, type WorkoutStep, workoutStateAt } from '../sim/workout';
 import type { World } from '../world/scene';
 
 const SIM_INTERVAL_MS = 50;
@@ -30,6 +31,14 @@ export interface RideSnapshot {
   segments: SegmentStatus[];
   paused: boolean;
   sentGradePct: number;
+  workout: WorkoutSnapshot | null;
+}
+
+export interface WorkoutSnapshot {
+  targetW: number;
+  stepLeftS: number;
+  elapsedS: number;
+  totalS: number;
 }
 
 export interface RideSummary {
@@ -56,6 +65,7 @@ export class Game {
   private lastSend = 0;
   private lastSent: TrainerCommand | null = null;
   private lastSentAt = 0;
+  private lastTargetW: number | null = null;
   private simTimer = 0;
   private rafId = 0;
   private results: SegmentResult[] = [];
@@ -79,6 +89,8 @@ export class Game {
     private trainer: Trainer,
     setup: RiderSetup,
     bikeShape = 'route',
+    private workout: WorkoutStep[] | null = null,
+    private ftp = 250,
   ) {
     this.physics = new PhysicsEngine({ ...setup, latitudeDeg: route.data.origin.lat });
     // La route commence au premier point du tracé : il faut de l'asphalte derrière la caméra.
@@ -176,6 +188,10 @@ export class Game {
       this.lastSend = now;
       void this.sendToTrainer(dist, now);
     }
+    if (this.workout && this.elapsedS >= totalDuration(this.workout)) {
+      this.finish();
+      return;
+    }
     if (dist >= this.route.lengthM) {
       if (this.exploring) this.jumpTo(this.route.lengthM);
       else this.finish();
@@ -191,6 +207,10 @@ export class Game {
   }
 
   private async sendToTrainer(dist: number, now: number): Promise<void> {
+    if (this.workout) {
+      await this.sendWorkoutTarget();
+      return;
+    }
     const cmd = trainerCommand(
       this.route.gradeAt(dist + GRADE_LOOKAHEAD_M),
       this.route.eleAt(dist),
@@ -207,13 +227,37 @@ export class Game {
     }
   }
 
+  private async sendWorkoutTarget(): Promise<void> {
+    const state = workoutStateAt(this.workout!, this.elapsedS);
+    if (!state) return;
+    const watts = Math.round((state.targetPct / 100) * this.ftp);
+    if (watts === this.lastTargetW) return;
+    this.lastTargetW = watts;
+    try {
+      await this.trainer.setTargetPower(watts);
+    } catch (err) {
+      this.onTrainerError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  private workoutSnapshot(): WorkoutSnapshot | null {
+    if (!this.workout) return null;
+    const state = workoutStateAt(this.workout, this.elapsedS);
+    return {
+      targetW: state ? Math.round((state.targetPct / 100) * this.ftp) : 0,
+      stepLeftS: state ? state.stepLeftS : 0,
+      elapsedS: this.elapsedS,
+      totalS: totalDuration(this.workout),
+    };
+  }
+
   private finish(): void {
     this.finished = true;
     this.stop();
     const summary: RideSummary = {
       elapsedS: this.elapsedS,
-      distanceKm: this.route.lengthM / 1000,
-      avgSpeedKmh: (this.route.lengthM / this.elapsedS) * 3.6,
+      distanceKm: this.distanceM / 1000,
+      avgSpeedKmh: (this.distanceM / this.elapsedS) * 3.6,
       avgPowerW: this.energyJ / this.elapsedS,
       maxPowerW: this.maxPower,
       results: this.results,
@@ -248,6 +292,7 @@ export class Game {
       segments: this.exploring ? [] : this.tracker.status(dist, e),
       paused: this.paused,
       sentGradePct: this.lastSent?.gradePct ?? 0,
+      workout: this.workoutSnapshot(),
     };
   }
 
