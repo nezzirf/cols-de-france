@@ -1,0 +1,27 @@
+{
+  "name": "cols-de-france",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Simulateur de cyclisme sur home trainer : les grands cols de France sur leurs tracés réels",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "routes": "node scripts/build-routes.mjs"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "0.170.0",
+    "@types/w3c-web-usb": "1.0.10",
+    "@types/web-bluetooth": "0.0.20",
+    "jpeg-js": "0.4.4",
+    "pngjs": "7.0.0",
+    "typescript": "5.6.3",
+    "vite": "5.4.11",
+    "vitest": "2.1.8"
+  }
+}
