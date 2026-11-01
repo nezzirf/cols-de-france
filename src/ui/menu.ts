@@ -12,7 +12,7 @@ import { renderGarage } from './tabGarage';
 import { renderRoutes } from './tabRoutes';
 import { renderWorkouts } from './tabWorkouts';
 
-export type DeviceKind = 'ble' | 'ant' | 'hr';
+export type DeviceKind = 'ble' | 'ant' | 'hr' | 'play';
 
 export interface MenuHost {
   profile: Profile;
@@ -48,6 +48,7 @@ const DEVICES: { kind: DeviceKind; label: string; title: string }[] = [
   { kind: 'ble', label: 'Bluetooth', title: 'Connecter le KICKR Core en Bluetooth' },
   { kind: 'ant', label: 'ANT+', title: 'Connecter le KICKR Core avec une clé ANT+ USB' },
   { kind: 'hr', label: 'Cardio', title: 'Connecter une ceinture cardio' },
+  { kind: 'play', label: 'Zwift Play', title: 'Connecter les manettes Zwift Play pour changer de vitesse' },
 ];
 
 export class Menu {
@@ -213,7 +214,7 @@ export class Menu {
     });
   }
 
-  private say(text: string, error = false): void {
+  say(text: string, error = false): void {
     const msg = this.q('[data-r="msg"]');
     msg.textContent = text;
     msg.classList.toggle('error', error);

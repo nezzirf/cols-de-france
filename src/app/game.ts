@@ -4,6 +4,7 @@ import type { Trainer, TrainerData } from '../hardware/types';
 import { commandChanged } from '../hardware/types';
 import { PhysicsEngine, type RiderSetup, trainerCommand, type TrainerCommand } from '../sim/physicsEngine';
 import type { Route } from '../sim/route';
+import { DEFAULT_GEAR, GEAR_COUNT, shiftedGrade } from '../sim/gears';
 import { LocalPrStore, type SegmentResult, type SegmentStatus, SegmentTracker } from '../sim/segments';
 import { totalDuration, type WorkoutStep, workoutStateAt } from '../sim/workout';
 import type { World } from '../world/scene';
@@ -32,6 +33,8 @@ export interface RideSnapshot {
   paused: boolean;
   sentGradePct: number;
   workout: WorkoutSnapshot | null;
+  /** Vitesse virtuelle engagée, ou null si elles ne sont pas utilisées. */
+  gear: number | null;
 }
 
 export interface WorkoutSnapshot {
@@ -66,6 +69,9 @@ export class Game {
   private lastSent: TrainerCommand | null = null;
   private lastSentAt = 0;
   private lastTargetW: number | null = null;
+  private gear = DEFAULT_GEAR;
+  private gearsOn = false;
+  private trainerSpeedMps: number | null = null;
   private simTimer = 0;
   private rafId = 0;
   private results: SegmentResult[] = [];
@@ -105,6 +111,7 @@ export class Game {
     this.lastData = performance.now();
     if (d.powerW !== undefined) this.data.powerW = Math.max(0, d.powerW);
     if (d.cadenceRpm !== undefined) this.data.cadenceRpm = d.cadenceRpm;
+    if (d.trainerSpeedMps !== undefined) this.trainerSpeedMps = d.trainerSpeedMps;
     if (d.heartRateBpm !== undefined) this.data.bpm = d.heartRateBpm;
   }
 
@@ -126,6 +133,18 @@ export class Game {
     this.paused = !this.paused;
     this.lastSim = performance.now();
     return this.paused;
+  }
+
+  /** Pignon fixe : la résistance suit désormais la vitesse virtuelle. */
+  enableGears(): void {
+    this.gearsOn = true;
+  }
+
+  shift(delta: number): void {
+    if (this.workout) return;
+    this.enableGears();
+    this.gear = Math.max(1, Math.min(GEAR_COUNT, this.gear + delta));
+    this.lastSend = 0;
   }
 
   private startExploring(): void {
@@ -211,12 +230,13 @@ export class Game {
       await this.sendWorkoutTarget();
       return;
     }
-    const cmd = trainerCommand(
+    const road = trainerCommand(
       this.route.gradeAt(dist + GRADE_LOOKAHEAD_M),
       this.route.eleAt(dist),
       this.physics.setup,
       this.difficulty,
     );
+    const cmd = this.gearsOn ? { ...road, gradePct: this.gearedGrade(road) } : road;
     if (!commandChanged(this.lastSent, cmd) && now - this.lastSentAt < FORCE_RESEND_MS) return;
     this.lastSent = cmd;
     this.lastSentAt = now;
@@ -225,6 +245,20 @@ export class Game {
     } catch (err) {
       this.onTrainerError(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  private gearedGrade(road: TrainerCommand): number {
+    const { riderKg, bikeKg, wheelRadiusM } = this.physics.setup;
+    return shiftedGrade({
+      gradePct: road.gradePct,
+      gear: this.gear,
+      cadenceRpm: this.data.cadenceRpm,
+      trainerSpeedMps: this.trainerSpeedMps,
+      totalKg: riderKg + bikeKg,
+      crr: road.crr,
+      cwKgPerM: road.cwKgPerM,
+      wheelRadiusM,
+    });
   }
 
   private async sendWorkoutTarget(): Promise<void> {
@@ -293,6 +327,7 @@ export class Game {
       paused: this.paused,
       sentGradePct: this.lastSent?.gradePct ?? 0,
       workout: this.workoutSnapshot(),
+      gear: this.gearsOn && !this.workout ? this.gear : null,
     };
   }
 

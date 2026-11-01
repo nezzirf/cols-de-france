@@ -5,6 +5,12 @@ avec une approche en vallée : Alpe d'Huez, Mont Ventoux, Tourmalet, Galibier, I
 
 ## Lancer
 
+En ligne, sans rien installer, y compris sur tablette : https://nezzirf.github.io/cols-de-france/
+
+Sous Windows, double-clique sur `Jouer.cmd` : il installe le jeu la première fois puis l'ouvre.
+
+Sinon, dans un terminal (`npm.cmd` si PowerShell bloque `npm`) :
+
 ```bash
 npm install
 npm run dev
@@ -20,6 +26,7 @@ Sans home trainer, « Rouler » démarre le mode démo.
 | ↑ / ↓ | Puissance ±10 W, ±50 W avec Maj (mode démo) |
 | P | Pause |
 | V | Caméra poursuite / embarquée |
+| + / − | Monter ou descendre une vitesse virtuelle |
 
 En mode démo, tu peux aussi explorer librement, sans influence sur les records (ils sont coupés
 pour la sortie dès la première utilisation) :
@@ -65,6 +72,20 @@ publient pas de modèles 3D, ce sont des ressemblances et non des copies exactes
 Ces valeurs sont typiques par catégorie (aéro, grimpeur, polyvalent, contre-la-montre…), car les
 marques ne publient pas de mesures comparables : un Cervélo S5 et un Canyon Aeroad se valent ici.
 Les modèles viennent de guides parus en janvier 2026 et peuvent avoir changé en cours de saison.
+
+## Vitesses virtuelles (Zwift Cog et Zwift Play)
+
+Avec un pignon fixe, la chaîne ne bouge pas : le jeu envoie au home trainer la pente qui reproduit la
+force du rapport choisi, à la même cadence. Il y a 24 rapports (`src/sim/gears.ts`). La vitesse à
+l'écran vient de la puissance réelle, comme d'habitude. Les vitesses sont inactives pendant une
+séance, puisque le home trainer impose alors la puissance.
+
+Clique sur **Zwift Play** dans le menu : un bouton de vitesse pressé s'affiche sous « Rouler ». En
+firmware 1, chaque manette se connecte à part : reclique pour la deuxième. Le bouton droit monte une
+vitesse, le gauche la descend. Les touches + et − font la même chose et activent aussi les vitesses.
+
+Zwift ne publie pas ce protocole : `src/hardware/zwiftPlay.ts` s'appuie sur le projet libre
+BikeControl et sur des analyses indépendantes, et une mise à jour de firmware pourrait le casser.
 
 ## Connecter le KICKR Core
 

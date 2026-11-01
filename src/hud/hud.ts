@@ -3,6 +3,7 @@
 
 import type { RideSnapshot } from '../app/game';
 import type { ConnectionState } from '../hardware/types';
+import { GEAR_COUNT } from '../sim/gears';
 import { gradeColor, gradeTextColor } from '../sim/gradeColor';
 import type { WorkoutStep } from '../sim/workout';
 import type { Route } from '../sim/route';
@@ -75,6 +76,7 @@ export class Hud {
         ${metric('Cadence', 'rpm', 'cadence')}
         ${metric('Cardio', 'bpm', 'hr')}
         ${metric('Vit. moy.', 'km/h', 'avg')}
+        ${metric('Rapport', '/ ' + GEAR_COUNT, 'gear', 'metric-gear')}
       </section>
       <section class="hud-right panel">
         <div class="hud-right-head">
@@ -119,6 +121,9 @@ export class Hud {
     this.set('cadence', String(Math.round(s.cadenceRpm)));
     this.set('hr', s.heartRateBpm === null ? '--' : String(Math.round(s.heartRateBpm)));
     this.set('avg', s.avgSpeedKmh > 0 ? fr1(s.avgSpeedKmh) : '--');
+
+    this.set('gear', String(s.gear ?? '--'));
+    (this.el.querySelector('.metric-gear') as HTMLElement).hidden = s.gear === null;
 
     this.slopeValue.textContent = fr1(s.gradePct);
     this.slope.style.background = gradeColor(s.gradePct);

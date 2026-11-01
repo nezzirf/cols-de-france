@@ -6,6 +6,7 @@ import { DemoTrainer } from './hardware/demoTrainer';
 import { BluetoothHeartRate } from './hardware/heartRate';
 import { KickrAnt } from './hardware/antUsb';
 import { KickrBluetooth } from './hardware/kickrBluetooth';
+import { type ShiftDirection, ZwiftPlay } from './hardware/zwiftPlay';
 import type { HeartRateSensor, Trainer } from './hardware/types';
 import { formatTime, Hud } from './hud/hud';
 import './hud/hud.css';
@@ -19,7 +20,7 @@ import { paintCustomGround } from './world/customGround';
 import { type FreeCamera, MOVE_KEYS } from './world/freeCamera';
 import { World } from './world/scene';
 
-const DEMO_HINT = '↑ ↓ puissance · Maj : ±50 W · F caméra libre · Pg↑ Pg↓ ±1 km · P pause · V caméra · Échap quitter';
+const DEMO_HINT = '↑ ↓ puissance · Maj : ±50 W · + − vitesses · F caméra libre · Pg↑ Pg↓ ±1 km · P pause · V caméra · Échap quitter';
 const FREE_HINT = 'ZQSD déplacer · clic + souris regarder · A E descendre, monter · Maj vite · molette vitesse · T poser le cycliste ici · F sortir';
 const JUMP_M = 1000;
 const EXPLORE_REFRESH_MS = 150;
@@ -31,6 +32,8 @@ class App {
   private trainer: Trainer | null = null;
   private trainerKind: DeviceKind | null = null;
   private hr: HeartRateSensor | null = null;
+  private play: ZwiftPlay[] = [];
+  private menu: Menu | null = null;
   private game: Game | null = null;
   private world: World | null = null;
   private bpmBeforeStart: number | null = null;
@@ -40,13 +43,17 @@ class App {
   private looking = false;
 
   async showMenu(): Promise<void> {
-    await new Menu(this.root, {
+    this.menu = new Menu(this.root, {
       profile: this.profile,
       saveProfile: () => saveProfile(this.profile),
       connect: (kind) => this.connect(kind),
-      isConnected: (kind) => (kind === 'hr' ? this.hr !== null : this.trainerKind === kind),
+      isConnected: (kind) => {
+        if (kind === 'play') return this.play.length > 0;
+        return kind === 'hr' ? this.hr !== null : this.trainerKind === kind;
+      },
       start: (routeId, workout) => this.startRide(routeId, workout),
-    }).show();
+    });
+    await this.menu.show();
   }
 
   private get bike(): Bike {
@@ -56,6 +63,7 @@ class App {
   private async connect(kind: DeviceKind): Promise<string> {
     try {
       if (kind === 'hr') return await this.connectHeartRate();
+      if (kind === 'play') return await this.connectZwiftPlay();
       await this.trainer?.disconnect();
       this.trainer = null;
       this.trainerKind = null;
@@ -86,6 +94,22 @@ class App {
     return 'Ceinture cardio connectée.';
   }
 
+  private async connectZwiftPlay(): Promise<string> {
+    const play = new ZwiftPlay();
+    play.onShift = (direction) => this.onShift(direction);
+    await play.connect();
+    this.play.push(play);
+    this.game?.enableGears();
+    return this.play.length === 1
+      ? 'Manette connectée : appuie sur un bouton de vitesse. Si l’autre manette apparaît à part, reclique sur Zwift Play.'
+      : 'Deuxième manette connectée : appuie sur un bouton de vitesse pour vérifier.';
+  }
+
+  private onShift(direction: ShiftDirection): void {
+    if (this.game) this.game.shift(direction === 'up' ? 1 : -1);
+    else this.menu?.say(`Bouton reçu : vitesse ${direction === 'up' ? 'supérieure' : 'inférieure'}.`);
+  }
+
   private async loadTrack(routeId: string) {
     if (routeId !== CUSTOM_ROUTE_ID) return loadRoute(routeId);
     const { customKm: climbKm, customGrade: gradePct } = this.profile;
@@ -109,6 +133,7 @@ class App {
     game.difficulty = this.profile.difficulty / 100;
     this.game = game;
     if (this.bpmBeforeStart !== null) game.receiveHeartRate(this.bpmBeforeStart);
+    if (this.play.length > 0) game.enableGears();
 
     this.root.innerHTML = '';
     const hud = new Hud(this.root, route);
@@ -117,7 +142,7 @@ class App {
     trainer.onState = (state) => hud.setConnection(trainer.label, state);
     this.route = route;
     this.hud = hud;
-    hud.setHint(demo ? DEMO_HINT : 'P pause · V caméra · Échap quitter');
+    hud.setHint(demo ? DEMO_HINT : '+ − vitesses · P pause · V caméra · Échap quitter');
     if (demo) {
       hud.enableExplore((d) => game.jumpTo(d));
       this.canvas.addEventListener('pointerdown', this.onPointerDown);
@@ -235,6 +260,12 @@ class App {
         break;
       case 'ArrowDown':
         demo?.adjust(-step);
+        break;
+      case '+':
+        this.game.shift(1);
+        break;
+      case '-':
+        this.game.shift(-1);
         break;
       case 'p':
       case 'P':
