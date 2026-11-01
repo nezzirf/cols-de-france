@@ -1,7 +1,8 @@
 # Cols de France
 
-Simulateur de cyclisme sur home trainer. Cinq grands cols sur leurs tracés réels, chacun
-avec une approche en vallée : Alpe d'Huez, Mont Ventoux, Tourmalet, Galibier, Izoard.
+Simulateur de cyclisme sur home trainer. Sept grands cols sur leurs tracés réels, chacun
+avec une approche en vallée : Alpe d'Huez, Mont Ventoux, Tourmalet, Galibier, Izoard,
+Madeleine, Aubisque.
 
 ## Lancer
 
@@ -59,8 +60,35 @@ La position exacte (kilomètre, altitude, coordonnées GPS) s'affiche sous la ba
   et `.erg`. Les blocs sont convertis en % de FTP. Ce qui n'a pas d'équivalent est signalé : un bloc
   « roulage libre » devient un palier à 55 %, et les watts d'un `.erg` sans FTP sont convertis avec la tienne.
 - **Garage** : le vélo et le maillot. Le maillot n'a aucun effet sur la vitesse.
+- **Historique** : toutes les sorties de plus d'une minute, gardées automatiquement dans le navigateur
+  (les points seconde par seconde des 20 dernières, le résumé des 300 dernières), avec le cumul
+  des sept derniers jours, les meilleures puissances sur 5 s, 1 min, 5 min et 20 min, et la FTP
+  estimée (95 % du meilleur effort de 20 minutes). Un clic sur une sortie rouvre son récap.
 
-La FTP, le poids et le nom se règlent en haut de l'écran.
+La FTP, le poids et le nom se règlent en haut de l'écran. Sous le bouton « Rouler » :
+
+- **Météo et moment** : dégagé, nuageux, brouillard ou pluie ; matin, jour ou coucher de soleil. Ils
+  changent la lumière, le ciel et la brume, jamais l'effort.
+- **Peloton** : quatre coéquipiers de niveaux différents (72, 88, 100 et 112 % de ta FTP) roulent avec
+  la même physique que toi, avec l'écart du plus proche devant et derrière. Hors séance guidée.
+- **Fantôme de ma meilleure sortie** : sur un col, un cycliste translucide rejoue ta sortie la plus
+  rapide sur ce parcours, tant qu'aucun record de segment ne prend le relais.
+
+## Pendant la sortie
+
+- **Zones de puissance** : la puissance prend la couleur de sa zone (modèle de Coggan, de Z1 à Z7, en
+  % de la FTP) ; le récap donne le temps passé dans chacune.
+- **Pause automatique** : si tu t'arrêtes de pédaler et que le vélo s'arrête (moins de 5 km/h), le
+  chrono et l'enregistrement s'arrêtent après 3 s, et repartent au premier coup de pédale.
+- **Alertes d'effort** : un message si tu tiens plus de 110 % de ta FTP pendant 2 minutes, ou si la
+  cadence reste sous 60 tr/min pendant 20 secondes. Pas d'alerte de puissance pendant une séance guidée.
+- **Reprise** : la sortie est sauvegardée toutes les 30 secondes (et quand tu quittes avec Échap).
+  Après une coupure, le menu propose de la reprendre, de la terminer pour voir son récap, ou de
+  l'abandonner.
+- **Récap** : courbe de puissance, cardio et relief que l'on survole pour lire les valeurs et que l'on
+  zoome en glissant dessus (ou avec + et −) ; les moyennes de la portion visible s'affichent dessous.
+  Le fichier .tcx se télécharge, et se partage directement vers une autre application là où le
+  navigateur le permet (tablette, téléphone).
 
 ## Le monde d'entraînement
 
@@ -188,9 +216,15 @@ Vérification avec les chiffres officiels, à partir du pied du col :
 | Tourmalet | 17,6 km à 7,1 % | 17,2 km à 7,4 % |
 | Galibier | 34,8 km à 5,4 % | 34,8 km à 5,5 % |
 | Izoard | 31,3 km à 4,4 % | 31,5 km à 4,3 % |
+| Madeleine (depuis La Chambre) | 19,5 km à 7,8 % | 19,3 km à 8,0 % |
+| Aubisque (depuis Laruns) | 16,6 km à 7,1 % | 16,6 km à 7,2 % |
 
-La longueur de l'Alpe et du Galibier sert à placer leur pied, seule leur pente est donc un
-résultat indépendant.
+La longueur de l'Alpe, du Galibier et de l'Aubisque sert à placer leur pied, seule leur pente
+est donc un résultat indépendant. Les chiffres officiels de la Madeleine et de l'Aubisque
+viennent de sites de cols cyclistes qui ne s'accordent pas à 0,3 km près : la comparaison vaut
+ce qu'elles valent. Sur l'Aubisque, deux lacets à pente douce (vers les kilomètres 15,1 et 21,9
+du tracé) sont reconnus comme des demi-tours d'un seul tenant et non comme des boucles ; je ne
+les ai pas recoupés sur une carte.
 
 Ce qui est calculé plutôt qu'observé :
 

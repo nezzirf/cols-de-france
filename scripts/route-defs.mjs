@@ -189,4 +189,52 @@ export const ROUTES = [
       { name: 'Casse Déserte', from: 'poi:Monument Coppi - Bobet', to: 'end' },
     ],
   },
+  {
+    id: 'madeleine',
+    name: 'Col de la Madeleine',
+    subtitle: 'Versant sud, depuis La Chambre',
+    massif: 'Maurienne',
+    via: [
+      [45.39268, 6.26538], // Saint-Rémy-de-Maurienne, dans la vallée
+      [45.35893, 6.29986], // La Chambre
+      [45.43495, 6.37552], // Col de la Madeleine
+    ],
+    after: [[45.4395, 6.3715]], // descente vers Celliers
+    foot: [45.35893, 6.29986],
+    official: { lengthKm: 19.3, avgGradePct: 8.0, tolerance: { lengthKm: 1.2, grade: 0.8 } },
+    buildingStyle: 'alpes',
+    biomes: { valley: 900, forest: 1700, alpage: 2300, rock: 'gris', trees: 'mixte' },
+    // Nœuds OpenStreetMap : le village du pied et le col (natural=saddle, ele=1993).
+    pois: [
+      { name: 'Saint-Rémy-de-Maurienne', type: 'village', at: [45.39268, 6.26538] },
+      { name: 'La Chambre', type: 'village', at: [45.35893, 6.29986] },
+      { name: 'Col de la Madeleine', type: 'col', at: [45.43495, 6.37552] },
+    ],
+    segments: [{ name: 'Ascension de la Madeleine', from: 'foot', to: 'end' }],
+  },
+  {
+    id: 'aubisque',
+    name: "Col d'Aubisque",
+    subtitle: 'Versant ouest, depuis Laruns par Eaux-Bonnes',
+    massif: 'Pyrénées',
+    via: [
+      [43.05484, -0.43295], // Bielle, dans la vallée d'Ossau
+      [42.98824, -0.42663], // Laruns
+      [42.97658, -0.33979], // Col d'Aubisque
+    ],
+    after: [[42.9715, -0.3265]], // la route continue vers le Soulor
+    footFromEndKm: 16.6, // Laruns est à 16,6 km du col
+    official: { lengthKm: 16.6, avgGradePct: 7.2, tolerance: { lengthKm: 1.2, grade: 0.8 } },
+    buildingStyle: 'pyrenees',
+    biomes: { valley: 850, forest: 1450, alpage: 1600, rock: 'calcaire', trees: 'hetre' },
+    // Nœuds OpenStreetMap : le village du pied et le col (natural=saddle, ele=1709).
+    pois: [
+      { name: 'Bielle', type: 'village', at: [43.05484, -0.43295] },
+      { name: 'Laruns', type: 'village', at: [42.98824, -0.42663] },
+      { name: 'Eaux-Bonnes', type: 'village', at: [42.97283, -0.39276] },
+      { name: 'Gourette', type: 'village', at: [42.95796, -0.33251] },
+      { name: "Col d'Aubisque", type: 'col', at: [42.97658, -0.33979] },
+    ],
+    segments: [{ name: "Ascension de l'Aubisque", from: 'foot', to: 'end' }],
+  },
 ];

@@ -1,6 +1,7 @@
 // Profil du joueur, conservé d'une séance à l'autre.
 
-import { DEFAULT_BIKE_ID, BIKE_JERSEY } from '../sim/bikes';
+import { BIKE_JERSEY, DEFAULT_BIKE_ID } from '../sim/bikes';
+import type { Moment, Weather } from '../world/ambiance';
 
 export interface Profile {
   name: string;
@@ -18,6 +19,12 @@ export interface Profile {
   workoutWhere: WorkoutWhere;
   appMode: AppMode;
   appBars: AppBars;
+  weather: Weather;
+  moment: Moment;
+  /** Faire rouler quatre coéquipiers de niveaux différents. */
+  peloton: boolean;
+  /** Courir contre sa meilleure sortie sur le même parcours. */
+  ghost: boolean;
 }
 
 export const CUSTOM_ROUTE_ID = 'perso';
@@ -48,6 +55,10 @@ const DEFAULT_PROFILE: Profile = {
   workoutWhere: 'monde',
   appMode: 'capture',
   appBars: 'les-deux',
+  weather: 'degage',
+  moment: 'jour',
+  peloton: false,
+  ghost: true,
 };
 
 export function loadProfile(): Profile {

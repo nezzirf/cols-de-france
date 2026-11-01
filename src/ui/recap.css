@@ -119,3 +119,147 @@
   border-color: #ff8a2b;
   background: #e4540a;
 }
+
+/* Barre sous la courbe : valeurs lues sous le curseur et boutons de zoom. */
+.recap-chart {
+  cursor: crosshair;
+  touch-action: pan-y;
+}
+
+.recap-chart-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  margin-bottom: 4px;
+}
+
+.recap-readout {
+  margin: 0;
+  color: rgba(244, 246, 248, 0.8);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.recap-zoom {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.recap-zoom .btn {
+  min-height: 34px;
+  padding: 4px 12px;
+  font-size: 14px;
+}
+
+.recap-legend em {
+  margin-left: auto;
+  color: rgba(244, 246, 248, 0.45);
+  font-style: normal;
+}
+
+.recap-title {
+  margin: 18px 0 8px;
+  font-size: 15px;
+}
+
+.recap-title small {
+  color: rgba(244, 246, 248, 0.5);
+  font-weight: 400;
+}
+
+.recap-bests {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.recap-best {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  font-variant-numeric: tabular-nums;
+}
+
+.recap-best b {
+  display: block;
+  font-size: 20px;
+}
+
+.recap-best span,
+.recap-best small {
+  color: rgba(244, 246, 248, 0.6);
+  font-size: 12px;
+}
+
+.recap-best small {
+  display: block;
+}
+
+.recap-best.is-record {
+  border-color: #ff8a2b;
+  background: rgba(255, 138, 43, 0.14);
+}
+
+.recap-best.is-record small {
+  color: #ffb066;
+  font-weight: 700;
+}
+
+.recap-ftp {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.recap-ftp small {
+  color: rgba(244, 246, 248, 0.5);
+}
+
+.recap-ftp .btn {
+  flex: none;
+  min-height: 34px;
+  padding: 4px 14px;
+  font-size: 14px;
+}
+
+.recap-zones {
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.recap-zones i {
+  display: block;
+  min-width: 2px;
+}
+
+.recap-zone-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 0 10px;
+  color: rgba(244, 246, 248, 0.7);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.recap-zone-list i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  border-radius: 50%;
+}
+
+.recap-note a {
+  color: #ffb066;
+}

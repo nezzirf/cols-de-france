@@ -150,7 +150,7 @@ describe('panneaux de ville', () => {
 });
 
 describe('données réelles des cols', () => {
-  const ids = ['alpe-dhuez', 'ventoux', 'tourmalet', 'galibier', 'izoard'];
+  const ids = ['alpe-dhuez', 'ventoux', 'tourmalet', 'galibier', 'izoard', 'madeleine', 'aubisque'];
   const load = (id: string) =>
     new Route(JSON.parse(fs.readFileSync(`public/data/${id}/route.json`, 'utf8')) as RouteData);
 
@@ -207,6 +207,43 @@ describe('données réelles des cols', () => {
   });
   it.each(ids)('%s : la route ne fait jamais de boucle sur elle-même', (id) => {
     expect(findDetours(load(id).data)).toEqual([]);
+  });
+  it('ne prend pas pour une boucle un lacet à pente douce, dont les jambes restent au même niveau', () => {
+    const x: number[] = [];
+    const z: number[] = [];
+    for (let i = 0; i <= 15; i++) {
+      x.push(i * 10);
+      z.push(0);
+    }
+    for (let a = 1; a <= 4; a++) {
+      const angle = (a / 5) * Math.PI;
+      x.push(150 + 12 * Math.sin(angle));
+      z.push(12 - 12 * Math.cos(angle));
+    }
+    for (let i = 15; i >= 0; i--) {
+      x.push(i * 10);
+      z.push(24);
+    }
+    expect(findDetours({ x, z, ele: new Array(x.length).fill(800), stepM: 10 })).toEqual([]);
+  });
+  it('détecte une boucle qui fait un tour complet avant de revenir', () => {
+    const x: number[] = [];
+    const z: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      x.push(i * 10 - 50);
+      z.push(0);
+    }
+    const r = 41;
+    for (let k = 1; k <= 26; k++) {
+      const angle = (k / 26) * 2 * Math.PI;
+      x.push(r * Math.sin(angle));
+      z.push(r - r * Math.cos(angle));
+    }
+    for (let i = 1; i <= 8; i++) {
+      x.push(i * 10);
+      z.push(0);
+    }
+    expect(findDetours({ x, z, ele: new Array(x.length).fill(800), stepM: 10 }).length).toBeGreaterThan(0);
   });
   it('détecte un demi-tour court dans une rue de village', () => {
     const n = 44;

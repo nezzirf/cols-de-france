@@ -49,6 +49,65 @@ export function normalizedPower(samples: RideSample[]): number {
   return mean(smoothed.map((p) => p ** 4)) ** 0.25;
 }
 
+/** Chiffres d'une portion de la sortie, entre `fromS` et `toS` (secondes de sortie, bornes comprises). */
+export interface RangeStats {
+  durationS: number;
+  avgPowerW: number;
+  avgHeartRateBpm: number | null;
+  avgSpeedKmh: number;
+  distanceKm: number;
+  elevationGainM: number;
+}
+
+export function rangeStats(samples: RideSample[], fromS: number, toS: number): RangeStats | null {
+  const part = samples.filter((s) => s.t >= fromS && s.t <= toS);
+  if (part.length < 2) return null;
+  const hr = part.map((s) => s.heartRateBpm).filter((v): v is number => v !== null && v > 0);
+  let gain = 0;
+  for (let i = 1; i < part.length; i++) gain += Math.max(0, part[i].altitudeM - part[i - 1].altitudeM);
+  const durationS = part[part.length - 1].t - part[0].t;
+  const distanceM = part[part.length - 1].distanceM - part[0].distanceM;
+  return {
+    durationS,
+    avgPowerW: mean(part.map((s) => s.powerW)),
+    avgHeartRateBpm: hr.length > 0 ? mean(hr) : null,
+    avgSpeedKmh: durationS > 0 ? (distanceM / durationS) * 3.6 : 0,
+    distanceKm: distanceM / 1000,
+    elevationGainM: gain,
+  };
+}
+
+/** Durées (s) des meilleures puissances suivies : sprint, minute, cinq minutes, vingt minutes. */
+export const BEST_WINDOWS_S = [5, 60, 300, 1200] as const;
+
+/** Meilleure puissance moyenne tenue sur `windowS` secondes consécutives, ou null si la sortie est plus courte. */
+export function bestPower(samples: RideSample[], windowS: number): number | null {
+  if (samples.length < windowS) return null;
+  let sum = 0;
+  let best = 0;
+  for (let i = 0; i < samples.length; i++) {
+    sum += samples[i].powerW;
+    if (i >= windowS) sum -= samples[i - windowS].powerW;
+    if (i >= windowS - 1) best = Math.max(best, sum / windowS);
+  }
+  return best;
+}
+
+/** Meilleures puissances par durée, en watts entiers. Les durées plus longues que la sortie sont absentes. */
+export function powerBests(samples: RideSample[]): Record<number, number> {
+  const bests: Record<number, number> = {};
+  for (const w of BEST_WINDOWS_S) {
+    const p = bestPower(samples, w);
+    if (p !== null) bests[w] = Math.round(p);
+  }
+  return bests;
+}
+
+/** FTP estimée : 95 % de la meilleure puissance sur vingt minutes. */
+export function estimateFtp(best20MinW: number | undefined): number | null {
+  return best20MinW ? Math.round(best20MinW * 0.95) : null;
+}
+
 export function rideStats(samples: RideSample[], ftp: number): RideStats {
   const hr = samples.map((s) => s.heartRateBpm).filter((v): v is number => v !== null && v > 0);
   const pedalling = samples.filter((s) => s.cadenceRpm > 0).map((s) => s.cadenceRpm);

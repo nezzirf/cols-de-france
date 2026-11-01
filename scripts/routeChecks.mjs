@@ -63,20 +63,50 @@ const DETOUR_LEVEL_M = 5;
 const DETOUR_MIN_M = 120;
 const DETOUR_MAX_M = 1500;
 
+/** Un lacet fait faire un demi-tour d'un seul tenant : entre 150 et 210 degrés de virage cumulé. */
+const HAIRPIN_TURN_MIN_DEG = 150;
+const HAIRPIN_TURN_MAX_DEG = 210;
+
+/** Virage cumulé (degrés) de la route entre les points i et j. */
+function turnBetween(x, z, i, j) {
+  let turn = 0;
+  let previous = null;
+  for (let k = i + 1; k <= j; k++) {
+    const heading = Math.atan2(z[k] - z[k - 1], x[k] - x[k - 1]);
+    if (previous !== null) {
+      let delta = heading - previous;
+      while (delta > Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+      turn += delta;
+    }
+    previous = heading;
+  }
+  return (turn * 180) / Math.PI;
+}
+
 /**
  * Cherche les boucles : la route revient à côté d'elle-même, presque à la même altitude, après un
- * court détour. Un vrai lacet y échappe, car il a pris de la hauteur entre ses deux jambes.
+ * court détour. Un vrai lacet y échappe de deux façons : il prend de la hauteur entre ses deux jambes,
+ * ou, sur une pente douce où les jambes restent au même niveau, il tourne d'un seul tenant d'environ
+ * un demi-tour, alors qu'une boucle parasite tourne d'un tour entier ou revient sur ses pas.
  * Renvoie les tronçons trouvés sous la forme { fromM, toM }.
  */
 export function findDetours({ x, z, ele, stepM }) {
   const out = [];
   const first = Math.round(DETOUR_MIN_M / stepM);
   const last = Math.round(DETOUR_MAX_M / stepM);
+  let resume = -1;
   for (let i = 0; i < x.length; i++) {
     if (out.length && i * stepM <= out[out.length - 1].toM) continue;
+    if (i <= resume) continue;
     for (let j = i + first; j <= Math.min(x.length - 1, i + last); j++) {
       if (Math.hypot(x[i] - x[j], z[i] - z[j]) > DETOUR_NEAR_M) continue;
       if (Math.abs(ele[i] - ele[j]) > DETOUR_LEVEL_M) continue;
+      const turn = Math.abs(turnBetween(x, z, i, j));
+      if (turn >= HAIRPIN_TURN_MIN_DEG && turn <= HAIRPIN_TURN_MAX_DEG) {
+        resume = j;
+        break;
+      }
       out.push({ fromM: i * stepM, toM: j * stepM });
       break;
     }

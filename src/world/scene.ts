@@ -1,7 +1,8 @@
 // Assemble la scène 3D : ciel, relief, route, végétation, repères, cycliste et ghost.
 
 import * as THREE from 'three';
-import type { Bike } from '../sim/bikes';
+import { ALL_BIKES, type Bike, findBike } from '../sim/bikes';
+import type { PelotonState } from '../sim/peloton';
 import type { BuildingData, Route } from '../sim/route';
 import { buildBuildings } from './buildings';
 import { buildCliffRocks } from './cliffs';
@@ -17,7 +18,9 @@ import { FreeCamera } from './freeCamera';
 import { createRiderModel, type RiderModel } from './rider';
 import { bikeShape, dressedRider } from './riderSetup';
 import { buildRoad, stations } from './road';
-import { createSky } from './sky';
+import { type Ambiance, ambianceLook, DEFAULT_AMBIANCE, FOG_GREY } from './ambiance';
+import { Rain } from './rain';
+import { createSky, type SkyTuning } from './sky';
 import { groundMaterial, SUN_DIRECTION, TerrainSystem } from './terrain';
 import { Vegetation } from './vegetation';
 
@@ -25,6 +28,9 @@ const RIDER_LATERAL_M = 1.4;
 const GHOST_LATERAL_M = 0.2;
 const SHADOW_RANGE_M = 130;
 const SHADOW_TEXEL_M = (SHADOW_RANGE_M * 2) / 3072;
+
+/** Cadence de pédalage des coéquipiers en mouvement. */
+const PELOTON_CADENCE_RPM = 86;
 
 export type CameraMode = 'poursuite' | 'embarquée';
 
@@ -35,6 +41,15 @@ export class World {
   private camera = new THREE.PerspectiveCamera(62, 1, 0.3, 60000);
   private fog = new THREE.FogExp2(0xcad9e2, 0.00009);
   private sun = new THREE.DirectionalLight(0xfff3e2, 3.0);
+  private sunDir = SUN_DIRECTION.clone();
+  private hemisphere = new THREE.HemisphereLight(0xeef1f2, 0x9a8a6a, 1.05);
+  private skyTuning: SkyTuning;
+  private look = ambianceLook(DEFAULT_AMBIANCE);
+  private fogTint = new THREE.Color(1, 1, 1);
+  private fogGrey = new THREE.Color(FOG_GREY);
+  private fogGoal = new THREE.Color();
+  private rain = new Rain();
+  private mates = new Map<string, { model: RiderModel; crank: number }>();
   private pipeline: Pipeline;
   private skyTime: { value: number };
   private terrain: TerrainSystem;
@@ -64,6 +79,7 @@ export class World {
     buildings: BuildingData[],
     bike: Bike,
     ortho: HTMLImageElement | HTMLCanvasElement,
+    ambiance: Ambiance = DEFAULT_AMBIANCE,
   ) {
     this.world = route.data.world ?? null;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
@@ -72,17 +88,19 @@ export class World {
     this.pipeline = new Pipeline(this.renderer, this.camera);
 
     this.scene.fog = this.fog;
-    const sky = createSky(this.fog, SUN_DIRECTION);
+    const sky = createSky(this.fog, this.sunDir);
     this.skyTime = sky.time;
+    this.skyTuning = sky.tuning;
     this.scene.add(sky.mesh);
     // Reflets du ciel sur les matières : ce qui fait briller un cadre ou un toit comme en vrai.
     const skyOnly = new THREE.Scene();
-    skyOnly.add(createSky(this.fog, SUN_DIRECTION).mesh);
+    skyOnly.add(createSky(this.fog, this.sunDir).mesh);
     const reflections = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = reflections.fromScene(skyOnly, 0, 0.1, 100).texture;
     this.scene.environmentIntensity = 0.42;
     reflections.dispose();
-    this.scene.add(new THREE.HemisphereLight(0xeef1f2, 0x9a8a6a, 1.05));
+    this.scene.add(this.hemisphere);
+    this.scene.add(this.rain.mesh);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(3072, 3072);
     const c = this.sun.shadow.camera;
@@ -125,10 +143,44 @@ export class World {
     this.ghost.group.visible = false;
     this.scene.add(this.ghost.group);
 
+    this.setAmbiance(ambiance);
     window.addEventListener('resize', this.resize);
     this.resize();
     const p = route.at(0);
     this.terrain.update(p.x, p.z, 1000);
+  }
+
+  /** Applique le moment de la journée et la météo : lumière, ciel, brume et pluie. */
+  setAmbiance(ambiance: Ambiance): void {
+    const look = ambianceLook(ambiance);
+    this.look = look;
+    this.sunDir.set(...look.sunDirection).normalize();
+    this.sun.color.set(look.sunColor);
+    this.sun.intensity = look.sunIntensity;
+    this.hemisphere.intensity = look.skyIntensity;
+    this.skyTuning.zenith.value.setRGB(...look.zenith);
+    this.skyTuning.cover.value = look.cover;
+    this.skyTuning.cloudDark.value = look.cloudDark;
+    this.fogTint.setRGB(...look.horizonTint);
+    this.rain.mesh.visible = look.rain > 0;
+  }
+
+  /** Les coéquipiers du peloton : un cycliste habillé aux couleurs de son équipe, créé à la première apparition. */
+  private placePeloton(states: PelotonState[], dt: number): void {
+    for (const s of states) {
+      let mate = this.mates.get(s.name);
+      if (!mate) {
+        const bike = ALL_BIKES.find((b) => b.team?.id === s.teamId) ?? findBike('');
+        const model = dressedRider(bike);
+        model.group.traverse((o) => (o.castShadow = true));
+        this.scene.add(model.group);
+        mate = { model, crank: Math.random() * Math.PI * 2 };
+        this.mates.set(s.name, mate);
+      }
+      mate.crank += s.speedKmh > 3 ? (PELOTON_CADENCE_RPM / 60) * Math.PI * 2 * dt : 0;
+      mate.model.pose(-mate.crank);
+      this.placeOnRoad(mate.model.group, s.distM, s.lateralM);
+    }
   }
 
   /** Démarre la caméra libre à l'endroit et dans la direction de la caméra actuelle. */
@@ -202,7 +254,7 @@ export class World {
     const sx = Math.round(x / SHADOW_TEXEL_M) * SHADOW_TEXEL_M;
     const sz = Math.round(z / SHADOW_TEXEL_M) * SHADOW_TEXEL_M;
     this.sun.target.position.set(sx, y, sz);
-    this.sun.position.set(sx, y, sz).addScaledVector(SUN_DIRECTION, 420);
+    this.sun.position.set(sx, y, sz).addScaledVector(this.sunDir, 420);
   }
 
   private updateCamera(distM: number, dt: number): void {
@@ -231,7 +283,7 @@ export class World {
     }
   }
 
-  render(distM: number, cadenceRpm: number, ghostDistM: number | null, dt: number, now: number): void {
+  render(distM: number, cadenceRpm: number, ghostDistM: number | null, dt: number, now: number, peloton: PelotonState[] = []): void {
     const p = this.route.at(distM);
     this.crank += ((cadenceRpm / 60) * Math.PI * 2 * dt) % (Math.PI * 2);
     this.rider.pose(-this.crank);
@@ -244,6 +296,8 @@ export class World {
       this.ghost.pose(-this.crank * 0.96);
     }
 
+    this.placePeloton(peloton, dt);
+
     // Tout le détail du décor suit la caméra libre, pour inspecter n'importe quel endroit.
     let focus: { x: number; z: number; ele: number } = p;
     if (this.free) focus = this.updateFreeCamera(this.free, dt);
@@ -251,8 +305,11 @@ export class World {
     this.updateBiome(focus.ele, focus.x);
     this.water?.update(dt);
     this.updateSun(focus.x, focus.ele, focus.z);
-    this.fog.color.lerp(this.targetFog, Math.min(1, dt * 0.6));
-    this.fog.density += (this.targetDensity - this.fog.density) * Math.min(1, dt * 0.6);
+    // La brume du lieu, teintée par le moment et grisée par la météo.
+    this.fogGoal.copy(this.targetFog).multiply(this.fogTint).lerp(this.fogGrey, this.look.fogGrey);
+    this.fog.color.lerp(this.fogGoal, Math.min(1, dt * 0.6));
+    this.fog.density += (this.targetDensity * this.look.fogMultiplier - this.fog.density) * Math.min(1, dt * 0.6);
+    if (this.look.rain > 0) this.rain.update(dt, this.camera.position);
     this.skyTime.value += dt;
 
     this.vegetation.update(focus.x, focus.z, dt);
@@ -267,6 +324,7 @@ export class World {
     window.removeEventListener('resize', this.resize);
     this.pipeline.dispose();
     this.water?.dispose();
+    this.rain.dispose();
     this.renderer.dispose();
   }
 

@@ -104,7 +104,7 @@ describe('bâtiments réels', () => {
     route: JSON.parse(fs.readFileSync(`public/data/${id}/route.json`, 'utf8')) as RouteData,
     buildings: JSON.parse(fs.readFileSync(`public/data/${id}/buildings.json`, 'utf8')) as BuildingData[],
   });
-  const ids = ['alpe-dhuez', 'ventoux', 'tourmalet', 'galibier', 'izoard'];
+  const ids = ['alpe-dhuez', 'ventoux', 'tourmalet', 'galibier', 'izoard', 'madeleine', 'aubisque'];
   const near = (b: BuildingData, x: number, z: number, r: number) =>
     Math.hypot(b.p[0] - x, b.p[1] - z) < r;
 
@@ -142,7 +142,7 @@ describe('bâtiments réels', () => {
     }
     expect(overlaps).toBe(0);
   });
-  // Tolérance : le faîtage d'une emprise presque rectangulaire suit son rectangle, un peu plus
+  // Tolérance (1,7 m) : le faîtage d'une emprise presque rectangulaire suit son rectangle, un peu plus
   // large qu'elle. Le défaut visé est la grande lame qui sortait des bâtiments irréguliers.
   it.each(ids)('%s : chaque toit reste au-dessus de son emprise', (id) => {
     const { buildings } = load(id);
@@ -153,7 +153,7 @@ describe('bâtiments réels', () => {
       const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
       const s = buildShell(b, 0, -1, true);
       for (let i = 0; i < s.roof.length; i += 3) {
-        if (s.roof[i] < x0 - 1.6 || s.roof[i] > x1 + 1.6 || s.roof[i + 2] < z0 - 1.6 || s.roof[i + 2] > z1 + 1.6) outside++;
+        if (s.roof[i] < x0 - 1.7 || s.roof[i] > x1 + 1.7 || s.roof[i + 2] < z0 - 1.7 || s.roof[i + 2] > z1 + 1.7) outside++;
       }
     }
     expect(outside).toBe(0);

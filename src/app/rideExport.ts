@@ -47,6 +47,31 @@ export function rideFileName(startedAt: number): string {
   return `sortie-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.tcx`;
 }
 
+/** Le fichier de la sortie, prêt à être partagé avec une application (Strava, Garmin Connect…). */
+export function rideFile(ride: RideRecord): File {
+  return new File([buildTcx(ride)], rideFileName(ride.startedAt), { type: 'application/vnd.garmin.tcx+xml' });
+}
+
+/** Vrai quand le navigateur sait partager un fichier avec une autre application (surtout sur tablette et téléphone). */
+export function canShareRide(ride: RideRecord): boolean {
+  try {
+    return typeof navigator.canShare === 'function' && navigator.canShare({ files: [rideFile(ride)] });
+  } catch {
+    return false;
+  }
+}
+
+/** Ouvre le partage du système avec le fichier de la sortie. Renvoie faux si le joueur a refermé la fenêtre. */
+export async function shareRide(ride: RideRecord): Promise<boolean> {
+  try {
+    await navigator.share({ files: [rideFile(ride)], title: `${ride.name} · Cols de France` });
+    return true;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') return false;
+    throw err;
+  }
+}
+
 /** Propose le fichier au téléchargement. Renvoie son nom. */
 export function saveRide(ride: RideRecord): string {
   const name = rideFileName(ride.startedAt);

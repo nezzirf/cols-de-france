@@ -4,8 +4,13 @@ import type { Trainer, TrainerData } from '../hardware/types';
 import { commandChanged } from '../hardware/types';
 import { PhysicsEngine, type RiderSetup, trainerCommand, type TrainerCommand } from '../sim/physicsEngine';
 import type { Route } from '../sim/route';
+import { AutoPause, STOPPED_SPEED_MPS } from '../sim/autoPause';
+import { EffortAlerts } from '../sim/effortAlerts';
 import { DEFAULT_GEAR, GEAR_COUNT, shiftedGrade } from '../sim/gears';
+import { Peloton, type PelotonGap, type PelotonState } from '../sim/peloton';
 import { type RideSample, rideStats, type RideStats } from '../sim/rideStats';
+import { powerZone } from '../sim/zones';
+import type { GameState } from './rideAutosave';
 import { LocalPrStore, type SegmentResult, type SegmentStatus, SegmentTracker } from '../sim/segments';
 import { totalDuration, type WorkoutStep, workoutStateAt } from '../sim/workout';
 import type { RouteEvent } from '../world/landmarks';
@@ -18,12 +23,20 @@ const TRAINER_PERIOD_MS = 1000;
 const FORCE_RESEND_MS = 10000;
 /** Le cycliste sent la pente sous la roue avant : on anticipe d'un demi-empattement. */
 const GRADE_LOOKAHEAD_M = 0.5;
+/** Intervalle entre deux points de reprise de la sortie. */
+const CHECKPOINT_EVERY_S = 30;
 
 /** Ce que la boucle de jeu demande à l'affichage : un décor 3D, ou rien quand on roule devant un écran. */
 export interface GameWorld {
   readonly events: RouteEvent[];
   onBiomeChange: (label: string) => void;
-  render(distM: number, cadenceRpm: number, ghostDistM: number | null, dt: number, now: number): void;
+  render(distM: number, cadenceRpm: number, ghostDistM: number | null, dt: number, now: number, peloton?: PelotonState[]): void;
+}
+
+/** Les coéquipiers qui encadrent le joueur, avec l'écart en mètres. */
+export interface PelotonSnapshot {
+  ahead: PelotonGap | null;
+  behind: PelotonGap | null;
 }
 
 export interface RideSnapshot {
@@ -47,6 +60,11 @@ export interface RideSnapshot {
   lap: number;
   /** Distance parcourue depuis le départ, tours compris. */
   totalM: number;
+  /** Le chrono est arrêté parce que le cycliste ne pédale plus. */
+  autoPaused: boolean;
+  /** Zone de puissance (1 à 7), ou 0 sans FTP. */
+  zone: number;
+  peloton: PelotonSnapshot | null;
 }
 
 export interface WorkoutSnapshot {
@@ -101,10 +119,17 @@ export class Game {
   private samples: RideSample[] = [];
   private nextSampleS = 1;
   private startedAt = 0;
+  private autoPause = new AutoPause();
+  private alerts = new EffortAlerts();
+  private peloton: Peloton | null = null;
+  /** Distance parcourue par seconde de la sortie de référence, pour courir contre soi-même. */
+  private reference: number[] | null = null;
   /** Facteur 0..1 appliqué à la pente envoyée au frein. */
   difficulty = 1;
 
   onFrame: (s: RideSnapshot) => void = () => {};
+  /** Appelé toutes les 30 secondes de sortie : de quoi reprendre la sortie après une coupure. */
+  onCheckpoint: (state: GameState, samples: RideSample[]) => void = () => {};
   onToast: (text: string) => void = () => {};
   onSegmentDone: (r: SegmentResult) => void = () => {};
   onFinish: (s: RideSummary) => void = () => {};
@@ -148,6 +173,71 @@ export class Game {
     // si la fenêtre passe en arrière-plan pendant la sortie.
     this.simTimer = window.setInterval(() => this.simulate(), SIM_INTERVAL_MS);
     this.rafId = requestAnimationFrame((t) => this.frame(t));
+  }
+
+  /** Fait rouler quatre coéquipiers de niveaux différents, à partir de la position actuelle. */
+  enablePeloton(): void {
+    const { route } = this;
+    const start = this.physics.distanceM;
+    this.peloton = new Peloton(
+      { lengthM: route.lengthM, loop: route.data.loop, gradeAt: (d) => route.gradeAt(d), eleAt: (d) => route.eleAt(d) },
+      this.physics.setup,
+      this.ftp,
+      start,
+      this.traveledM(start),
+    );
+  }
+
+  /** Une sortie passée sur ce parcours : un fantôme la rejoue, tant qu'aucun record de segment ne prend le relais. */
+  setReference(samples: RideSample[] | null): void {
+    this.reference = samples && samples.length > 1 ? samples.map((s) => s.distanceM) : null;
+  }
+
+  private referenceDistance(timeS: number): number | null {
+    const ref = this.reference;
+    if (!ref || timeS <= 0) return null;
+    const last = ref.length - 1;
+    if (timeS >= last + 1) return null;
+    if (timeS < 1) return START_OFFSET_M + (ref[0] - START_OFFSET_M) * timeS;
+    const i = Math.floor(timeS) - 1;
+    return ref[i] + (ref[Math.min(last, i + 1)] - ref[i]) * (timeS - Math.floor(timeS));
+  }
+
+  /** Sauvegarde tout de suite, par exemple quand on quitte la sortie avant la fin. */
+  saveNow(): void {
+    if (!this.finished && this.elapsedS > 0) this.onCheckpoint(this.state(), this.samples);
+  }
+
+  /** État à sauvegarder pour reprendre la sortie plus tard. */
+  state(): GameState {
+    return {
+      elapsedS: this.elapsedS,
+      energyJ: this.energyJ,
+      maxPowerW: this.maxPower,
+      distanceM: this.physics.distanceM,
+      laps: this.laps,
+      startedAt: this.startedAt,
+    };
+  }
+
+  /** Reprend une sortie interrompue : le chrono, les points et la position repartent d'où ils étaient. */
+  restore(state: GameState, samples: RideSample[]): void {
+    this.elapsedS = state.elapsedS;
+    this.energyJ = state.energyJ;
+    this.maxPower = state.maxPowerW;
+    this.laps = state.laps;
+    this.startedAt = state.startedAt;
+    this.samples = samples;
+    this.nextSampleS = samples.length + 1;
+    this.physics.distanceM = state.distanceM;
+    this.physics.speedMps = 0;
+    this.tracker.restartAt(state.distanceM, state.elapsedS);
+    const ev = this.world.events;
+    this.eventIndex = ev.findIndex((e) => e.distM > state.distanceM);
+    if (this.eventIndex < 0) this.eventIndex = ev.length;
+    // Le chrono repart au premier coup de pédale.
+    this.autoPause.paused = true;
+    this.onToast('Sortie reprise : pédale pour repartir');
   }
 
   togglePause(): boolean {
@@ -209,12 +299,19 @@ export class Game {
     const power = this.data.powerW;
     this.physics.advance(dt, { powerW: power, gradePct: this.route.gradeAt(d), altitudeM: this.route.eleAt(d) });
 
-    // Le chrono part au premier coup de pédale.
+    // Le chrono part au premier coup de pédale, et s'arrête quand on s'arrête vraiment.
     if (this.elapsedS > 0 || power > 0 || this.physics.speedMps > 0) {
-      if (this.startedAt === 0) this.startedAt = Date.now();
-      this.elapsedS += dt;
-      this.energyJ += power * dt;
-      this.maxPower = Math.max(this.maxPower, power);
+      const pedalling = power > 0 || this.data.cadenceRpm > 0;
+      const change = this.autoPause.update(dt, pedalling, this.physics.speedMps > STOPPED_SPEED_MPS);
+      if (change === 'pause') this.onToast('Pause automatique : le chrono repart quand tu pédales');
+      else if (change === 'resume') this.onToast('C’est reparti');
+      if (!this.autoPause.paused) {
+        if (this.startedAt === 0) this.startedAt = Date.now();
+        this.elapsedS += dt;
+        this.energyJ += power * dt;
+        this.maxPower = Math.max(this.maxPower, power);
+      }
+      this.peloton?.advance(dt);
     }
 
     const dist = Math.min(this.physics.distanceM, this.route.lengthM);
@@ -253,6 +350,9 @@ export class Game {
         altitudeM: this.route.eleAt(dist),
         speedKmh: this.physics.speedMps * 3.6,
       });
+      const alert = this.alerts.update({ powerW: this.data.powerW, cadenceRpm: this.data.cadenceRpm }, this.ftp, this.workout !== null);
+      if (alert) this.onToast(alert);
+      if (this.nextSampleS % CHECKPOINT_EVERY_S === 0) this.onCheckpoint(this.state(), this.samples);
       this.nextSampleS++;
     }
   }
@@ -370,8 +470,8 @@ export class Game {
     const dt = Math.min(0.1, (time - this.lastFrame) / 1000);
     this.lastFrame = time;
     const dist = Math.min(this.physics.distanceM, this.route.lengthM);
-    const ghost = this.exploring ? null : this.tracker.ghostDistance(this.elapsedS);
-    this.world.render(dist, this.paused ? 0 : this.data.cadenceRpm, ghost, dt, time);
+    const ghost = this.exploring ? null : (this.tracker.ghostDistance(this.elapsedS) ?? this.referenceDistance(this.elapsedS));
+    this.world.render(dist, this.paused ? 0 : this.data.cadenceRpm, ghost, dt, time, this.peloton?.states());
     this.onFrame(this.snapshot(dist));
     this.rafId = requestAnimationFrame((t) => this.frame(t));
   }
@@ -396,6 +496,9 @@ export class Game {
       gear: this.gearsOn && !this.workout ? this.gear : null,
       lap: this.laps + 1,
       totalM: this.traveledM(dist),
+      autoPaused: this.autoPause.paused,
+      zone: powerZone(this.data.powerW, this.ftp),
+      peloton: this.peloton ? this.peloton.neighbours(this.traveledM(dist)) : null,
     };
   }
 

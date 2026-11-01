@@ -1,20 +1,33 @@
 // Écran de fin de sortie : le récap de la séance, avec de quoi enregistrer la sortie dans un fichier.
 
 import type { RideSummary } from '../app/game';
-import { saveRide } from '../app/rideExport';
+import { canShareRide, type RideRecord, saveRide, shareRide } from '../app/rideExport';
 import { formatTime } from '../hud/hud';
-import type { RideSample } from '../sim/rideStats';
+import { BEST_WINDOWS_S, estimateFtp, powerBests } from '../sim/rideStats';
+import { timeInZones, ZONES } from '../sim/zones';
 import { fr } from './format';
+import { RideChart } from './rideChart';
 import './recap.css';
 
 export interface RecapOptions {
   name: string;
   summary: RideSummary;
+  ftp: number;
+  /** Meilleures puissances d'avant cette sortie, pour repérer les records battus. */
+  previousBests?: Record<number, number>;
+  /** Propose d'adopter la FTP estimée. */
+  onApplyFtp?(ftp: number): void;
   onMenu(): void;
+  /** Texte du bouton de retour. */
+  menuLabel?: string;
 }
 
 /** Une sortie sans pédalage n'a rien à enregistrer. */
 const MIN_SAVED_S = 10;
+/** En dessous de cet écart, la FTP estimée n'est pas proposée. */
+const MIN_FTP_GAP_W = 3;
+
+const STRAVA_UPLOAD = 'https://www.strava.com/upload/select';
 
 const stat = (value: string, label: string, hint = ''): string =>
   `<div class="recap-stat"><b>${value}</b><span>${label}</span>${hint ? `<small>${hint}</small>` : ''}</div>`;
@@ -24,55 +37,9 @@ function dateLabel(ms: number): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-/** Courbes de la séance : le relief en fond, la puissance en orange et le cardio en rouge. */
-function drawRide(canvas: HTMLCanvasElement, samples: RideSample[]): void {
-  const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
-  canvas.width = Math.round(w * dpr);
-  canvas.height = Math.round(h * dpr);
-  const g = canvas.getContext('2d')!;
-  g.scale(dpr, dpr);
-  if (samples.length < 2) return;
-  const t1 = samples[samples.length - 1].t;
-  const x = (t: number) => (t / t1) * w;
-  const line = (value: (s: RideSample) => number, lo: number, hi: number) => (s: RideSample) => h - 6 - ((value(s) - lo) / (hi - lo || 1)) * (h - 12);
+const windowLabel = (s: number): string => (s < 60 ? `${s} s` : `${s / 60} min`);
 
-  const alt = samples.map((s) => s.altitudeM);
-  const yAlt = line((s) => s.altitudeM, Math.min(...alt), Math.max(...alt));
-  g.beginPath();
-  g.moveTo(0, h);
-  for (const s of samples) g.lineTo(x(s.t), yAlt(s));
-  g.lineTo(w, h);
-  g.closePath();
-  g.fillStyle = 'rgba(255,255,255,0.08)';
-  g.fill();
-
-  // La puissance est lissée sur 10 s : à la seconde, la courbe serait illisible.
-  const smooth = samples.map((s, i) => {
-    const part = samples.slice(Math.max(0, i - 9), i + 1);
-    return { ...s, powerW: part.reduce((a, b) => a + b.powerW, 0) / part.length };
-  });
-  const yPower = line((s) => s.powerW, 0, Math.max(100, ...smooth.map((s) => s.powerW)) * 1.1);
-  g.beginPath();
-  smooth.forEach((s, i) => (i === 0 ? g.moveTo(x(s.t), yPower(s)) : g.lineTo(x(s.t), yPower(s))));
-  g.strokeStyle = '#ff8a2b';
-  g.lineWidth = 2;
-  g.stroke();
-
-  const beats = samples.filter((s) => s.heartRateBpm);
-  if (beats.length > 1) {
-    const bpm = beats.map((s) => s.heartRateBpm!);
-    const yHr = line((s) => s.heartRateBpm!, Math.min(...bpm) - 5, Math.max(...bpm) + 5);
-    g.beginPath();
-    beats.forEach((s, i) => (i === 0 ? g.moveTo(x(s.t), yHr(s)) : g.lineTo(x(s.t), yHr(s))));
-    g.strokeStyle = '#ff6b5e';
-    g.lineWidth = 1.5;
-    g.stroke();
-  }
-}
-
-export function showRecap(root: HTMLElement, { name, summary, onMenu }: RecapOptions): void {
+export function showRecap(root: HTMLElement, { name, summary, ftp, previousBests, onApplyFtp, onMenu, menuLabel }: RecapOptions): void {
   const { stats, samples } = summary;
   const screen = document.createElement('div');
   screen.className = 'screen over';
@@ -85,6 +52,32 @@ export function showRecap(root: HTMLElement, { name, summary, onMenu }: RecapOpt
   const saveable = summary.elapsedS >= MIN_SAVED_S && samples.length >= 2;
   const heart = stats.avgHeartRateBpm !== null ? stat(`${Math.round(stats.avgHeartRateBpm)} bpm`, 'Cardio moyen', `max ${Math.round(stats.maxHeartRateBpm!)}`) : '';
   const load = stats.tss !== null ? stat(`${Math.round(stats.tss)}`, 'Charge (TSS)', `intensité ${fr(stats.intensityFactor!, 2)}`) : '';
+
+  const bests = powerBests(samples);
+  const bestCells = BEST_WINDOWS_S.filter((w) => bests[w] !== undefined)
+    .map((w) => {
+      const before = previousBests?.[w];
+      const record = before !== undefined && bests[w] > before;
+      return `<div class="recap-best${record ? ' is-record' : ''}"><b>${bests[w]} W</b><span>${windowLabel(w)}</span>${record ? '<small>Record !</small>' : before !== undefined ? `<small>record ${before} W</small>` : ''}</div>`;
+    })
+    .join('');
+  const estimate = estimateFtp(bests[1200]);
+  const estimateLine =
+    estimate !== null
+      ? `<div class="recap-ftp"><span>FTP estimée : <b>${estimate} W</b> <small>(95 % de ta meilleure puissance sur 20 min)</small></span>${
+          onApplyFtp && Math.abs(estimate - ftp) >= MIN_FTP_GAP_W ? `<button class="btn" data-a="ftp">Utiliser ${estimate} W</button>` : ''
+        }</div>`
+      : '';
+
+  const zoneSeconds = timeInZones(samples.map((s) => s.powerW), ftp);
+  const zoneTotal = zoneSeconds.reduce((a, b) => a + b, 0);
+  const zones =
+    zoneTotal > 0
+      ? `<h3 class="recap-title">Temps dans chaque zone <small>(FTP ${ftp} W)</small></h3>
+         <div class="recap-zones">${ZONES.map((z, i) => (zoneSeconds[i] > 0 ? `<i style="flex:${zoneSeconds[i]};background:${z.color}" title="Z${z.id} ${z.name}"></i>` : '')).join('')}</div>
+         <div class="recap-zone-list">${ZONES.map((z, i) => `<span><i style="background:${z.color}"></i>Z${z.id} ${z.name} <b>${formatTime(zoneSeconds[i])}</b></span>`).join('')}</div>`
+      : '';
+
   screen.innerHTML = `<div class="result recap">
     <h2>Récap de la séance</h2>
     <p class="recap-sub">${name} · ${dateLabel(summary.startedAt)}</p>
@@ -100,24 +93,68 @@ export function showRecap(root: HTMLElement, { name, summary, onMenu }: RecapOpt
       ${heart}
       ${load}
     </div>
-    <canvas class="recap-chart" aria-label="Puissance, cardio et relief de la séance"></canvas>
-    <p class="recap-legend"><i style="background:#ff8a2b"></i>Puissance <i style="background:#ff6b5e"></i>Cardio <i style="background:rgba(255,255,255,0.3)"></i>Relief</p>
+    ${
+      samples.length >= 2
+        ? `<canvas class="recap-chart" aria-label="Puissance, cardio et relief de la séance"></canvas>
+    <div class="recap-chart-bar">
+      <p class="recap-readout" data-r="readout" aria-live="off"></p>
+      <span class="recap-zoom">
+        <button class="btn" data-a="zoom-out" aria-label="Dézoomer">−</button>
+        <button class="btn" data-a="zoom-in" aria-label="Zoomer">+</button>
+        <button class="btn" data-a="zoom-reset" hidden>Tout afficher</button>
+      </span>
+    </div>
+    <p class="recap-legend"><i style="background:#ff8a2b"></i>Puissance <i style="background:#ff6b5e"></i>Cardio <i style="background:rgba(255,255,255,0.3)"></i>Relief <em>Glisse sur la courbe pour zoomer sur un effort</em></p>`
+        : ''
+    }
+    ${bestCells ? `<h3 class="recap-title">Meilleures puissances</h3><div class="recap-bests">${bestCells}</div>${estimateLine}` : ''}
+    ${zones}
     ${segs}
     <div class="recap-actions">
       <button class="btn primary" data-a="save" ${saveable ? '' : 'disabled'}>Enregistrer la sortie</button>
-      <button class="btn recap-menu" data-a="menu">Retour au menu</button>
+      <button class="btn" data-a="share" hidden>Envoyer vers une autre application</button>
+      <button class="btn recap-menu" data-a="menu">${menuLabel ?? 'Retour au menu'}</button>
     </div>
     <p class="recap-note" data-r="note" role="status">${saveable ? 'Le fichier .tcx s’importe dans Strava, Garmin Connect, TrainingPeaks…' : 'Sortie trop courte pour être enregistrée.'}</p>
   </div>`;
   root.appendChild(screen);
-  drawRide(screen.querySelector('canvas')!, samples);
 
-  const save = screen.querySelector<HTMLButtonElement>('[data-a="save"]')!;
-  const note = screen.querySelector<HTMLElement>('[data-r="note"]')!;
+  const q = <T extends HTMLElement>(selector: string): T => screen.querySelector(selector) as T;
+  if (samples.length >= 2) {
+    new RideChart(
+      { canvas: q('canvas'), readout: q('[data-r="readout"]'), zoomIn: q('[data-a="zoom-in"]'), zoomOut: q('[data-a="zoom-out"]'), reset: q('[data-a="zoom-reset"]') },
+      samples,
+    );
+  }
+
+  const record: RideRecord = { name, startedAt: summary.startedAt, elapsedS: summary.elapsedS, samples, stats };
+  const save = q<HTMLButtonElement>('[data-a="save"]');
+  const note = q('[data-r="note"]');
   save.addEventListener('click', () => {
-    const file = saveRide({ name, startedAt: summary.startedAt, elapsedS: summary.elapsedS, samples, stats });
+    const file = saveRide(record);
     save.textContent = '✓ Sortie enregistrée';
-    note.textContent = `Fichier « ${file} » téléchargé : importe-le dans ton service d’entraînement.`;
+    note.replaceChildren(`Fichier « ${file} » téléchargé : importe-le dans ton service d’entraînement. `);
+    const link = document.createElement('a');
+    link.href = STRAVA_UPLOAD;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = 'Ouvrir la page d’envoi de Strava';
+    note.appendChild(link);
   });
-  screen.querySelector('[data-a="menu"]')!.addEventListener('click', onMenu);
+  const share = q<HTMLButtonElement>('[data-a="share"]');
+  if (saveable && canShareRide(record)) {
+    share.hidden = false;
+    share.addEventListener('click', () => {
+      shareRide(record).catch((err) => {
+        note.textContent = `Partage impossible : ${err instanceof Error ? err.message : err}`;
+      });
+    });
+  }
+  const apply = screen.querySelector<HTMLButtonElement>('[data-a="ftp"]');
+  apply?.addEventListener('click', () => {
+    onApplyFtp?.(estimate!);
+    apply.textContent = `✓ FTP réglée sur ${estimate} W`;
+    apply.disabled = true;
+  });
+  q('[data-a="menu"]').addEventListener('click', onMenu);
 }

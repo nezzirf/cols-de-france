@@ -2,15 +2,19 @@
 // de la sortie. Tout ce que le joueur choisit reste dans son profil.
 
 import { type AppOptions, CUSTOM_ROUTE_ID, type Profile, type WorkoutWhere } from '../app/profile';
+import type { SavedRide } from '../app/rideAutosave';
+import type { HistoryEntry } from '../app/rideHistory';
+import { type Moment, MOMENTS, type Weather, WEATHERS } from '../world/ambiance';
 import { findBike, findJersey, wearing, type Bike } from '../sim/bikes';
 import { SALON_ROUTE_ID } from '../sim/salonRoute';
 import { WORLD_NAME, WORLD_ROUTE_ID } from '../sim/worldRoute';
 import { loadRouteIndex, type RouteSummary } from '../sim/route';
 import { loadWorkouts, saveWorkouts, WORKOUT_PRESETS, type Workout } from '../sim/workout';
-import { esc, fr, hex } from './format';
+import { duration, esc, fr, hex } from './format';
 import './menu.css';
 import { BikePreview } from './preview';
 import { renderGarage } from './tabGarage';
+import { renderHistory } from './tabHistory';
 import { renderRoutes } from './tabRoutes';
 import { renderWorkouts } from './tabWorkouts';
 
@@ -23,6 +27,14 @@ export interface MenuHost {
   connect(kind: DeviceKind): Promise<string>;
   isConnected(kind: DeviceKind): boolean;
   start(routeId: string, workout: Workout | null, app: AppOptions | null): Promise<void>;
+  /** Sortie interrompue que l'on peut reprendre, si elle existe. */
+  pendingRide(): SavedRide | null;
+  resumeRide(): Promise<void>;
+  /** Termine la sortie interrompue : son récap s'affiche et elle entre dans l'historique. */
+  finishPendingRide(): void;
+  discardPendingRide(): void;
+  /** Rouvre le récap d'une sortie de l'historique. */
+  openRide(entry: HistoryEntry): void;
 }
 
 /** Ce que les onglets partagent avec l'écran. */
@@ -33,14 +45,16 @@ export interface MenuContext {
   /** À appeler après tout changement de choix. */
   changed(): void;
   saveWorkouts(): void;
+  openRide(entry: HistoryEntry): void;
 }
 
-type TabId = 'parcours' | 'entrainement' | 'garage';
+type TabId = 'parcours' | 'entrainement' | 'garage' | 'historique';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'parcours', label: 'Parcours' },
   { id: 'entrainement', label: 'Entraînement' },
   { id: 'garage', label: 'Garage' },
+  { id: 'historique', label: 'Historique' },
 ];
 
 const CREDITS =
@@ -69,6 +83,7 @@ export class Menu {
       workouts: loadWorkouts(),
       changed: () => this.changed(),
       saveWorkouts: () => saveWorkouts(this.context.workouts),
+      openRide: (entry) => host.openRide(entry),
     };
   }
 
@@ -115,6 +130,14 @@ export class Menu {
             <span>Pente ressentie <b data-r="difficulty"></b></span>
             <input type="range" min="25" max="100" step="5" data-p="difficulty" value="${this.profile.difficulty}">
           </label>
+          <div class="m-ambiance" data-r="ambiance">
+            <div class="m-ambiance-row">
+              <label>Météo<select data-o="weather">${WEATHERS.map((w) => `<option value="${w.id}">${w.label}</option>`).join('')}</select></label>
+              <label>Moment<select data-o="moment">${MOMENTS.map((m) => `<option value="${m.id}">${m.label}</option>`).join('')}</select></label>
+            </div>
+            <label class="m-check" data-r="pelotonRow"><input type="checkbox" data-o="peloton"> Rouler avec un peloton</label>
+            <label class="m-check"><input type="checkbox" data-o="ghost"> Fantôme de ma meilleure sortie</label>
+          </div>
           <button class="m-go" data-a="start">Rouler</button>
           <p class="m-msg" data-r="msg">Sans home trainer connecté, la sortie démarre en mode démo au clavier.</p>
         </aside>
@@ -140,6 +163,23 @@ export class Menu {
     this.root.querySelectorAll<HTMLElement>('[data-d]').forEach((b) => {
       b.addEventListener('click', () => void this.connect(b.dataset.d as DeviceKind));
     });
+    this.root.querySelectorAll<HTMLSelectElement>('select[data-o]').forEach((select) => {
+      const key = select.dataset.o as 'weather' | 'moment';
+      select.value = this.profile[key];
+      select.addEventListener('change', () => {
+        if (key === 'weather') this.profile.weather = select.value as Weather;
+        else this.profile.moment = select.value as Moment;
+        this.changed();
+      });
+    });
+    this.root.querySelectorAll<HTMLInputElement>('input[data-o]').forEach((box) => {
+      const key = box.dataset.o as 'peloton' | 'ghost';
+      box.checked = this.profile[key];
+      box.addEventListener('change', () => {
+        this.profile[key] = box.checked;
+        this.changed();
+      });
+    });
     this.q('[data-a="start"]').addEventListener('click', () => void this.start());
 
     this.preview = new BikePreview(this.q('[data-r="preview"]'));
@@ -161,14 +201,56 @@ export class Menu {
     });
     const content = this.q('[data-r="content"]');
     content.innerHTML = '';
+    this.renderResume(content);
     const page = document.createElement('div');
     page.className = 'm-page';
     content.appendChild(page);
     if (tab === 'parcours') renderRoutes(page, this.context);
     else if (tab === 'entrainement') renderWorkouts(page, this.context);
+    else if (tab === 'historique') renderHistory(page, this.context);
     else renderGarage(page, this.context);
     // Le résumé dépend de l'onglet : le lieu choisi dans Entraînement ne vaut que là, ou avec une séance.
     this.changed();
+  }
+
+  /** Propose de reprendre la sortie interrompue, quand il y en a une. */
+  private renderResume(content: HTMLElement): void {
+    const saved = this.host.pendingRide();
+    if (!saved) return;
+    const last = saved.samples[saved.samples.length - 1];
+    const km = last ? last.distanceM / 1000 : 0;
+    const box = document.createElement('div');
+    box.className = 'm-resume';
+    box.innerHTML = `<p><b>Sortie interrompue</b> · ${esc(saved.name)} · ${duration(saved.state.elapsedS)} · ${fr(km)} km</p>
+      <div class="m-resume-actions">
+        <button class="primary" data-a="resume">Reprendre</button>
+        <button data-a="finish">Terminer et voir le récap</button>
+        <button data-a="discard">Abandonner</button>
+      </div>`;
+    box.querySelector('[data-a="resume"]')!.addEventListener('click', () => void this.resume());
+    box.querySelector('[data-a="finish"]')!.addEventListener('click', () => this.host.finishPendingRide());
+    box.querySelector('[data-a="discard"]')!.addEventListener('click', () => {
+      this.host.discardPendingRide();
+      box.remove();
+    });
+    content.appendChild(box);
+  }
+
+  private async resume(): Promise<void> {
+    this.preview?.dispose();
+    this.preview = null;
+    try {
+      await this.host.resumeRide();
+    } catch (err) {
+      await this.show();
+      this.say(err instanceof Error ? err.message : String(err), true);
+    }
+  }
+
+  /** Libère l'aperçu 3D quand le menu laisse la place à un autre écran. */
+  close(): void {
+    this.preview?.dispose();
+    this.preview = null;
   }
 
   /** Redessine l'aperçu du cycliste, par exemple quand un modèle vient d'être chargé. */
@@ -223,6 +305,9 @@ export class Menu {
     const workout = this.workout;
     // En ERG, le home trainer suit la puissance : la pente ressentie ne joue plus.
     this.q('[data-r="slope"]').hidden = workout !== null;
+    // L'ambiance et le peloton n'ont de sens que dans le monde 3D, et le peloton hors séance guidée.
+    this.q('[data-r="ambiance"]').hidden = this.launch.where === 'app';
+    this.q('[data-r="pelotonRow"]').hidden = workout !== null;
     this.q('[data-r="summary"]').innerHTML = `
       <div class="m-sum-title">${esc(bike.name)}</div>
       <div class="m-sum-sub">${esc(bike.team?.name ?? bike.label)}</div>

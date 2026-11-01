@@ -45,6 +45,7 @@ export class Hud {
   private strip: HTMLCanvasElement;
   private time: HTMLElement;
   private segments: HTMLElement;
+  private peloton: HTMLElement;
   private slope: HTMLElement;
   private slopeValue: HTMLElement;
   private altitude: HTMLElement;
@@ -80,6 +81,7 @@ export class Hud {
           <div class="hud-track"><i data-r="progress"></i><u data-r="foot" title="Pied du col"></u></div>
         </div>
         <div class="hud-segments" data-r="segments"></div>
+        <div class="hud-peloton" data-r="peloton" hidden></div>
       </section>
       <section class="hud-center panel">
         ${metric('Vitesse', 'km/h', 'speed', 'metric-main')}
@@ -110,6 +112,7 @@ export class Hud {
     const q = <T extends HTMLElement>(name: string) => this.el.querySelector(`[data-r="${name}"]`) as T;
     this.time = q('time');
     this.segments = q('segments');
+    this.peloton = q('peloton');
     this.slope = q('slope');
     this.slopeValue = q('slopeValue');
     this.altitude = q('altitude');
@@ -170,7 +173,12 @@ export class Hud {
     drawNextKilometer(this.profile, this.route, s.distanceM);
     drawRouteStrip(this.strip, this.route, s.distanceM);
     this.renderSegments(s.segments);
-    this.pause.hidden = !s.paused;
+    this.pause.hidden = !(s.paused || s.autoPaused);
+    this.pause.textContent = s.paused ? 'Pause' : 'Pause automatique';
+    const power = this.values.get('power')!.parentElement!;
+    if (s.zone > 0) power.dataset.zone = String(s.zone);
+    else delete power.dataset.zone;
+    this.renderPeloton(s);
     if (this.workout && s.workout) {
       this.workout.target.textContent = String(s.workout.targetW);
       this.workout.left.textContent = formatTime(Math.ceil(s.workout.stepLeftS));
@@ -198,6 +206,18 @@ export class Hud {
         </div>`;
       })
       .join('');
+  }
+
+  /** Coéquipiers les plus proches : celui à rattraper devant, celui qui revient derrière. */
+  private renderPeloton(s: RideSnapshot): void {
+    this.peloton.hidden = s.peloton === null;
+    if (!s.peloton) return;
+    const seconds = (m: number): string => `${Math.max(1, Math.round(m / Math.max(2, s.speedKmh / 3.6)))} s`;
+    const row = (cls: string, gap: { name: string; gapM: number } | null): string =>
+      gap
+        ? `<div class="peloton-row ${cls}"><span>${gap.name}</span><b>${Math.round(Math.abs(gap.gapM))} m</b><small>${seconds(Math.abs(gap.gapM))}</small></div>`
+        : `<div class="peloton-row none ${cls}"><span>${cls === 'ahead' ? 'Tête de course' : 'Dernier'}</span></div>`;
+    this.peloton.innerHTML = row('ahead', s.peloton.ahead) + row('behind', s.peloton.behind);
   }
 
   /** Bandeau de séance : consigne, temps restant dans le bloc et déroulé complet. */

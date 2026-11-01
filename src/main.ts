@@ -3,6 +3,9 @@
 import { Game, type RideSummary } from './app/game';
 import { type AppOptions, CUSTOM_ROUTE_ID, loadProfile, saveProfile } from './app/profile';
 import { keepAwake, openFloatingBar, startCapture } from './app/castSource';
+import { clearInProgress, loadInProgress, type SavedRide, saveInProgress } from './app/rideAutosave';
+import { addRide, type HistoryEntry, loadHistory, loadSamples, personalBests, referenceRide } from './app/rideHistory';
+import { summaryFromSamples } from './app/rideSummary';
 import { preloadBikeAsset } from './world/bikeAsset';
 import { preloadRiderAsset } from './world/riderAsset';
 import { DemoTrainer } from './hardware/demoTrainer';
@@ -59,6 +62,8 @@ class App {
   private releaseLock: (() => void) | null = null;
   private lastExplore = 0;
   private looking = false;
+  /** Ce qu'il faut savoir de la sortie en cours pour la sauvegarder, la reprendre et l'inscrire à l'historique. */
+  private rideInfo: { routeId: string | null; name: string; workout: Workout | null } | null = null;
 
   async showMenu(): Promise<void> {
     this.menu = new Menu(this.root, {
@@ -70,6 +75,11 @@ class App {
         return kind === 'hr' ? this.hr !== null : this.trainerKind === kind;
       },
       start: (routeId, workout, app) => (app ? this.startAppRide(workout, app) : this.startRide(routeId, workout)),
+      pendingRide: () => loadInProgress(),
+      resumeRide: () => this.resumeRide(),
+      finishPendingRide: () => this.finishPendingRide(),
+      discardPendingRide: () => clearInProgress(),
+      openRide: (entry) => this.openPastRide(entry),
     });
     const bikeLoading = Promise.all([preloadBikeAsset(), preloadRiderAsset()]);
     await this.menu.show();
@@ -145,7 +155,68 @@ class App {
     return { route, heights, buildings: [], ortho: paintCustomGround(route.data.terrain) };
   }
 
-  private async startRide(routeId: string, workout: Workout | null): Promise<void> {
+  /** Reprend la sortie interrompue : même parcours, même séance, chrono et points là où ils s'étaient arrêtés. */
+  private async resumeRide(): Promise<void> {
+    const saved = loadInProgress();
+    if (!saved) throw new Error('La sortie à reprendre est introuvable.');
+    if (saved.routeId === null) await this.startAppRide(saved.workout, { mode: this.profile.appMode, bars: this.profile.appBars }, saved);
+    else await this.startRide(saved.routeId, saved.workout, saved);
+  }
+
+  /** Affiche un récap sans passer par le jeu : on quitte le menu et on y revient depuis l'écran. */
+  private showStandaloneRecap(options: Parameters<typeof showRecap>[1]): void {
+    this.menu?.close();
+    this.menu = null;
+    this.root.innerHTML = '';
+    showRecap(this.root, options);
+  }
+
+  private finishPendingRide(): void {
+    const saved = loadInProgress();
+    if (!saved) return;
+    const summary = summaryFromSamples(saved.samples, this.profile.ftp, saved.state.startedAt);
+    const before = personalBests(loadHistory());
+    addRide({ name: saved.name, routeId: saved.routeId, startedAt: summary.startedAt, elapsedS: summary.elapsedS, distanceKm: summary.distanceKm, samples: summary.samples, stats: summary.stats });
+    clearInProgress();
+    this.showStandaloneRecap({
+      name: saved.name,
+      summary,
+      ftp: this.profile.ftp,
+      previousBests: before,
+      onApplyFtp: (ftp) => this.applyFtp(ftp),
+      onMenu: () => void this.showMenu(),
+    });
+  }
+
+  private openPastRide(entry: HistoryEntry): void {
+    const samples = loadSamples(entry.id);
+    if (!samples) {
+      this.menu?.say('Le détail de cette sortie n’est plus gardé.', true);
+      return;
+    }
+    this.showStandaloneRecap({
+      name: entry.name,
+      summary: summaryFromSamples(samples, this.profile.ftp, entry.id),
+      ftp: this.profile.ftp,
+      previousBests: personalBests(loadHistory(), entry.id),
+      onApplyFtp: (ftp) => this.applyFtp(ftp),
+      onMenu: () => void this.showMenu(),
+    });
+  }
+
+  private applyFtp(ftp: number): void {
+    this.profile.ftp = ftp;
+    saveProfile(this.profile);
+  }
+
+  /** Enregistre l'état de la sortie toutes les 30 secondes, pour la reprendre après une coupure. */
+  private autosave(game: Game): void {
+    game.onCheckpoint = (state, samples) => {
+      if (this.rideInfo) saveInProgress({ ...this.rideInfo, state, samples, savedAt: Date.now() });
+    };
+  }
+
+  private async startRide(routeId: string, workout: Workout | null, resume: SavedRide | null = null): Promise<void> {
     const { route, heights, buildings, ortho } = await this.loadTrack(routeId);
 
     const demo = this.trainer === null;
@@ -155,11 +226,15 @@ class App {
     }
     const trainer = this.trainer!;
 
-    this.world = new World(this.canvas, route, heights, buildings, this.bike, ortho);
+    this.world = new World(this.canvas, route, heights, buildings, this.bike, ortho, { weather: this.profile.weather, moment: this.profile.moment });
     const steps = workout ? expandBlocks(workout.blocks) : null;
     const game = new Game(route, this.world, trainer, setupFor(this.bike, this.profile.riderKg), this.bike.shape, steps, this.profile.ftp);
     game.difficulty = this.profile.difficulty / 100;
     this.game = game;
+    this.rideInfo = { routeId, name: workout?.name ?? route.data.name, workout };
+    this.autosave(game);
+    // Courir contre soi-même : la meilleure sortie déjà faite sur ce parcours, s'il ne boucle pas.
+    if (this.profile.ghost && !route.data.loop) game.setReference(referenceRide(routeId, 1));
     if (this.bpmBeforeStart !== null) game.receiveHeartRate(this.bpmBeforeStart);
     if (this.play.length > 0) game.enableGears();
 
@@ -192,6 +267,8 @@ class App {
       hud.toast(`${r.def.name} : ${formatTime(r.timeS)}${r.isNewPr ? ' · nouveau record' : ''}`, true);
     game.onTrainerError = (m) => hud.toast(`Home trainer : ${m}`);
     game.onFinish = (s) => this.showResult(workout?.name ?? route.data.name, s);
+    if (resume) game.restore(resume.state, resume.samples);
+    if (this.profile.peloton && !steps) game.enablePeloton();
 
     window.addEventListener('keydown', this.onKey);
     window.addEventListener('keyup', this.onKeyUp);
@@ -206,7 +283,7 @@ class App {
    * Sortie devant un écran : pas de décor, seulement des barres. L'image vient d'une application
    * capturée dans la page, ou bien la barre flotte seule par-dessus l'application.
    */
-  private async startAppRide(workout: Workout | null, app: AppOptions): Promise<void> {
+  private async startAppRide(workout: Workout | null, app: AppOptions, resume: SavedRide | null = null): Promise<void> {
     // Capture et fenêtre flottante exigent un geste récent du joueur : on les demande avant tout le reste.
     let stream: MediaStream | null = null;
     let pip: Window | null = null;
@@ -231,6 +308,8 @@ class App {
     game.difficulty = this.profile.difficulty / 100;
     this.game = game;
     this.route = route;
+    this.rideInfo = { routeId: null, name: workout?.name ?? 'Sortie libre', workout };
+    this.autosave(game);
     if (this.bpmBeforeStart !== null) game.receiveHeartRate(this.bpmBeforeStart);
     if (this.play.length > 0) game.enableGears();
 
@@ -283,6 +362,7 @@ class App {
     // Le rafraîchissement ne suit pas l'écran : si le jeu passe au second plan, la barre doit continuer.
     this.miniTimer = window.setInterval(() => mini.update(game.currentSnapshot(), performance.now()), MINI_REFRESH_MS);
 
+    if (resume) game.restore(resume.state, resume.samples);
     window.addEventListener('keydown', this.onKey);
     this.releaseLock = keepAwake();
     game.start();
@@ -449,7 +529,19 @@ class App {
   private showResult(name: string, s: RideSummary): void {
     this.endButton?.remove();
     this.endButton = null;
-    showRecap(this.root, { name, summary: s, onMenu: () => void this.quit() });
+    // La sortie entre dans l'historique et n'est plus « interrompue » : le récap compare aux records d'avant.
+    const before = personalBests(loadHistory());
+    addRide({ name, routeId: this.rideInfo?.routeId ?? null, startedAt: s.startedAt, elapsedS: s.elapsedS, distanceKm: s.distanceKm, samples: s.samples, stats: s.stats });
+    clearInProgress();
+    this.rideInfo = null;
+    showRecap(this.root, {
+      name,
+      summary: s,
+      ftp: this.profile.ftp,
+      previousBests: before,
+      onApplyFtp: (ftp) => this.applyFtp(ftp),
+      onMenu: () => void this.quit(),
+    });
   }
 
   private async quit(): Promise<void> {
@@ -471,6 +563,9 @@ class App {
     this.releaseLock?.();
     this.releaseLock = null;
     this.canvas.style.display = '';
+    // Quitter avant la fin garde la sortie : le menu proposera de la reprendre.
+    this.game?.saveNow();
+    this.rideInfo = null;
     this.game?.stop();
     this.world?.dispose();
     this.game = null;

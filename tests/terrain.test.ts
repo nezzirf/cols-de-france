@@ -51,7 +51,7 @@ function loadField(id: string): { route: Route; field: HeightField } {
 }
 
 describe('la route touche le sol', () => {
-  const ids = ['alpe-dhuez', 'ventoux', 'tourmalet', 'galibier', 'izoard'];
+  const ids = ['alpe-dhuez', 'ventoux', 'tourmalet', 'galibier', 'izoard', 'madeleine', 'aubisque'];
   it.each(ids)('%s : le relief ne recouvre jamais la route', (id) => {
     const { route, field } = loadField(id);
     let covered = 0;
@@ -68,7 +68,7 @@ describe('la route touche le sol', () => {
     }
     expect({ covered, worst: Math.round(worst * 10) / 10 }).toEqual({ covered: 0, worst: 0 });
   });
-  it.each(['alpe-dhuez', 'galibier', 'izoard'])('%s : aucune paroi ne recouvre une route en contrebas', (id) => {
+  it.each(['alpe-dhuez', 'galibier', 'izoard', 'madeleine', 'aubisque'])('%s : aucune paroi ne recouvre une route en contrebas', (id) => {
     const { route } = loadField(id);
     let covered = 0;
     for (const [i, s] of stations(route).entries()) {

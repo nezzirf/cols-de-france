@@ -618,3 +618,40 @@ input:focus-visible {
 .result .btn.primary {
   margin-top: 16px;
 }
+
+/* Zone de puissance : la valeur prend la couleur de la zone, avec son numéro à côté. */
+.metric[data-zone] .metric-label::after {
+  content: ' · Z' attr(data-zone);
+  font-weight: 700;
+}
+
+.metric[data-zone='1'] .metric-value, .metric[data-zone='1'] .metric-label::after { color: #8a97a6; }
+.metric[data-zone='2'] .metric-value, .metric[data-zone='2'] .metric-label::after { color: #3fa7ff; }
+.metric[data-zone='3'] .metric-value, .metric[data-zone='3'] .metric-label::after { color: #4cc46a; }
+.metric[data-zone='4'] .metric-value, .metric[data-zone='4'] .metric-label::after { color: #f2c230; }
+.metric[data-zone='5'] .metric-value, .metric[data-zone='5'] .metric-label::after { color: #ff8a2b; }
+.metric[data-zone='6'] .metric-value, .metric[data-zone='6'] .metric-label::after { color: #ff4d4d; }
+.metric[data-zone='7'] .metric-value, .metric[data-zone='7'] .metric-label::after { color: #c04dff; }
+
+/* Peloton : le coéquipier à rattraper devant, celui qui revient derrière. */
+.hud-peloton {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.peloton-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.peloton-row.ahead b { color: var(--behind); }
+.peloton-row.behind b { color: var(--ahead); }
+.peloton-row.none { color: var(--dim); }
+.peloton-row small { color: var(--dim); font-size: 12px; }
