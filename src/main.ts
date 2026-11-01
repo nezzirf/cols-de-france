@@ -6,7 +6,7 @@ import { DemoTrainer } from './hardware/demoTrainer';
 import { BluetoothHeartRate } from './hardware/heartRate';
 import { KickrAnt } from './hardware/antUsb';
 import { KickrBluetooth } from './hardware/kickrBluetooth';
-import { type ShiftDirection, ZwiftPlay } from './hardware/zwiftPlay';
+import { type ShiftDirection, ShiftGate, ZwiftPlay } from './hardware/zwiftPlay';
 import type { HeartRateSensor, Trainer } from './hardware/types';
 import { formatTime, Hud } from './hud/hud';
 import './hud/hud.css';
@@ -33,6 +33,7 @@ class App {
   private trainerKind: DeviceKind | null = null;
   private hr: HeartRateSensor | null = null;
   private play: ZwiftPlay[] = [];
+  private shiftGate = new ShiftGate();
   private menu: Menu | null = null;
   private game: Game | null = null;
   private world: World | null = null;
@@ -97,7 +98,9 @@ class App {
   private async connectZwiftPlay(): Promise<string> {
     const play = new ZwiftPlay();
     play.onShift = (direction) => this.onShift(direction);
-    await play.connect();
+    if (!(await play.connect(this.play.map((p) => p.deviceId)))) {
+      return 'Cette manette est déjà connectée. Appuie sur l’autre pour la réveiller, puis reclique sur Zwift Play.';
+    }
     this.play.push(play);
     this.game?.enableGears();
     return this.play.length === 1
@@ -106,6 +109,7 @@ class App {
   }
 
   private onShift(direction: ShiftDirection): void {
+    if (!this.shiftGate.pass(direction, performance.now())) return;
     if (this.game) this.game.shift(direction === 'up' ? 1 : -1);
     else this.menu?.say(`Bouton reçu : vitesse ${direction === 'up' ? 'supérieure' : 'inférieure'}.`);
   }

@@ -20,6 +20,7 @@ const FIELD_BUTTON_MAP = 1;
 const SHIFT_DOWN_MASK = 0x100 | 0x200;
 const SHIFT_UP_MASK = 0x1000 | 0x2000;
 const RECONNECT_MS = 5000;
+const MIN_SHIFT_INTERVAL_MS = 180;
 
 export type ShiftDirection = 'up' | 'down';
 
@@ -98,6 +99,17 @@ export class ShiftDetector {
   }
 }
 
+/** Un seul changement par appui, même si plusieurs connexions rapportent le même bouton. */
+export class ShiftGate {
+  private last: { direction: ShiftDirection; atMs: number } | null = null;
+
+  pass(direction: ShiftDirection, nowMs: number): boolean {
+    if (this.last?.direction === direction && nowMs - this.last.atMs < MIN_SHIFT_INTERVAL_MS) return false;
+    this.last = { direction, atMs: nowMs };
+    return true;
+  }
+}
+
 export class ZwiftPlay {
   onShift: (direction: ShiftDirection) => void = () => {};
   onConnection: (connected: boolean) => void = () => {};
@@ -105,24 +117,38 @@ export class ZwiftPlay {
   private detector = new ShiftDetector();
   private retryTimer = 0;
   private closing = false;
+  private listening: BluetoothRemoteGATTCharacteristic[] = [];
 
-  /** Doit être appelé depuis un geste utilisateur : le navigateur l'exige. */
-  async connect(): Promise<void> {
+  get deviceId(): string | null {
+    return this.device?.id ?? null;
+  }
+
+  /**
+   * Doit être appelé depuis un geste utilisateur : le navigateur l'exige.
+   * Rend false, sans se connecter, si le joueur a rechoisi une manette déjà connectée.
+   */
+  async connect(connectedIds: (string | null)[]): Promise<boolean> {
     if (!navigator.bluetooth) throw new Error('Bluetooth indisponible dans ce navigateur : utilise Chrome ou Edge.');
     this.device = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: 'Zwift' }, { manufacturerData: [{ companyIdentifier: ZWIFT_COMPANY_ID }] }],
       optionalServices: [ZWIFT_RIDE_SERVICE, ZWIFT_PLAY_SERVICE],
     });
+    if (connectedIds.includes(this.device.id)) return false;
     this.device.addEventListener('gattserverdisconnected', this.onDisconnected);
     await this.open();
+    return true;
   }
 
   private async open(): Promise<void> {
     const server = await this.device!.gatt!.connect();
     const service = await server.getPrimaryService(ZWIFT_RIDE_SERVICE).catch(() => server.getPrimaryService(ZWIFT_PLAY_SERVICE));
+    // Après une reconnexion, l'ancienne écoute ne doit pas s'ajouter à la nouvelle.
+    for (const old of this.listening) old.removeEventListener('characteristicvaluechanged', this.onFrame);
+    this.listening = [];
     for (const id of [ASYNC_CHARACTERISTIC, SYNC_TX_CHARACTERISTIC]) {
       const characteristic = await service.getCharacteristic(id);
       characteristic.addEventListener('characteristicvaluechanged', this.onFrame);
+      this.listening.push(characteristic);
       await characteristic.startNotifications();
     }
     const rx = await service.getCharacteristic(SYNC_RX_CHARACTERISTIC);

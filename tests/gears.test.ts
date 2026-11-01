@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GEAR_COUNT, gearRatio, shiftedGrade, type ShiftInput } from '../src/sim/gears';
-import { parseShiftFrame, readVarintFields, ShiftDetector } from '../src/hardware/zwiftPlay';
+import { parseShiftFrame, readVarintFields, ShiftDetector, ShiftGate } from '../src/hardware/zwiftPlay';
 
 const base: ShiftInput = {
   gradePct: 6,
@@ -81,6 +81,18 @@ describe('Zwift Play', () => {
   });
   it('firmware 2 : ignore les autres boutons', () => {
     expect(parseShiftFrame(new Uint8Array([0x23, 0x08, 0xfe, 0xff, 0xff, 0xff, 0x0f]))).toEqual({ up: false, down: false });
+  });
+  it('ne compte qu’une fois un appui reçu en double', () => {
+    const gate = new ShiftGate();
+    expect([gate.pass('up', 1000), gate.pass('up', 1000), gate.pass('up', 1090)]).toEqual([true, false, false]);
+  });
+  it('laisse passer des appuis rapides mais distincts', () => {
+    const gate = new ShiftGate();
+    expect([gate.pass('up', 1000), gate.pass('up', 1250), gate.pass('up', 1500)]).toEqual([true, true, true]);
+  });
+  it('laisse passer tout de suite un changement de sens', () => {
+    const gate = new ShiftGate();
+    expect([gate.pass('up', 1000), gate.pass('down', 1020)]).toEqual([true, true]);
   });
   it('ignore la batterie et les trames inconnues', () => {
     expect(parseShiftFrame(new Uint8Array([0x19, 0x08, 0x64]))).toBeNull();
