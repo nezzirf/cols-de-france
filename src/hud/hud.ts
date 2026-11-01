@@ -48,7 +48,9 @@ export class Hud {
   private slope: HTMLElement;
   private slopeValue: HTMLElement;
   private altitude: HTMLElement;
-  private toEnd: HTMLElement;
+  private doneKm: HTMLElement;
+  private leftKm: HTMLElement;
+  private progress: HTMLElement;
   private toastEl: HTMLElement;
   private status: HTMLElement;
   private pause: HTMLElement;
@@ -68,6 +70,13 @@ export class Hud {
       <section class="hud-left panel">
         <div class="hud-time" data-r="time">00:00</div>
         <div class="hud-time-label">Temps écoulé</div>
+        <div class="hud-route">
+          <div class="hud-route-values">
+            <div><b data-r="doneKm">0,0</b> km<span>Réalisés</span></div>
+            <div><b data-r="leftKm">--</b> km<span>Restants</span></div>
+          </div>
+          <div class="hud-track"><i data-r="progress"></i><u data-r="foot" title="Pied du col"></u></div>
+        </div>
         <div class="hud-segments" data-r="segments"></div>
       </section>
       <section class="hud-center panel">
@@ -83,7 +92,7 @@ export class Hud {
           <div class="slope" data-r="slope"><span data-r="slopeValue">0,0</span><small>%</small></div>
           <div class="hud-right-info">
             <div><span data-r="altitude">--</span> m</div>
-            <div class="dim"><span data-r="toEnd">--</span> km au sommet</div>
+            <div class="dim">Altitude</div>
           </div>
         </div>
         <canvas class="profile" data-r="profile" width="560" height="200" aria-label="Profil du prochain kilomètre"></canvas>
@@ -102,7 +111,10 @@ export class Hud {
     this.slope = q('slope');
     this.slopeValue = q('slopeValue');
     this.altitude = q('altitude');
-    this.toEnd = q('toEnd');
+    this.doneKm = q('doneKm');
+    this.leftKm = q('leftKm');
+    this.progress = q('progress');
+    q('foot').style.left = `${(route.data.footM / route.lengthM) * 100}%`;
     this.profile = q('profile');
     this.strip = q('strip');
     this.toastEl = q('toast');
@@ -129,7 +141,10 @@ export class Hud {
     this.slope.style.background = gradeColor(s.gradePct);
     this.slope.style.color = gradeTextColor(s.gradePct);
     this.altitude.textContent = String(Math.round(s.altitudeM));
-    this.toEnd.textContent = fr1(Math.max(0, this.route.lengthM - s.distanceM) / 1000);
+    const done = Math.min(s.distanceM, this.route.lengthM);
+    this.doneKm.textContent = fr1(done / 1000);
+    this.leftKm.textContent = fr1((this.route.lengthM - done) / 1000);
+    this.progress.style.transform = `scaleX(${done / this.route.lengthM})`;
     drawNextKilometer(this.profile, this.route, s.distanceM);
     drawRouteStrip(this.strip, this.route, s.distanceM);
     this.renderSegments(s.segments);
