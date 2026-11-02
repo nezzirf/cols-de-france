@@ -6,7 +6,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
-export const RIDER_ASSET_URL = `${import.meta.env.BASE_URL}models/rider/cyclist.glb`;
+export const RIDER_ASSET_URL = `${import.meta.env.BASE_URL}models/rider/mannequin.glb`;
 
 /** Tête du personnage dans son repère d'origine (mètres, debout, de face vers +Z). */
 export interface HeadFrame {
@@ -25,6 +25,8 @@ export interface HeadFrame {
   chin: THREE.Vector3;
   /** Repères des aérations sur la calotte : avant de la tête, milieu et profondeur. */
   vents: { front: number; middle: number; depth: number };
+  /** Avant du visage (z) à la hauteur y, sur l'axe du nez. */
+  faceZ(y: number): number;
   /** Passe du repère d'origine à celui de l'os de la tête, au repos. */
   restInverse: THREE.Matrix4;
 }
@@ -242,6 +244,13 @@ function measureHead(mesh: THREE.SkinnedMesh, eyesMesh: THREE.SkinnedMesh, headB
     temple: new THREE.Vector3(size.x * 0.46, edge(middle.z) + 0.004, middle.z + size.z * 0.02),
     chin: new THREE.Vector3(size.x * 0.05, box.min.y + 0.02, middle.z + size.z * 0.12),
     vents: { front: middle.z + size.z / 2, middle: middle.z, depth: size.z },
+    faceZ: (y: number): number => {
+      let front = -Infinity;
+      for (let i = 0; i < count; i++) {
+        if (onHead[i] && Math.abs(rest[i].x) < 0.012 && Math.abs(rest[i].y - y) < 0.008) front = Math.max(front, rest[i].z);
+      }
+      return Number.isFinite(front) ? front : middle.z + size.z / 2;
+    },
     restInverse: headBone.matrixWorld.clone().invert(),
   };
 }

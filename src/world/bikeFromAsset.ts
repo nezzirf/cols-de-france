@@ -114,6 +114,22 @@ export function buildAssetBike(wheelRadiusM: number, material: THREE.Material | 
   const ring = spinner(need('ChainRing_02'));
   const wheels = [spinner(need('Back_Wheel_01')), spinner(need('Front_Wheel_06'))];
 
+  // Les pédales restent à plat quand la manivelle tourne : leur orientation au repos, dans le repère du vélo,
+  // est rétablie à chaque image par une rotation inverse de celle de leur parent.
+  const flat = ['LeftPeddle_04', 'RightPeddle_03'].map((name) => {
+    const bone = need(name);
+    const groupWorld = group.getWorldQuaternion(new THREE.Quaternion());
+    return { bone, rest: groupWorld.invert().multiply(bone.getWorldQuaternion(new THREE.Quaternion())) };
+  });
+  const keepFlat = (): void => {
+    group.updateWorldMatrix(true, true);
+    const groupWorld = group.getWorldQuaternion(new THREE.Quaternion());
+    for (const { bone, rest } of flat) {
+      const parent = bone.parent!.getWorldQuaternion(new THREE.Quaternion());
+      bone.quaternion.copy(parent.invert().multiply(groupWorld).multiply(rest));
+    }
+  };
+
   // La pédale gauche du modèle repose à un certain angle autour du plateau : le jeu la veut à `crankAngle`.
   const ringAt = ring.bone.getWorldPosition(new THREE.Vector3());
   const left = need('LeftPeddle_04').getWorldPosition(new THREE.Vector3());
@@ -141,6 +157,7 @@ export function buildAssetBike(wheelRadiusM: number, material: THREE.Material | 
     fit,
     drive(crankAngle, wheelAngle) {
       spin(ring, crankAngle - restAngle);
+      keepFlat();
       for (const wheel of wheels) spin(wheel, wheelAngle);
     },
   };

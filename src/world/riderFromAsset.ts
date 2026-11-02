@@ -15,7 +15,10 @@ const KNEE_IN = 0.05;
 /** Avant-pied par rapport à l'axe de la pédale : en avant (m), épaisseur de la pédale au-dessus de l'axe, hauteur de l'os de l'avant-pied au-dessus de la semelle. */
 const CLEAT_FORWARD = 0.005;
 const PEDAL_TOP = 0.012;
-const BALL_HEIGHT = 0.026;
+/** Redressement du buste par rapport à la fiche du vélo : 0 le garde tel quel, 1 le rend vertical. */
+const TORSO_RISE = 0.15;
+/** Penchée supplémentaire (rad) du bassin, des reins et du haut du dos par rapport à la droite du buste : plus, moins de cambrure. La somme est nulle. */
+const LUMBAR_TILT = [-0.2, -0.1, 0.12, 0.18] as const;
 const TORSO_BONES = ['pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01', 'Head'] as const;
 /** Inclinaison de la tête par rapport à l'horizontale, pour regarder la route. */
 const HEAD_PITCH = -0.12;
@@ -207,12 +210,18 @@ function helmetMaterial(accent: THREE.Material, skull: HeadFrame): THREE.Materia
 
 /** Réglage du casque modélisé sur la tête : marge de largeur, hauteur au-dessus du crâne, décalage vers l'avant, inclinaison. */
 /** Réglage des lunettes sur la tête : marge de largeur, hauteur par rapport aux yeux, avance de l'écran par rapport au bout du nez. */
-const GLASSES_FIT = { margin: 0.012, lift: -0.035, front: -0.012 };
+const GLASSES_FIT = { margin: 0.012, lift: -0.036, front: 0.004 };
 
 /** Part du chemin que fait la clavicule vers la main (0 : épaule fixe, 1 : elle la vise). */
 const SHOULDER_FOLLOW = 0.3;
 
-const HELMET_FIT ={ margin: 0.03, lift: 0.012, forward: -0.02, pitch: -0.22 };
+const HELMET_FIT = { margin: 0.04, lift: 0.0, forward: 0.012, pitch: -0.12 };
+
+/** Nez et bouche : distance sous les yeux, taille (demi-axes) et avance par rapport à la peau. */
+const FACE = {
+  noseDrop: 0.05, noseWidth: 0.011, noseHeight: 0.02, noseDepth: 0.024, noseOut: 0.005,
+  mouthDrop: 0.09, mouthWidth: 0.02, mouthHeight: 0.0035, mouthDepth: 0.004, mouthOut: 0.0,
+};
 
 function modelledHelmetMaterial(accent: THREE.Material): THREE.Material {
   const color = ((accent as THREE.MeshStandardMaterial).color ?? new THREE.Color(0xdddddd)).clone();
@@ -240,6 +249,8 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
   const restLeg = worldPos(bone('thigh_l')).distanceTo(worldPos(bone('calf_l'))) + worldPos(bone('calf_l')).distanceTo(worldPos(bone('foot_l')));
   rig.scale.setScalar((fit.thigh + fit.shin) / restLeg);
   rig.updateMatrixWorld(true);
+  // Hauteur de l'os de l'avant-pied au-dessus de la semelle : le personnage au repos a les pieds au sol.
+  const ballHeight = worldPos(bone('ball_l')).y;
 
   // Tenue : maillot, cuissard, gants, chaussettes et chaussures sont peints sur la peau, par zones de hauteur.
   rig.traverse((o) => {
@@ -269,6 +280,12 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
     shell.rotation.set(HELMET_FIT.pitch, 0, 0);
     shell.position.set(skull.centre.x, skull.top + HELMET_FIT.lift - box.max.y * scale, skull.centre.z + HELMET_FIT.forward);
     fitted.add(shell);
+    // Doublure sombre : par les aérations, on voit de la mousse et non le crâne.
+    const lining = new THREE.Mesh(modelled, outfit.mono ? outfit.jersey : pbr({ color: 0x15161a, roughness: 0.8, side: THREE.DoubleSide }));
+    lining.scale.setScalar(scale * 0.95);
+    lining.rotation.copy(shell.rotation);
+    lining.position.set(shell.position.x, skull.top + HELMET_FIT.lift - 0.006 - box.max.y * scale * 0.95, shell.position.z);
+    fitted.add(lining);
   } else {
     fitted.add(new THREE.Mesh(skull.shell, outfit.mono ? outfit.jersey : helmetMaterial(outfit.accent, skull)));
   }
@@ -277,6 +294,21 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
     place(strap, new THREE.Vector3(skull.temple.x * side, skull.temple.y, skull.temple.z), new THREE.Vector3(skull.chin.x * side, skull.chin.y, skull.chin.z));
     fitted.add(strap);
   }
+  // Visage : un nez et une bouche posés sur l'avant du visage lisse.
+  const skinColor = ((rig.getObjectByName('SuperHero_Male') as THREE.SkinnedMesh | undefined)?.material as THREE.MeshStandardMaterial | undefined)?.color;
+  const noseY = skull.eyes.y - FACE.noseDrop;
+  const nose = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 16, 12),
+    outfit.mono ? outfit.jersey : pbr({ color: skinColor ?? 0xc99a82, roughness: 0.62 }),
+  );
+  nose.scale.set(FACE.noseWidth, FACE.noseHeight, FACE.noseDepth);
+  nose.position.set(skull.centre.x, noseY, skull.faceZ(noseY) + FACE.noseOut);
+  const mouthY = skull.eyes.y - FACE.mouthDrop;
+  const mouth = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8), outfit.mono ? outfit.jersey : pbr({ color: 0x8a4a46, roughness: 0.5 }));
+  mouth.scale.set(FACE.mouthWidth, FACE.mouthHeight, FACE.mouthDepth);
+  mouth.position.set(skull.centre.x, mouthY, skull.faceZ(mouthY) + FACE.mouthOut);
+  fitted.add(nose, mouth);
+
   // Lunettes de sport : à la largeur de la tête, le milieu de l'écran à hauteur des yeux, l'avant de l'écran
   // juste devant le front.
   const sunglasses = riderGlasses();
@@ -317,15 +349,19 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
 
   // Buste : une droite du bassin au cou, penchée comme le cycliste de la fiche du vélo.
   const pelvis = worldPos(bone('pelvis'));
-  const lean = at(fit.neck[0], fit.neck[1], 0).sub(at(fit.hip[0], fit.hip[1], 0)).normalize();
+  const lean = at(fit.neck[0], fit.neck[1], 0).sub(at(fit.hip[0], fit.hip[1], 0)).normalize().lerp(new THREE.Vector3(0, 1, 0), TORSO_RISE).normalize();
   const rest = TORSO_BONES.map((name) => worldPos(bone(name)));
-  const reach = rest.map((p) => p.distanceTo(pelvis));
   const up = new THREE.Vector3(0, 1, 0);
+  const sideways = new THREE.Vector3(1, 0, 0);
+  // Le dos s'arrondit en bas : le bassin et le bas des reins penchent plus que le buste, le haut du dos reprend l'écart.
+  let spine = pelvis.clone();
   for (let i = 0; i < TORSO_BONES.length - 1; i++) {
     // La tête se redresse un peu par rapport au buste, pour regarder devant.
-    const dir = i === TORSO_BONES.length - 2 ? lean.clone().lerp(up, NECK_RISE).normalize() : lean;
-    const next = i === TORSO_BONES.length - 2 ? worldPos(bone(TORSO_BONES[i])).addScaledVector(dir, reach[i + 1] - reach[i]) : pelvis.clone().addScaledVector(dir, reach[i + 1]);
+    const last = i === TORSO_BONES.length - 2;
+    const dir = last ? lean.clone().lerp(up, NECK_RISE).normalize() : lean.clone().applyAxisAngle(sideways, -LUMBAR_TILT[i]);
+    const next = spine.clone().addScaledVector(dir, rest[i + 1].distanceTo(rest[i]));
     aim(bone(TORSO_BONES[i]), bone(TORSO_BONES[i + 1]), next);
+    spine = worldPos(bone(TORSO_BONES[i + 1]));
   }
   // La tête regarde la route : on la redresse par rapport à l'horizontale.
   const head = bone('Head');
@@ -373,8 +409,8 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
       const py = fit.bb[1] + Math.sin(angle) * fit.crank;
       // Le pied : l'avant-pied juste au-dessus de l'axe de la pédale, la semelle à plat sur elle (la cheville est derrière
       // et plus haut, selon l'inclinaison de l'os du pied au repos).
-      const ball = world(at(px + CLEAT_FORWARD, py + PEDAL_TOP + BALL_HEIGHT, leg.side * PEDAL_SIDE));
-      const ankle = world(at(px + CLEAT_FORWARD - footLen * Math.cos(footTilt), py + PEDAL_TOP + BALL_HEIGHT + footLen * Math.sin(footTilt), leg.side * PEDAL_SIDE));
+      const ball = world(at(px + CLEAT_FORWARD, py + PEDAL_TOP + ballHeight, leg.side * PEDAL_SIDE));
+      const ankle = world(at(px + CLEAT_FORWARD - footLen * Math.cos(footTilt), py + PEDAL_TOP + ballHeight + footLen * Math.sin(footTilt), leg.side * PEDAL_SIDE));
       const knee = joint(worldPos(leg.hip), ankle, thigh, shin, pole(-leg.side * KNEE_IN, 0, -1));
       aim(leg.hip, leg.knee, knee);
       aim(leg.knee, leg.ankle, ankle);
@@ -383,7 +419,7 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
 
     for (const arm of limbs.arms) {
       const grip = world(at(fit.hand[0], fit.hand[1], arm.side * fit.handSide));
-      const wrist = world(at(fit.hand[0] - handLen * 0.91, fit.hand[1] - handLen * 0.41, arm.side * fit.handSide));
+      const wrist = world(at(fit.hand[0] - handLen * 0.97, fit.hand[1] - handLen * 0.24, arm.side * fit.handSide));
       // L'épaule suit un peu le bras qui part vers l'avant : sans cela, le haut du bras se tord sous le deltoïde.
       const collarAt = worldPos(arm.collar);
       const rest = worldPos(arm.shoulder).sub(collarAt);
