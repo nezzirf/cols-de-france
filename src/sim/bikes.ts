@@ -195,7 +195,11 @@ const PLAIN_JERSEYS: [string, string, number, number][] = [
   ['jaune', 'Jaune', 0xf6d31f, 0x1d2329],
   ['orange', 'Orange', 0xf26522, 0x1d2329],
   ['rose', 'Rose', 0xe8348b, 0xf2f3f5],
+  ['noir-rouge', 'Noir et rouge', 0x17191d, 0xc8102e],
 ];
+
+/** Maillots dont la couleur d'accent colore aussi le casque. */
+const RED_HELMET = new Set(['noir-rouge']);
 
 export const JERSEYS: Jersey[] = [
   ...PLAIN_JERSEYS.map(([id, name, color, accent]) => ({ id, name, color, accent, team: false })),
@@ -209,7 +213,8 @@ export function findJersey(id: string): Jersey | null {
 /** Le vélo avec le maillot choisi : le cadre et ses couleurs ne changent pas. */
 export function wearing(bike: Bike, jerseyId: string): Bike {
   const jersey = findJersey(jerseyId);
-  return jersey ? { ...bike, jersey: jersey.color } : bike;
+  if (!jersey) return bike;
+  return RED_HELMET.has(jersey.id) ? { ...bike, jersey: jersey.color, accent: jersey.accent } : { ...bike, jersey: jersey.color };
 }
 
 export function setupFor(bike: Bike, riderKg: number): RiderSetup {

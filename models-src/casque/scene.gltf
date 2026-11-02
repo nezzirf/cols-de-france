@@ -1,0 +1,152 @@
+{
+  "accessors": [
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 56535,
+      "max": [
+        202.10801696777344,
+        173.1300048828125,
+        456.99603271484375
+      ],
+      "min": [
+        -80.98600006103516,
+        -47.74599838256836,
+        242.67799377441406
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 678420,
+      "componentType": 5126,
+      "count": 56535,
+      "max": [
+        0.9997484683990479,
+        0.9999781250953674,
+        0.9999616146087646
+      ],
+      "min": [
+        -0.9999469518661499,
+        -0.9999799728393555,
+        -1.0
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 0,
+      "componentType": 5125,
+      "count": 338532,
+      "type": "SCALAR"
+    }
+  ],
+  "asset": {
+    "extras": {
+      "author": "LAFF3D (https://sketchfab.com/laff3d)",
+      "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+      "source": "https://sketchfab.com/3d-models/capacete-ciclista-436b9cf5a4f1428aa776aa4daa6a1f9a",
+      "title": "Capacete Ciclista"
+    },
+    "generator": "Sketchfab-12.67.0",
+    "version": "2.0"
+  },
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 1354128,
+      "name": "floatBufferViews",
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 1356840,
+      "byteOffset": 1354128,
+      "byteStride": 12,
+      "name": "floatBufferViews",
+      "target": 34962
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 2710968,
+      "uri": "scene.bin"
+    }
+  ],
+  "materials": [
+    {
+      "doubleSided": true,
+      "name": "Scene_-_Root",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.44359290127816126,
+          0.44359290127816126,
+          0.44359290127816126,
+          1.0
+        ],
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.6471203222368336
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Object_0",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 1,
+            "POSITION": 0
+          },
+          "indices": 2,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "children": [
+        1
+      ],
+      "matrix": [
+        0.9951991438865662,
+        0.09750817716121674,
+        0.008412402123212835,
+        0.0,
+        0.06166309118270874,
+        -0.557954668998718,
+        -0.8275773525238038,
+        0.0,
+        -0.07600182294845581,
+        0.8241230249404908,
+        -0.5612887144088743,
+        0.0,
+        23.01321029663086,
+        90.60242462158199,
+        185.04058837890628,
+        1.0
+      ],
+      "name": "Sketchfab_model"
+    },
+    {
+      "children": [
+        2
+      ],
+      "name": "Capacete_3Db1.stl.cleaner.materialmerger.gles"
+    },
+    {
+      "mesh": 0,
+      "name": "Object_2"
+    }
+  ],
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Sketchfab_Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ]
+}

@@ -6,12 +6,16 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
-export const RIDER_ASSET_URL = `${import.meta.env.BASE_URL}models/rider/Superhero_Male_FullBody.gltf`;
+export const RIDER_ASSET_URL = `${import.meta.env.BASE_URL}models/rider/cyclist.glb`;
 
 /** Tête du personnage dans son repère d'origine (mètres, debout, de face vers +Z). */
 export interface HeadFrame {
   /** Largeur de la tête. */
   width: number;
+  /** Sommet du crâne, centre et dimensions de la boîte de la tête. */
+  top: number;
+  centre: THREE.Vector3;
+  size: THREE.Vector3;
   /** Milieu des yeux. */
   eyes: THREE.Vector3;
   /** Calotte du casque : le haut du crâne du personnage, gonflé et allongé vers l'arrière. */
@@ -29,21 +33,51 @@ let asset: THREE.Object3D | null = null;
 let head: HeadFrame | null = null;
 let loading: Promise<void> | null = null;
 
+/** Casque de route modélisé : en mètres, dôme vers le haut (y), avant vers +Z, posé sur sa bordure en y = 0. */
+export const HELMET_URL = `${import.meta.env.BASE_URL}models/casque/helmet.glb`;
+let helmet: THREE.BufferGeometry | null = null;
+
+/** Casque modélisé, ou rien s'il n'a pas pu être chargé : le jeu garde alors la calotte tirée du crâne. */
+export const riderHelmetGeometry = (): THREE.BufferGeometry | null => helmet;
+
+/** Lunettes de sport modélisées : en mètres, écran vers -Z, branches vers +Z, centrées en x. */
+export const GLASSES_URL = `${import.meta.env.BASE_URL}models/lunette/scene.gltf`;
+let glasses: { geometry: THREE.BufferGeometry; map: THREE.Texture | null } | null = null;
+
+/** Lunettes modélisées, ou rien si elles n'ont pas pu être chargées : le cycliste n'en porte alors pas. */
+export const riderGlasses = (): { geometry: THREE.BufferGeometry; map: THREE.Texture | null } | null => glasses;
+
+async function loadGlasses(): Promise<void> {
+  try {
+    const gltf = await new GLTFLoader().loadAsync(GLASSES_URL);
+    gltf.scene.updateMatrixWorld(true);
+    gltf.scene.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || glasses) return;
+      const material = (Array.isArray(o.material) ? o.material[0] : o.material) as THREE.MeshBasicMaterial;
+      glasses = { geometry: o.geometry.clone().applyMatrix4(o.matrixWorld), map: material.map ?? null };
+    });
+  } catch {
+    glasses = null;
+  }
+}
+
+async function loadHelmet(): Promise<void> {
+  try {
+    const gltf = await new GLTFLoader().loadAsync(HELMET_URL);
+    gltf.scene.updateMatrixWorld(true);
+    gltf.scene.traverse((o) => {
+      if (o instanceof THREE.Mesh && !helmet) helmet = o.geometry.clone().applyMatrix4(o.matrixWorld);
+    });
+  } catch {
+    helmet = null;
+  }
+}
+
 /**
  * Part du corps que l'on garde autour de l'axe de l'os : 1 laisse le volume tel quel, moins de 1 l'affine.
  * Le personnage est un « superhéros » très musclé ; un coureur est plus mince, surtout en haut du corps.
  */
-const SLIM: [bone: string, child: string, keep: number][] = [
-  ['spine_01', 'spine_02', 0.93],
-  ['spine_02', 'spine_03', 0.8],
-  ['spine_03', 'neck_01', 0.76],
-  ['neck_01', 'Head', 0.86],
-  ...(['l', 'r'] as const).flatMap((side): [string, string, number][] => [
-    [`clavicle_${side}`, `upperarm_${side}`, 0.78],
-    [`upperarm_${side}`, `lowerarm_${side}`, 0.7],
-    [`lowerarm_${side}`, `hand_${side}`, 0.8],
-  ]),
-];
+const SLIM: [bone: string, child: string, keep: number][] = [];
 
 /**
  * Rapproche les points du haut du corps de l'axe de leur os, à proportion de leur poids sur cet os :
@@ -99,13 +133,21 @@ function keepRestPositions(mesh: THREE.SkinnedMesh): void {
   const count = geometry.getAttribute('position').count;
   const rest = new Float32Array(count * 3);
   const v = new THREE.Vector3();
+  const apose = geometry.morphAttributes.position?.[0];
   for (let i = 0; i < count; i++) {
     v.fromBufferAttribute(geometry.getAttribute('position'), i);
     mesh.applyBoneTransform(i, v);
+    // Le personnage est fabriqué les bras en avant (pose du vélo) ; la forme « apose » garde la pose d'origine,
+    // bras le long du corps, sur laquelle les zones du maillot, des gants et des chaussures sont calées.
+    if (apose) v.set(v.x + apose.getX(i), v.y + apose.getY(i), v.z + apose.getZ(i));
     v.applyMatrix4(mesh.matrixWorld);
     rest.set([v.x, v.y, v.z], i * 3);
   }
   geometry.setAttribute('aRest', new THREE.BufferAttribute(rest, 3));
+  // La forme n'a servi qu'à cela : on la retire pour ne pas la payer à chaque image.
+  geometry.morphAttributes = {};
+  mesh.morphTargetInfluences = undefined;
+  mesh.morphTargetDictionary = undefined;
 }
 
 /** Épaisseur de la coque du casque, et allongement vers l'arrière (part de la profondeur de la tête). */
@@ -192,6 +234,9 @@ function measureHead(mesh: THREE.SkinnedMesh, eyesMesh: THREE.SkinnedMesh, headB
   }
   return {
     width: size.x,
+    top,
+    centre: middle,
+    size,
     eyes: eyeBox.getCenter(new THREE.Vector3()),
     shell,
     temple: new THREE.Vector3(size.x * 0.46, edge(middle.z) + 0.004, middle.z + size.z * 0.02),
@@ -205,7 +250,8 @@ function measureHead(mesh: THREE.SkinnedMesh, eyesMesh: THREE.SkinnedMesh, headB
 export function preloadRiderAsset(): Promise<void> {
   loading ??= new GLTFLoader()
     .loadAsync(RIDER_ASSET_URL)
-    .then((gltf) => {
+    .then(async (gltf) => {
+      await Promise.all([loadHelmet(), loadGlasses()]);
       gltf.scene.updateMatrixWorld(true);
       let body: THREE.SkinnedMesh | null = null;
       let eyes: THREE.SkinnedMesh | null = null;

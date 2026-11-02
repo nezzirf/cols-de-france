@@ -1,0 +1,11 @@
+Model Information:
+* title:	Action Sunglass
+* source:	https://sketchfab.com/3d-models/action-sunglass-7d7a05e6142d48a193db90854950fda0
+* author:	Nazmul (https://sketchfab.com/matra)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Action Sunglass" (https://sketchfab.com/3d-models/action-sunglass-7d7a05e6142d48a193db90854950fda0) by Nazmul (https://sketchfab.com/matra) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

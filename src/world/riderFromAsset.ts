@@ -5,15 +5,22 @@
 import * as THREE from 'three';
 import type { RiderFit } from './bikeFromAsset';
 import { at } from './modelParts';
-import { cloneRiderAsset, type HeadFrame, riderHead } from './riderAsset';
-import { addGlasses } from './riderGear';
+import { cloneRiderAsset, type HeadFrame, riderGlasses, riderHead, riderHelmetGeometry } from './riderAsset';
 import { place, turned } from './modelParts';
 import { pbr } from './materials';
 
-const PEDAL_SIDE = 0.1;
+const PEDAL_SIDE = 0.072;
+/** Les genoux montent droit vers l'avant, au plus près du cadre : léger rappel vers l'intérieur (0 : droit, plus : vers le cadre). */
+const KNEE_IN = 0.05;
+/** Avant-pied par rapport à l'axe de la pédale : en avant (m), épaisseur de la pédale au-dessus de l'axe, hauteur de l'os de l'avant-pied au-dessus de la semelle. */
+const CLEAT_FORWARD = 0.005;
+const PEDAL_TOP = 0.012;
+const BALL_HEIGHT = 0.026;
 const TORSO_BONES = ['pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01', 'Head'] as const;
 /** Inclinaison de la tête par rapport à l'horizontale, pour regarder la route. */
 const HEAD_PITCH = -0.12;
+/** Part du redressement du cou par rapport au dos : 0 le prolonge, 1 le rend vertical. */
+const NECK_RISE = 0.12;
 
 const tmp = new THREE.Vector3();
 
@@ -33,6 +40,20 @@ function aim(bone: THREE.Object3D, child: THREE.Object3D, target: THREE.Vector3)
   bone.quaternion.copy(parent.invert().multiply(world));
   bone.updateWorldMatrix(false, true);
 }
+
+/** Tourne `bone` de `angle` autour de `axis` (repère du monde), sans toucher à la position de son origine. */
+function turn(bone: THREE.Object3D, axis: THREE.Vector3, angle: number): void {
+  bone.updateWorldMatrix(true, false);
+  const parent = bone.parent!.getWorldQuaternion(new THREE.Quaternion());
+  const world = new THREE.Quaternion().setFromAxisAngle(axis, angle).multiply(bone.getWorldQuaternion(new THREE.Quaternion()));
+  bone.quaternion.copy(parent.invert().multiply(world));
+  bone.updateWorldMatrix(false, true);
+}
+
+/** Fermeture des doigts sur la cocotte : première et seconde phalange (rad). */
+const FINGER_CURL = [0.61, 0.87] as const;
+/** Tour de l'avant-bras et de la main pour poser la paume vers le bas (rad). */
+const PRONATION = Math.PI / 2;
 
 /** Coude ou genou : deux segments de longueurs données entre `from` et `to`, pliés du côté de `pole`. */
 function joint(from: THREE.Vector3, to: THREE.Vector3, first: number, second: number, pole: THREE.Vector3): THREE.Vector3 {
@@ -55,7 +76,18 @@ export interface Outfit {
   mono: boolean;
 }
 
-const CLOTH_UNIFORMS = ['uJersey', 'uShorts', 'uGloves', 'uShoes', 'uSocks'] as const;
+const CLOTH_UNIFORMS = ['uJersey', 'uShorts', 'uGloves', 'uShoes', 'uSocks', 'uAccent'] as const;
+
+/** Les trois poches dorsales du maillot : centres espacés de 10,5 cm, 9,4 cm de large, 14 cm de haut, au bas du dos. */
+const POCKET_SDF = `
+float pocketsSdf(vec3 r) {
+  float d = 1.0;
+  for (int i = 0; i < 3; i++) {
+    float cx = (float(i) - 1.0) * 0.105;
+    d = min(d, max(abs(r.x - cx) - 0.047, abs(r.y - 1.145) - 0.07));
+  }
+  return d;
+}`;
 
 /**
  * Matière de la peau, où le maillot, le cuissard, les gants, les chaussettes et les chaussures sont peints
@@ -72,16 +104,24 @@ function dressSkin(source: THREE.MeshStandardMaterial, outfit: Outfit): THREE.Me
     uGloves: new THREE.Color(0x131417),
     uShoes: new THREE.Color(0xeeeeea),
     uSocks: new THREE.Color(0xf4f4f1),
+    uAccent: colorOf(outfit.accent),
   };
   skin.onBeforeCompile = (shader) => {
     for (const name of CLOTH_UNIFORMS) shader.uniforms[name] = { value: colors[name] };
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 aRest;\nvarying vec3 vRest;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRest = aRest;');
+      .replace('#include <common>', `#include <common>\nattribute vec3 aRest;\nvarying vec3 vRest;${POCKET_SDF}`)
+      // Les poches du dos sont en léger relief : la peau se gonfle de 7 mm, bords arrondis.
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        vRest = aRest;
+        float pocketBack = 1.0 - smoothstep(-0.07, -0.04, aRest.z);
+        transformed += normalize(objectNormal) * 0.007 * (1.0 - smoothstep(-0.014, 0.0, pocketsSdf(aRest))) * pocketBack;`,
+      );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
-        '#include <common>\nvarying vec3 vRest;\nuniform vec3 uJersey;\nuniform vec3 uShorts;\nuniform vec3 uGloves;\nuniform vec3 uShoes;\nuniform vec3 uSocks;',
+        `#include <common>\nvarying vec3 vRest;\nuniform vec3 uJersey;\nuniform vec3 uShorts;\nuniform vec3 uGloves;\nuniform vec3 uShoes;\nuniform vec3 uSocks;\nuniform vec3 uAccent;${POCKET_SDF}`,
       )
       .replace(
         '#include <map_fragment>',
@@ -90,14 +130,37 @@ function dressSkin(source: THREE.MeshStandardMaterial, outfit: Outfit): THREE.Me
         float ax = abs(vRest.x);
         float y = vRest.y;
         float shorts = smoothstep(0.66 - w, 0.66 + w, y) * (1.0 - smoothstep(1.03 - w, 1.03 + w, y));
-        float collar = 1.555 + 0.045 * smoothstep(0.05, 0.11, ax);
+        float collar = 1.5 + 0.04 * smoothstep(0.05, 0.11, ax);
         float torso = smoothstep(1.03 - w, 1.03 + w, y) * (1.0 - smoothstep(collar - w, collar + w, y));
-        float jersey = torso * (1.0 - smoothstep(0.36 - w, 0.36 + w, ax));
-        float gloves = smoothstep(0.7 - w, 0.7 + w, ax) * step(1.2, y);
+        float armT = (ax - 0.24) * 0.28 + (1.4175 - y) * 0.96;
+        float sleeve = 1.0 - smoothstep(0.15 - w, 0.15 + w, armT);
+        float jersey = torso * mix(1.0, sleeve, smoothstep(0.23 - w, 0.23 + w, ax));
+        float gloves = smoothstep(0.45 - w, 0.45 + w, ax) * step(0.7, y);
         float shoes = 1.0 - smoothstep(0.115 - w, 0.115 + w, y);
         float socks = (1.0 - smoothstep(0.3 - w, 0.3 + w, y)) * (1.0 - shoes);
         diffuseColor.rgb = mix(diffuseColor.rgb, uShorts, shorts);
-        diffuseColor.rgb = mix(diffuseColor.rgb, uJersey, jersey);
+        // Détails du maillot : liserés au col, aux manches et à la taille, fermeture, panneaux latéraux, poches dorsales.
+        float back = 1.0 - smoothstep(-0.07, -0.04, vRest.z);
+        float front = smoothstep(0.04, 0.07, vRest.z);
+        float armZone = smoothstep(0.23 - w, 0.23 + w, ax);
+        float trim = smoothstep(collar - 0.03 - w, collar - 0.03 + w, y)
+          + smoothstep(1.03 - w, 1.03 + w, y) * (1.0 - smoothstep(1.07 - w, 1.07 + w, y))
+          + smoothstep(0.125 - w, 0.125 + w, armT) * armZone;
+        trim = clamp(trim, 0.0, 1.0) * jersey;
+        float sd = pocketsSdf(vRest);
+        float pocket = (1.0 - smoothstep(-0.0015, 0.0015, sd)) * back * jersey;
+        float stitch = (1.0 - smoothstep(0.0008, 0.0022, abs(sd + 0.004))) * back * jersey;
+        float lip = pocket * smoothstep(1.185 - w, 1.185 + w, y);
+        float zip = (1.0 - smoothstep(0.0025, 0.0045, ax)) * front * jersey;
+        vec3 jerseyCol = uJersey;
+        jerseyCol *= 1.0 - 0.1 * smoothstep(0.11, 0.17, ax) * (1.0 - armZone);
+        float weave = fract(sin(dot(floor(vRest.xy * 200.0 + vRest.z * 150.0), vec2(12.9898, 78.233))) * 43758.5453);
+        jerseyCol *= 0.985 + 0.03 * weave;
+        jerseyCol = mix(jerseyCol, jerseyCol * 0.8, pocket);
+        jerseyCol = mix(jerseyCol, uAccent, max(trim, lip));
+        jerseyCol = mix(jerseyCol, jerseyCol * 0.5, stitch);
+        jerseyCol = mix(jerseyCol, vec3(0.04), zip);
+        diffuseColor.rgb = mix(diffuseColor.rgb, jerseyCol, jersey);
         diffuseColor.rgb = mix(diffuseColor.rgb, uGloves, gloves);
         diffuseColor.rgb = mix(diffuseColor.rgb, uSocks, socks);
         diffuseColor.rgb = mix(diffuseColor.rgb, uShoes, shoes);
@@ -142,6 +205,20 @@ function helmetMaterial(accent: THREE.Material, skull: HeadFrame): THREE.Materia
   return material;
 }
 
+/** Réglage du casque modélisé sur la tête : marge de largeur, hauteur au-dessus du crâne, décalage vers l'avant, inclinaison. */
+/** Réglage des lunettes sur la tête : marge de largeur, hauteur par rapport aux yeux, avance de l'écran par rapport au bout du nez. */
+const GLASSES_FIT = { margin: 0.012, lift: -0.035, front: -0.012 };
+
+/** Part du chemin que fait la clavicule vers la main (0 : épaule fixe, 1 : elle la vise). */
+const SHOULDER_FOLLOW = 0.3;
+
+const HELMET_FIT ={ margin: 0.03, lift: 0.012, forward: -0.02, pitch: -0.22 };
+
+function modelledHelmetMaterial(accent: THREE.Material): THREE.Material {
+  const color = ((accent as THREE.MeshStandardMaterial).color ?? new THREE.Color(0xdddddd)).clone();
+  return new THREE.MeshPhysicalMaterial({ color, roughness: 0.36, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.08, side: THREE.DoubleSide });
+}
+
 export interface AssetRider {
   group: THREE.Group;
   pose(crankAngle: number): void;
@@ -170,33 +247,56 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
       const skin = (Array.isArray(o.material) ? o.material[0] : o.material) as THREE.MeshStandardMaterial;
       o.material = outfit.mono ? outfit.jersey : dressSkin(skin, outfit);
     }
+    if (o instanceof THREE.SkinnedMesh && o.name === 'Shoes' && outfit.mono) o.material = outfit.jersey;
   });
 
-  // Casque ajusté sur le crâne, sangle et lunettes. Tout se pose dans le repère d'origine du personnage, puis
+  // Casque ajusté sur le crâne, avec sa sangle. Tout se pose dans le repère d'origine du personnage, puis
   // se rattache à l'os de la tête : ils le suivent quand il s'incline.
   const headBone = bone('Head');
   const skull = riderHead();
   const dark = outfit.mono ? outfit.jersey : pbr({ color: 0x16181c, roughness: 0.5 });
-  const lens = outfit.mono ? outfit.jersey : pbr({ color: 0x24384a, roughness: 0.1, metalness: 0.7, transparent: true, opacity: 0.8 });
   const fitted = new THREE.Group();
   fitted.matrixAutoUpdate = false;
   fitted.matrix.copy(skull.restInverse);
   headBone.add(fitted);
-  fitted.add(new THREE.Mesh(skull.shell, outfit.mono ? outfit.jersey : helmetMaterial(outfit.accent, skull)));
+  const modelled = riderHelmetGeometry();
+  if (modelled) {
+    // Casque modélisé : mis à la largeur de la tête, posé sur le crâne, bordure au niveau du front.
+    const box = new THREE.Box3().setFromBufferAttribute(modelled.getAttribute('position') as THREE.BufferAttribute);
+    const scale = (skull.width + HELMET_FIT.margin) / (box.max.x - box.min.x);
+    const shell = new THREE.Mesh(modelled, outfit.mono ? outfit.jersey : modelledHelmetMaterial(outfit.accent));
+    shell.scale.setScalar(scale);
+    shell.rotation.set(HELMET_FIT.pitch, 0, 0);
+    shell.position.set(skull.centre.x, skull.top + HELMET_FIT.lift - box.max.y * scale, skull.centre.z + HELMET_FIT.forward);
+    fitted.add(shell);
+  } else {
+    fitted.add(new THREE.Mesh(skull.shell, outfit.mono ? outfit.jersey : helmetMaterial(outfit.accent, skull)));
+  }
   for (const side of [-1, 1]) {
     const strap = new THREE.Mesh(turned([0.0045, 0.0045], 6), dark);
     place(strap, new THREE.Vector3(skull.temple.x * side, skull.temple.y, skull.temple.z), new THREE.Vector3(skull.chin.x * side, skull.chin.y, skull.chin.z));
     fitted.add(strap);
   }
-  const glasses = new THREE.Group();
-  addGlasses(glasses, { dark, lens });
-  // Les lunettes sont dessinées pour une tête de 17 cm de large, face vers -Z ; le personnage regarde vers +Z.
-  const size = skull.width / 0.172;
-  // Un peu plus hautes que celles du dessin d'origine, et en avant des yeux, que le visage enfonce.
-  glasses.scale.set(size * 0.92, size * 1.1, size * 0.96);
-  glasses.rotation.y = Math.PI;
-  glasses.position.set(skull.eyes.x, skull.eyes.y - 0.018 * size * 1.1, skull.eyes.z + 0.05 - 0.117 * size);
-  fitted.add(glasses);
+  // Lunettes de sport : à la largeur de la tête, le milieu de l'écran à hauteur des yeux, l'avant de l'écran
+  // juste devant le front.
+  const sunglasses = riderGlasses();
+  if (sunglasses) {
+    const box = new THREE.Box3().setFromBufferAttribute(sunglasses.geometry.getAttribute('position') as THREE.BufferAttribute);
+    const scale = (skull.width + GLASSES_FIT.margin) / (box.max.x - box.min.x);
+    const material = outfit.mono
+      ? outfit.jersey
+      : new THREE.MeshStandardMaterial({ map: sunglasses.map, color: 0xffffff, roughness: 0.18, metalness: 0.35, side: THREE.DoubleSide });
+    const frame = new THREE.Mesh(sunglasses.geometry, material);
+    frame.scale.setScalar(scale);
+    // Le modèle regarde vers -Z : un demi-tour, pour que l'écran soit devant et les branches derrière.
+    frame.rotation.y = Math.PI;
+    frame.position.set(
+      skull.centre.x,
+      skull.eyes.y + GLASSES_FIT.lift - ((box.min.y + box.max.y) / 2) * scale,
+      skull.centre.z + skull.size.z / 2 + GLASSES_FIT.front + box.min.z * scale,
+    );
+    fitted.add(frame);
+  }
 
   // Le bassin se pose sur la selle : le milieu des deux hanches au point voulu.
   const hips = worldPos(bone('thigh_l')).add(worldPos(bone('thigh_r'))).multiplyScalar(0.5);
@@ -209,6 +309,11 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
   const shin = length('calf_l', 'foot_l');
   const upper = length('upperarm_l', 'lowerarm_l');
   const fore = length('lowerarm_l', 'hand_l');
+  // Le pied au repos : sa longueur (cheville - avant-pied) et son inclinaison, pour poser la semelle à plat.
+  const footLen = length('foot_l', 'ball_l');
+  const handLen = length('hand_l', 'middle_01_l');
+  const footRest = worldPos(bone('foot_l')).sub(worldPos(bone('ball_l')));
+  const footTilt = Math.atan2(footRest.y, Math.hypot(footRest.x, footRest.z));
 
   // Buste : une droite du bassin au cou, penchée comme le cycliste de la fiche du vélo.
   const pelvis = worldPos(bone('pelvis'));
@@ -218,7 +323,7 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
   const up = new THREE.Vector3(0, 1, 0);
   for (let i = 0; i < TORSO_BONES.length - 1; i++) {
     // La tête se redresse un peu par rapport au buste, pour regarder devant.
-    const dir = i === TORSO_BONES.length - 2 ? lean.clone().lerp(up, 0.45).normalize() : lean;
+    const dir = i === TORSO_BONES.length - 2 ? lean.clone().lerp(up, NECK_RISE).normalize() : lean;
     const next = i === TORSO_BONES.length - 2 ? worldPos(bone(TORSO_BONES[i])).addScaledVector(dir, reach[i + 1] - reach[i]) : pelvis.clone().addScaledVector(dir, reach[i + 1]);
     aim(bone(TORSO_BONES[i]), bone(TORSO_BONES[i + 1]), next);
   }
@@ -240,10 +345,12 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
     })),
     arms: [-1, 1].map((side) => ({
       side,
+      collar: bone(side < 0 ? 'clavicle_l' : 'clavicle_r'),
       shoulder: bone(side < 0 ? 'upperarm_l' : 'upperarm_r'),
       elbow: bone(side < 0 ? 'lowerarm_l' : 'lowerarm_r'),
       wrist: bone(side < 0 ? 'hand_l' : 'hand_r'),
       knuckle: bone(side < 0 ? 'middle_01_l' : 'middle_01_r'),
+      fingers: ['index', 'middle', 'ring', 'pinky'].map((n) => [bone(`${n}_01_${side < 0 ? 'l' : 'r'}`), bone(`${n}_02_${side < 0 ? 'l' : 'r'}`)] as const),
     })),
   };
 
@@ -264,9 +371,11 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
       const angle = crankAngle + i * Math.PI;
       const px = fit.bb[0] + Math.cos(angle) * fit.crank;
       const py = fit.bb[1] + Math.sin(angle) * fit.crank;
-      const ankle = world(at(px - 0.09, py + 0.09, leg.side * PEDAL_SIDE));
-      const ball = world(at(px + 0.02, py + 0.01, leg.side * PEDAL_SIDE));
-      const knee = joint(worldPos(leg.hip), ankle, thigh, shin, pole(leg.side * 0.25, 0, -1));
+      // Le pied : l'avant-pied juste au-dessus de l'axe de la pédale, la semelle à plat sur elle (la cheville est derrière
+      // et plus haut, selon l'inclinaison de l'os du pied au repos).
+      const ball = world(at(px + CLEAT_FORWARD, py + PEDAL_TOP + BALL_HEIGHT, leg.side * PEDAL_SIDE));
+      const ankle = world(at(px + CLEAT_FORWARD - footLen * Math.cos(footTilt), py + PEDAL_TOP + BALL_HEIGHT + footLen * Math.sin(footTilt), leg.side * PEDAL_SIDE));
+      const knee = joint(worldPos(leg.hip), ankle, thigh, shin, pole(-leg.side * KNEE_IN, 0, -1));
       aim(leg.hip, leg.knee, knee);
       aim(leg.knee, leg.ankle, ankle);
       aim(leg.ankle, leg.ball, ball);
@@ -274,11 +383,25 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
 
     for (const arm of limbs.arms) {
       const grip = world(at(fit.hand[0], fit.hand[1], arm.side * fit.handSide));
-      const wrist = world(at(fit.hand[0] - 0.075, fit.hand[1] + 0.025, arm.side * fit.handSide));
-      const elbow = joint(worldPos(arm.shoulder), wrist, upper, fore, pole(arm.side * 0.55, -0.8, 0.1));
+      const wrist = world(at(fit.hand[0] - handLen * 0.91, fit.hand[1] - handLen * 0.41, arm.side * fit.handSide));
+      // L'épaule suit un peu le bras qui part vers l'avant : sans cela, le haut du bras se tord sous le deltoïde.
+      const collarAt = worldPos(arm.collar);
+      const rest = worldPos(arm.shoulder).sub(collarAt);
+      const follow = rest.clone().normalize().lerp(wrist.clone().sub(collarAt).normalize(), SHOULDER_FOLLOW).normalize().multiplyScalar(rest.length());
+      aim(arm.collar, arm.shoulder, collarAt.add(follow));
+      const elbow = joint(worldPos(arm.shoulder), wrist, upper, fore, pole(arm.side * 0.12, -1, 0.1));
       aim(arm.shoulder, arm.elbow, elbow);
+      // Pronation : la paume regarde vers le bas, la moitié du tour à l'avant-bras, l'autre moitié à la main.
       aim(arm.elbow, arm.wrist, wrist);
+      turn(arm.elbow, worldPos(arm.wrist).sub(worldPos(arm.elbow)).normalize(), -arm.side * PRONATION * 0.5);
       aim(arm.wrist, arm.knuckle, grip);
+      turn(arm.wrist, worldPos(arm.knuckle).sub(worldPos(arm.wrist)).normalize(), -arm.side * PRONATION * 0.5);
+      // Les doigts se referment sur la cocotte : chaque phalange tourne autour de l'axe latéral, vers le bas.
+      const across = new THREE.Vector3(1, 0, 0).applyQuaternion(around);
+      for (const [first, second] of arm.fingers) {
+        turn(first, across, -FINGER_CURL[0]);
+        turn(second, across, -FINGER_CURL[1]);
+      }
     }
 
     // La tête : l'inclinaison voulue par rapport au monde, quel que soit l'angle du cou.

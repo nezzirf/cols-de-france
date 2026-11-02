@@ -1,0 +1,11 @@
+Model Information:
+* title:	MEN
+* source:	https://sketchfab.com/3d-models/men-598f1a9287aa454baaa5718cfe93e59e
+* author:	shakeelsafdar (https://sketchfab.com/shakeelsafdar111)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "MEN" (https://sketchfab.com/3d-models/men-598f1a9287aa454baaa5718cfe93e59e) by shakeelsafdar (https://sketchfab.com/shakeelsafdar111) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

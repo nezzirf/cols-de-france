@@ -8,8 +8,8 @@ import type { Point } from './modelParts';
 /** Repères du modèle, dans son propre repère (mètres, x vers l'avant) : plateau, rayon de roue, selle, cocotte. */
 const ASSET_BB = { fx: -0.096, y: 0.287 };
 const ASSET_WHEEL_R = 0.364;
-const ASSET_SADDLE = { fx: -0.512, top: 1.056 };
-const ASSET_HOOD = { fx: 0.34, y: 0.97 };
+const ASSET_SADDLE = { fx: -0.319, top: 1.056 };
+const ASSET_HOOD = { fx: 0.578, y: 1.022 };
 const ASSET_CRANK = 0.184;
 
 /** Où poser le cycliste sur ce vélo : bassin sur la selle, mains sur les cocottes, jambes à la bonne longueur. */
@@ -92,7 +92,7 @@ export function buildAssetBike(wheelRadiusM: number, material: THREE.Material | 
   // Le modèle regarde vers +X, le jeu vers -Z : un quart de tour autour de la verticale.
   root.rotation.y = Math.PI / 2;
   root.scale.setScalar(scale);
-  root.position.set(0, 0, -bb[0] - ASSET_BB.fx * scale);
+  root.position.set(0, 0, -bb[0] + ASSET_BB.fx * scale);
   group.add(root);
   group.updateMatrixWorld(true);
 
@@ -119,21 +119,21 @@ export function buildAssetBike(wheelRadiusM: number, material: THREE.Material | 
   const left = need('LeftPeddle_04').getWorldPosition(new THREE.Vector3());
   const restAngle = Math.atan2(left.y - ringAt.y, -(left.z - ringAt.z));
 
-  // Le bassin sur la selle, un peu en avant de son centre ; le buste penché vers les cocottes.
+  // Le bassin sur la selle, juste derrière son centre ; le buste penché vers les cocottes.
   const saddle = onBike(ASSET_SADDLE.fx, ASSET_SADDLE.top);
-  const hip: Point = [saddle[0] + 0.04, saddle[1] + 0.075];
+  const hip: Point = [saddle[0] - 0.035, saddle[1] + 0.075];
   const hand = onBike(ASSET_HOOD.fx, ASSET_HOOD.y);
   const fit: RiderFit = {
     bb,
     crank: ASSET_CRANK * scale,
     hip,
-    shoulder: [hip[0] + 0.5, hip[1] + 0.33],
-    neck: [hip[0] + 0.58, hip[1] + 0.39],
-    head: [hip[0] + 0.67, hip[1] + 0.47],
+    shoulder: [hip[0] + 0.5, hip[1] + 0.3],
+    neck: [hip[0] + 0.58, hip[1] + 0.36],
+    head: [hip[0] + 0.67, hip[1] + 0.44],
     hand,
     handSide: 0.2,
-    thigh: 0.47,
-    shin: 0.46,
+    thigh: 0.45,
+    shin: 0.44,
   };
 
   return {
