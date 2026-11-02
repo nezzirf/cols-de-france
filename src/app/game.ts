@@ -7,6 +7,7 @@ import type { Route } from '../sim/route';
 import { AutoPause, STOPPED_SPEED_MPS } from '../sim/autoPause';
 import { EffortAlerts } from '../sim/effortAlerts';
 import { DEFAULT_GEAR, GEAR_COUNT, shiftedGrade } from '../sim/gears';
+import { GROUP_WARMUP_S, type GroupOptions, groupRiders } from '../sim/group';
 import { Peloton, type PelotonGap, type PelotonState } from '../sim/peloton';
 import { type RideSample, rideStats, type RideStats } from '../sim/rideStats';
 import { powerZone } from '../sim/zones';
@@ -37,6 +38,8 @@ export interface GameWorld {
 export interface PelotonSnapshot {
   ahead: PelotonGap | null;
   behind: PelotonGap | null;
+  /** Sortie en groupe : niveau, effectif, coureurs devant et derrière, et temps d'échauffement restant. */
+  group: { wkg: number; riders: number; countAhead: number; countBehind: number; warmupLeftS: number } | null;
 }
 
 export interface RideSnapshot {
@@ -122,6 +125,7 @@ export class Game {
   private autoPause = new AutoPause();
   private alerts = new EffortAlerts();
   private peloton: Peloton | null = null;
+  private groupOptions: GroupOptions | null = null;
   /** Distance parcourue par seconde de la sortie de référence, pour courir contre soi-même. */
   private reference: number[] | null = null;
   /** Facteur 0..1 appliqué à la pente envoyée au frein. */
@@ -185,6 +189,21 @@ export class Game {
       this.ftp,
       start,
       this.traveledM(start),
+    );
+  }
+
+  /** Fait rouler un groupe de dix ou quinze coureurs aux watts par kilo choisis, à partir de la position actuelle. */
+  enableGroup(options: GroupOptions): void {
+    const { route } = this;
+    const start = this.physics.distanceM;
+    this.groupOptions = options;
+    this.peloton = new Peloton(
+      { lengthM: route.lengthM, loop: route.data.loop, gradeAt: (d) => route.gradeAt(d), eleAt: (d) => route.eleAt(d) },
+      this.physics.setup,
+      this.ftp,
+      start,
+      this.traveledM(start),
+      groupRiders(options),
     );
   }
 
@@ -498,7 +517,17 @@ export class Game {
       totalM: this.traveledM(dist),
       autoPaused: this.autoPause.paused,
       zone: powerZone(this.data.powerW, this.ftp),
-      peloton: this.peloton ? this.peloton.neighbours(this.traveledM(dist)) : null,
+      peloton: this.peloton ? this.pelotonSnapshot(this.peloton, this.traveledM(dist)) : null,
+    };
+  }
+
+  private pelotonSnapshot(peloton: Peloton, traveledM: number): PelotonSnapshot {
+    const group = this.groupOptions;
+    return {
+      ...peloton.neighbours(traveledM),
+      group: group
+        ? { wkg: group.wkg, riders: group.riders, warmupLeftS: Math.max(0, GROUP_WARMUP_S - peloton.clockS), countAhead: peloton.counts(traveledM).ahead, countBehind: peloton.counts(traveledM).behind }
+        : null,
     };
   }
 

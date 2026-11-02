@@ -217,7 +217,12 @@ export class Hud {
       gap
         ? `<div class="peloton-row ${cls}"><span>${gap.name}</span><b>${Math.round(Math.abs(gap.gapM))} m</b><small>${seconds(Math.abs(gap.gapM))}</small></div>`
         : `<div class="peloton-row none ${cls}"><span>${cls === 'ahead' ? 'Tête de course' : 'Dernier'}</span></div>`;
-    this.peloton.innerHTML = row('ahead', s.peloton.ahead) + row('behind', s.peloton.behind);
+    const group = s.peloton.group;
+    // Sortie en groupe : le niveau, l'échauffement restant, puis combien de coureurs sont devant et derrière.
+    const head = group
+      ? `<div class="peloton-head"><b>${group.wkg.toFixed(1).replace('.', ',')} W/kg</b><span>${group.warmupLeftS > 0 ? `Échauffement ${formatTime(group.warmupLeftS)}` : 'Groupe calé'}</span><small>${group.countAhead} devant · ${group.countBehind} derrière</small></div>`
+      : '';
+    this.peloton.innerHTML = head + row('ahead', s.peloton.ahead) + row('behind', s.peloton.behind);
   }
 
   /** Bandeau de séance : consigne, temps restant dans le bloc et déroulé complet. */

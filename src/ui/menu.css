@@ -1454,3 +1454,71 @@
   height: 18px;
   accent-color: var(--m-accent);
 }
+
+/* Onglet Peloton : niveau et taille du groupe, avant le choix du parcours. */
+.m-group {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 22px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: linear-gradient(120deg, #ff8a2b, #e8491a);
+  box-shadow: var(--m-shadow);
+  color: #fff;
+}
+
+.m-group-wkg {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.m-group-wkg span {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.m-group-wkg b {
+  font-size: 26px;
+}
+
+.m-group input[type='range'] {
+  accent-color: #fff;
+}
+
+.m-group-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.92;
+}
+
+.m-group-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.m-group-size span {
+  margin-right: 6px;
+}
+
+.m-seg {
+  min-width: 56px;
+  padding: 8px 16px;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.m-seg[aria-pressed='true'] {
+  background: #fff;
+  color: #d8450f;
+  border-color: #fff;
+}

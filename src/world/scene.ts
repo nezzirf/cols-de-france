@@ -31,6 +31,9 @@ const SHADOW_TEXEL_M = (SHADOW_RANGE_M * 2) / 3072;
 
 /** Cadence de pédalage des coéquipiers en mouvement. */
 const PELOTON_CADENCE_RPM = 86;
+/** Au-delà, un coureur du peloton n'est plus dessiné. */
+const PELOTON_DRAW_DISTANCE_M = 180;
+const PELOTON_BUILDS_PER_FRAME = 2;
 
 export type CameraMode = 'poursuite' | 'embarquée';
 
@@ -165,11 +168,22 @@ export class World {
     this.rain.mesh.visible = look.rain > 0;
   }
 
-  /** Les coéquipiers du peloton : un cycliste habillé aux couleurs de son équipe, créé à la première apparition. */
-  private placePeloton(states: PelotonState[], dt: number): void {
+  /**
+   * Les coureurs du peloton : un cycliste habillé aux couleurs de son équipe. Ceux qui sont loin du joueur
+   * ne sont ni dessinés ni animés, et au plus deux sont créés par image pour ne pas figer l'écran au départ d'un groupe.
+   */
+  private placePeloton(states: PelotonState[], dt: number, userDistM: number): void {
+    const loop = this.route.data.loop;
+    const lap = loop ? loop.toM - loop.fromM : 0;
+    let created = 0;
     for (const s of states) {
+      let gap = Math.abs(s.distM - userDistM);
+      if (lap > 0) gap = Math.min(gap, lap - (gap % lap));
+      const near = gap < PELOTON_DRAW_DISTANCE_M;
       let mate = this.mates.get(s.name);
       if (!mate) {
+        if (!near || created >= PELOTON_BUILDS_PER_FRAME) continue;
+        created++;
         const bike = ALL_BIKES.find((b) => b.team?.id === s.teamId) ?? findBike('');
         const model = dressedRider(bike);
         model.group.traverse((o) => (o.castShadow = true));
@@ -177,6 +191,8 @@ export class World {
         mate = { model, crank: Math.random() * Math.PI * 2 };
         this.mates.set(s.name, mate);
       }
+      mate.model.group.visible = near;
+      if (!near) continue;
       mate.crank += s.speedKmh > 3 ? (PELOTON_CADENCE_RPM / 60) * Math.PI * 2 * dt : 0;
       mate.model.pose(-mate.crank);
       this.placeOnRoad(mate.model.group, s.distM, s.lateralM);
@@ -296,7 +312,7 @@ export class World {
       this.ghost.pose(-this.crank * 0.96);
     }
 
-    this.placePeloton(peloton, dt);
+    this.placePeloton(peloton, dt, distM);
 
     // Tout le détail du décor suit la caméra libre, pour inspecter n'importe quel endroit.
     let focus: { x: number; z: number; ele: number } = p;

@@ -655,3 +655,16 @@ input:focus-visible {
 .peloton-row.behind b { color: var(--ahead); }
 .peloton-row.none { color: var(--dim); }
 .peloton-row small { color: var(--dim); font-size: 12px; }
+
+/* Sortie en groupe : niveau du groupe, échauffement restant et effectif devant / derrière. */
+.peloton-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin-bottom: 4px;
+}
+
+.peloton-head b { font-size: 16px; }
+.peloton-head span { color: var(--dim); font-size: 13px; text-align: right; }
+.peloton-head small { grid-column: 1 / -1; color: var(--dim); font-size: 12px; }

@@ -18,6 +18,7 @@ import { formatTime, Hud } from './hud/hud';
 import './hud/hud.css';
 import { MiniHud } from './hud/miniHud';
 import { findBike, setupFor, wearing, type Bike } from './sim/bikes';
+import type { GroupOptions } from './sim/group';
 import { buildCustomRoute } from './sim/customRoute';
 import { loadRoute, Route } from './sim/route';
 import { buildSalonRoute } from './sim/salonRoute';
@@ -74,7 +75,7 @@ class App {
         if (kind === 'play') return this.play.length > 0;
         return kind === 'hr' ? this.hr !== null : this.trainerKind === kind;
       },
-      start: (routeId, workout, app) => (app ? this.startAppRide(workout, app) : this.startRide(routeId, workout)),
+      start: (routeId, workout, app, group) => (app ? this.startAppRide(workout, app) : this.startRide(routeId, workout, null, group)),
       pendingRide: () => loadInProgress(),
       resumeRide: () => this.resumeRide(),
       finishPendingRide: () => this.finishPendingRide(),
@@ -216,7 +217,7 @@ class App {
     };
   }
 
-  private async startRide(routeId: string, workout: Workout | null, resume: SavedRide | null = null): Promise<void> {
+  private async startRide(routeId: string, workout: Workout | null, resume: SavedRide | null = null, group: GroupOptions | null = null): Promise<void> {
     const { route, heights, buildings, ortho } = await this.loadTrack(routeId);
 
     const demo = this.trainer === null;
@@ -268,7 +269,9 @@ class App {
     game.onTrainerError = (m) => hud.toast(`Home trainer : ${m}`);
     game.onFinish = (s) => this.showResult(workout?.name ?? route.data.name, s);
     if (resume) game.restore(resume.state, resume.samples);
-    if (this.profile.peloton && !steps) game.enablePeloton();
+    // Un groupe choisi dans l'onglet Peloton ; à défaut, les quatre coéquipiers de l'option du menu. La reprise ne les retrouve pas.
+    if (group && !resume) game.enableGroup(group);
+    else if (this.profile.peloton && !steps) game.enablePeloton();
 
     window.addEventListener('keydown', this.onKey);
     window.addEventListener('keyup', this.onKeyUp);

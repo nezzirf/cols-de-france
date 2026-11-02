@@ -1,6 +1,7 @@
 // Profil du joueur, conservé d'une séance à l'autre.
 
 import { BIKE_JERSEY, DEFAULT_BIKE_ID } from '../sim/bikes';
+import type { GroupSize } from '../sim/group';
 import type { Moment, Weather } from '../world/ambiance';
 
 export interface Profile {
@@ -25,6 +26,10 @@ export interface Profile {
   peloton: boolean;
   /** Courir contre sa meilleure sortie sur le même parcours. */
   ghost: boolean;
+  /** Sortie en peloton : nombre de coureurs, watts par kilo du groupe et parcours. */
+  groupRiders: GroupSize;
+  groupWkg: number;
+  groupRouteId: string;
 }
 
 export const CUSTOM_ROUTE_ID = 'perso';
@@ -59,6 +64,9 @@ const DEFAULT_PROFILE: Profile = {
   moment: 'jour',
   peloton: false,
   ghost: true,
+  groupRiders: 10,
+  groupWkg: 3,
+  groupRouteId: '',
 };
 
 export function loadProfile(): Profile {

@@ -6,6 +6,7 @@ import type { SavedRide } from '../app/rideAutosave';
 import type { HistoryEntry } from '../app/rideHistory';
 import { type Moment, MOMENTS, type Weather, WEATHERS } from '../world/ambiance';
 import { findBike, findJersey, wearing, type Bike } from '../sim/bikes';
+import type { GroupOptions } from '../sim/group';
 import { SALON_ROUTE_ID } from '../sim/salonRoute';
 import { WORLD_NAME, WORLD_ROUTE_ID } from '../sim/worldRoute';
 import { loadRouteIndex, type RouteSummary } from '../sim/route';
@@ -15,6 +16,7 @@ import './menu.css';
 import { BikePreview } from './preview';
 import { renderGarage } from './tabGarage';
 import { renderHistory } from './tabHistory';
+import { renderPeloton } from './tabPeloton';
 import { renderRoutes } from './tabRoutes';
 import { renderWorkouts } from './tabWorkouts';
 
@@ -26,7 +28,7 @@ export interface MenuHost {
   /** Rend le message à afficher ; lève une erreur si la connexion échoue. */
   connect(kind: DeviceKind): Promise<string>;
   isConnected(kind: DeviceKind): boolean;
-  start(routeId: string, workout: Workout | null, app: AppOptions | null): Promise<void>;
+  start(routeId: string, workout: Workout | null, app: AppOptions | null, group: GroupOptions | null): Promise<void>;
   /** Sortie interrompue que l'on peut reprendre, si elle existe. */
   pendingRide(): SavedRide | null;
   resumeRide(): Promise<void>;
@@ -48,11 +50,12 @@ export interface MenuContext {
   openRide(entry: HistoryEntry): void;
 }
 
-type TabId = 'parcours' | 'entrainement' | 'garage' | 'historique';
+type TabId = 'parcours' | 'entrainement' | 'peloton' | 'garage' | 'historique';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'parcours', label: 'Parcours' },
   { id: 'entrainement', label: 'Entraînement' },
+  { id: 'peloton', label: 'Peloton' },
   { id: 'garage', label: 'Garage' },
   { id: 'historique', label: 'Historique' },
 ];
@@ -207,6 +210,7 @@ export class Menu {
     content.appendChild(page);
     if (tab === 'parcours') renderRoutes(page, this.context);
     else if (tab === 'entrainement') renderWorkouts(page, this.context);
+    else if (tab === 'peloton') renderPeloton(page, this.context);
     else if (tab === 'historique') renderHistory(page, this.context);
     else renderGarage(page, this.context);
     // Le résumé dépend de l'onglet : le lieu choisi dans Entraînement ne vaut que là, ou avec une séance.
@@ -269,24 +273,26 @@ export class Menu {
    * Ce que lancera « Rouler ». Dans l'onglet Entraînement, ou dès qu'une séance est choisie, le lieu
    * choisi là s'applique, séance ou non ; sinon, c'est le parcours choisi dans l'onglet Parcours.
    */
-  private get launch(): { where: WorkoutWhere; routeId: string; app: AppOptions | null } {
+  private get launch(): { where: WorkoutWhere; routeId: string; app: AppOptions | null; group: GroupOptions | null } {
     const p = this.profile;
-    const training = this.workout !== null || this.tab === 'entrainement';
+    // Dans l'onglet Peloton, c'est le groupe et son parcours : pas de séance guidée.
+    const group: GroupOptions | null = this.tab === 'peloton' ? { riders: p.groupRiders, wkg: p.groupWkg } : null;
+    const training = group === null && (this.workout !== null || this.tab === 'entrainement');
     const where: WorkoutWhere = training ? p.workoutWhere : 'parcours';
-    const routeId = where === 'monde' ? WORLD_ROUTE_ID : where === 'app' ? SALON_ROUTE_ID : p.routeId;
-    return { where, routeId, app: where === 'app' ? { mode: p.appMode, bars: p.appBars } : null };
+    const routeId = group ? p.groupRouteId : where === 'monde' ? WORLD_ROUTE_ID : where === 'app' ? SALON_ROUTE_ID : p.routeId;
+    return { where, routeId, app: where === 'app' ? { mode: p.appMode, bars: p.appBars } : null, group };
   }
 
   private routeLabel(): string {
     const p = this.profile;
-    const { where } = this.launch;
+    const { where, routeId } = this.launch;
     if (where === 'app') {
       const how = p.appMode === 'flottante' ? 'barre flottante' : p.appMode === 'partage' ? 'écran partagé' : { haut: 'barre en haut', bas: 'barre en bas', 'les-deux': 'barres en haut et en bas' }[p.appBars];
       return `Média · ${how}`;
     }
-    if (where === 'monde' || p.routeId === WORLD_ROUTE_ID) return `${WORLD_NAME} · boucle de 6 biomes`;
-    if (p.routeId === CUSTOM_ROUTE_ID) return `Personnalisé · ${fr(p.customKm)} km à ${fr(p.customGrade)} %`;
-    return this.context.routes.find((r) => r.id === p.routeId)?.name ?? '--';
+    if (where === 'monde' || routeId === WORLD_ROUTE_ID) return `${WORLD_NAME} · boucle de 6 biomes`;
+    if (routeId === CUSTOM_ROUTE_ID) return `Personnalisé · ${fr(p.customKm)} km à ${fr(p.customGrade)} %`;
+    return this.context.routes.find((r) => r.id === routeId)?.name ?? '--';
   }
 
   private changed(): void {
@@ -302,20 +308,24 @@ export class Menu {
     this.q('[data-r="wkg"]').textContent = fr(p.ftp / p.riderKg, 2);
     this.q('[data-r="difficulty"]').textContent = `${p.difficulty} %`;
 
-    const workout = this.workout;
+    const { group } = this.launch;
+    const workout = group ? null : this.workout;
     // En ERG, le home trainer suit la puissance : la pente ressentie ne joue plus.
     this.q('[data-r="slope"]').hidden = workout !== null;
     // L'ambiance et le peloton n'ont de sens que dans le monde 3D, et le peloton hors séance guidée.
     this.q('[data-r="ambiance"]').hidden = this.launch.where === 'app';
-    this.q('[data-r="pelotonRow"]').hidden = workout !== null;
+    this.q('[data-r="pelotonRow"]').hidden = workout !== null || group !== null;
     this.q('[data-r="summary"]').innerHTML = `
       <div class="m-sum-title">${esc(bike.name)}</div>
       <div class="m-sum-sub">${esc(bike.team?.name ?? bike.label)}</div>
       <dl>
         <div><dt>Maillot</dt><dd>${esc(jersey?.name ?? 'Tenue du vélo')}</dd></div>
         <div><dt>Parcours</dt><dd>${esc(this.routeLabel())}</dd></div>
-        <div><dt>Séance</dt><dd>${workout ? esc(workout.name) : 'Sortie libre'}</dd></div>
+        <div><dt>${group ? 'Peloton' : 'Séance'}</dt><dd>${group ? `${group.riders} coureurs · ${fr(group.wkg)} W/kg` : workout ? esc(workout.name) : 'Sortie libre'}</dd></div>
       </dl>`;
+
+    const go = this.q<HTMLButtonElement>('[data-a="start"]');
+    if (!go.disabled) go.textContent = group ? 'Rouler en peloton' : 'Rouler';
 
     const key = `${bike.id}|${bike.jersey}`;
     if (key !== this.shownBike) {
@@ -351,8 +361,8 @@ export class Menu {
     this.preview?.dispose();
     this.preview = null;
     try {
-      const { routeId, app } = this.launch;
-      await this.host.start(routeId, this.workout, app);
+      const { routeId, app, group } = this.launch;
+      await this.host.start(routeId, group ? null : this.workout, app, group);
     } catch (err) {
       await this.show();
       this.say(err instanceof Error ? err.message : String(err), true);

@@ -1,5 +1,5 @@
-// Peloton simulé : des coéquipiers de niveaux différents qui roulent à puissance presque constante,
-// avec la même physique que le joueur. Il y a toujours quelqu'un à rattraper, ou qui revient.
+// Peloton simulé : des coureurs qui roulent à puissance presque constante, avec la même physique que
+// le joueur. Il y a toujours quelqu'un à rattraper, ou qui revient.
 
 import { PhysicsEngine, type RiderSetup } from './physicsEngine';
 
@@ -9,6 +9,20 @@ export interface PelotonRoute {
   readonly loop?: { fromM: number; toM: number };
   gradeAt(distM: number): number;
   eleAt(distM: number): number;
+}
+
+/** Un coureur du peloton : son équipe, sa place sur la route, sa masse et la puissance qu'il développe. */
+export interface PelotonRider {
+  name: string;
+  teamId: string;
+  /** Place sur la largeur de la route. */
+  lateralM: number;
+  /** Masse du coureur ; celle du joueur quand elle n'est pas donnée. */
+  massKg?: number;
+  /** Avance (+) ou retard (−) au départ, par rapport au joueur. */
+  startOffsetM?: number;
+  /** Puissance (W) à l'instant `clockS`, en secondes depuis le départ du peloton. */
+  powerAt(clockS: number): number;
 }
 
 /** Niveau de chaque coéquipier, en proportion de la FTP du joueur, sa place sur la largeur de la route et son équipe. */
@@ -24,6 +38,16 @@ const SURGE_AMPLITUDE = 0.06;
 const SURGE_PERIOD_S = 90;
 
 export const PELOTON_SIZE = LEVELS.length;
+
+/** Les quatre coéquipiers, à des niveaux proportionnels à la FTP du joueur. */
+function teammates(ftp: number): PelotonRider[] {
+  return LEVELS.map((info) => ({
+    name: info.name,
+    teamId: info.teamId,
+    lateralM: info.lateralM,
+    powerAt: (clockS) => info.ratio * ftp * (1 + SURGE_AMPLITUDE * Math.sin((2 * Math.PI * clockS) / SURGE_PERIOD_S + info.lateralM * 7)),
+  }));
+}
 
 export interface PelotonState {
   name: string;
@@ -43,44 +67,58 @@ export interface PelotonGap {
 }
 
 interface Member {
-  info: (typeof LEVELS)[number];
+  info: PelotonRider;
   physics: PhysicsEngine;
   traveledM: number;
 }
 
 export class Peloton {
   private members: Member[];
-  private clockS = 0;
+  private clock = 0;
 
-  /** `startM` : position de départ sur le tracé ; `startTraveledM` : distance parcourue que le joueur affiche à cet endroit. */
+  /**
+   * `startM` : position de départ sur le tracé ; `startTraveledM` : distance parcourue que le joueur affiche à cet endroit.
+   * Sans `riders`, ce sont les quatre coéquipiers, dont la puissance suit la FTP du joueur.
+   */
   constructor(
     private route: PelotonRoute,
     setup: RiderSetup,
-    private ftp: number,
+    ftp: number,
     startM: number,
     startTraveledM: number,
+    riders: PelotonRider[] = teammates(ftp),
   ) {
-    this.members = LEVELS.map((info) => {
-      const physics = new PhysicsEngine({ ...setup });
-      physics.distanceM = startM;
-      return { info, physics, traveledM: startTraveledM };
+    this.members = riders.map((info) => {
+      const offset = info.startOffsetM ?? 0;
+      // Un coureur plus lourd est aussi un peu plus large : la surface frontale grandit moins vite que la masse.
+      const mass = info.massKg ?? setup.riderKg;
+      const physics = new PhysicsEngine({ ...setup, riderKg: mass, cda: setup.cda * Math.pow(mass / setup.riderKg, 0.35) });
+      physics.distanceM = startM + offset;
+      return { info, physics, traveledM: startTraveledM + offset };
     });
   }
 
+  /** Temps écoulé depuis le départ du peloton (s). */
+  get clockS(): number {
+    return this.clock;
+  }
+
+  get size(): number {
+    return this.members.length;
+  }
+
   advance(dt: number): void {
-    this.clockS += dt;
+    this.clock += dt;
     const { route } = this;
     for (const m of this.members) {
       const from = m.physics.distanceM;
-      const phase = m.info.lateralM * 7;
-      const power = m.info.ratio * this.ftp * (1 + SURGE_AMPLITUDE * Math.sin((2 * Math.PI * this.clockS) / SURGE_PERIOD_S + phase));
-      m.physics.advance(dt, { powerW: power, gradePct: route.gradeAt(from), altitudeM: route.eleAt(from) });
+      m.physics.advance(dt, { powerW: m.info.powerAt(this.clock), gradePct: route.gradeAt(from), altitudeM: route.eleAt(from) });
       m.traveledM += m.physics.distanceM - from;
       const loop = route.loop;
       if (loop && m.physics.distanceM >= loop.toM) {
         m.physics.distanceM -= loop.toM - loop.fromM;
       } else if (!loop && m.physics.distanceM >= route.lengthM) {
-        // Arrivé : le coéquipier s'arrête sur la ligne.
+        // Arrivé : le coureur s'arrête sur la ligne.
         m.traveledM -= m.physics.distanceM - route.lengthM;
         m.physics.distanceM = route.lengthM;
         m.physics.speedMps = 0;
@@ -99,7 +137,7 @@ export class Peloton {
     }));
   }
 
-  /** Le coéquipier le plus proche devant le joueur et le plus proche derrière lui, quand ils existent. */
+  /** Le coureur le plus proche devant le joueur et le plus proche derrière lui, quand ils existent. */
   neighbours(userTraveledM: number): { ahead: PelotonGap | null; behind: PelotonGap | null } {
     let ahead: PelotonGap | null = null;
     let behind: PelotonGap | null = null;
@@ -109,5 +147,12 @@ export class Peloton {
       if (gap.gapM <= 0 && (behind === null || gap.gapM > behind.gapM)) behind = gap;
     }
     return { ahead, behind };
+  }
+
+  /** Combien de coureurs sont devant le joueur, et combien derrière. */
+  counts(userTraveledM: number): { ahead: number; behind: number } {
+    let ahead = 0;
+    for (const m of this.members) if (m.traveledM > userTraveledM) ahead++;
+    return { ahead, behind: this.members.length - ahead };
   }
 }

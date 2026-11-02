@@ -71,6 +71,13 @@ La FTP, le poids et le nom se règlent en haut de l'écran. Sous le bouton « Ro
   changent la lumière, le ciel et la brume, jamais l'effort.
 - **Peloton** : quatre coéquipiers de niveaux différents (72, 88, 100 et 112 % de ta FTP) roulent avec
   la même physique que toi, avec l'écart du plus proche devant et derrière. Hors séance guidée.
+- **Onglet Peloton** : un groupe de 10 ou 15 coureurs, aux watts par kilo choisis avant le départ, sur le
+  parcours de ton choix. Chacun a sa masse (58 à 85 kg) et son niveau à ± 2 % ; ils roulent avec la même
+  physique que toi. Pendant 15 minutes, le groupe s'échauffe à 60 % du niveau choisi, monte à 100 % dans
+  les 2 dernières minutes, puis tient ce niveau jusqu'à la fin : si tu vas moins vite, il part devant ;
+  si tu vas plus vite, tu le doubles. L'écran indique le niveau, l'échauffement restant et combien de
+  coureurs sont devant et derrière. Le groupe ne reprend pas après une coupure (reprise de sortie) et
+  ne fait pas d'abri du vent.
 - **Fantôme de ma meilleure sortie** : sur un col, un cycliste translucide rejoue ta sortie la plus
   rapide sur ce parcours, tant qu'aucun record de segment ne prend le relais.
 
