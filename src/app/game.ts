@@ -106,6 +106,7 @@ export class Game {
   private lastSend = 0;
   private lastSent: TrainerCommand | null = null;
   private lastSentAt = 0;
+  private released = false;
   private lastTargetW: number | null = null;
   private laps = 0;
   private gear = DEFAULT_GEAR;
@@ -546,5 +547,12 @@ export class Game {
     this.running = false;
     clearInterval(this.simTimer);
     cancelAnimationFrame(this.rafId);
+    // Une séance laisse le frein sur sa dernière puissance imposée : on le rend libre, pour finir en roue libre
+    // au lieu de pédaler contre un effort que la séance n'ordonne plus.
+    if (this.workout && !this.released) {
+      this.released = true;
+      const free = trainerCommand(0, 0, this.physics.setup, 1);
+      void this.trainer.setSimulation(free).catch(() => {});
+    }
   }
 }

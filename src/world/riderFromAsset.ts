@@ -217,7 +217,7 @@ const GLASSES_FIT = { margin: 0.012, lift: -0.036, front: 0.004 };
 /** Part du chemin que fait la clavicule vers la main (0 : épaule fixe, 1 : elle la vise). */
 const SHOULDER_FOLLOW = 0.3;
 
-const HELMET_FIT = { margin: 0.04, lift: 0.0, forward: 0.012, pitch: -0.12 };
+const HELMET_FIT = { margin: 0.04, lift: 0.012, forward: 0.012, pitch: -0.12 };
 
 /** Nez et bouche : distance sous les yeux, taille (demi-axes) et avance par rapport à la peau. */
 const FACE = {

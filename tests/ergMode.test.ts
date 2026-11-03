@@ -89,9 +89,9 @@ describe('mode ERG', () => {
   it('impose la puissance cible en watts dès le départ, sans jamais passer en simulation', async () => {
     const { game, pedal } = session([stable(120, 75)]);
     await pedal(3);
+    expect(simulations).toBe(0);
     game.stop();
     expect(targets[0]).toBe(150);
-    expect(simulations).toBe(0);
   });
 
   it('change la cible à chaque palier', async () => {
@@ -131,6 +131,15 @@ describe('mode ERG', () => {
     game.stop();
     expect(errors).toHaveLength(1);
     expect(targets[0]).toBe(150);
+  });
+
+  it('rend le frein libre à la fin de la séance, une seule fois', async () => {
+    const { game, pedal } = session([stable(120, 110)]);
+    await pedal(3);
+    expect(simulations).toBe(0);
+    game.stop();
+    game.stop();
+    expect(simulations).toBe(1);
   });
 
   it('garde le chrono à l’arrêt tant que le cycliste ne pédale pas, puis finit à la fin de la séance', async () => {

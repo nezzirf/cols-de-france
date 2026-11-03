@@ -92,7 +92,11 @@ export class BikePreview {
 
   private onDown = (e: PointerEvent): void => {
     this.dragging = true;
-    this.canvas.setPointerCapture(e.pointerId);
+    try {
+      this.canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // Le pointeur a déjà quitté la page : le glissement se fait sans capture.
+    }
   };
 
   private onMove = (e: PointerEvent): void => {
