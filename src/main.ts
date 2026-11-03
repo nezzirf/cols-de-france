@@ -339,7 +339,8 @@ class App {
       mini = new MiniHud(this.root, { placement: app.bars, steps });
       const video = document.createElement('video');
       video.className = 'mini-video';
-      video.muted = true;
+      // Le son de l'onglet capturé, s'il a été partagé, passe par le jeu : la diffusion sur une télé l'emporte avec l'image.
+      video.muted = !stream?.getAudioTracks().length;
       video.autoplay = true;
       video.playsInline = true;
       video.srcObject = stream;

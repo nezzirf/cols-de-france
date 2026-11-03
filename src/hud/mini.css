@@ -1,11 +1,17 @@
-/* HUD minimal : des barres pleines en haut et/ou en bas, la vidéo entière entre les deux. */
+/*
+ * HUD minimal : la vidéo remplit tout l'écran, et les chiffres flottent par-dessus dans des barres de
+ * verre dépoli, arrondies, comme les cartes du menu : discrètes, translucides, l'orange du jeu pour la cible.
+ */
 .mini {
+  --glass: rgba(14, 18, 24, 0.44);
+  --glass-line: rgba(255, 255, 255, 0.16);
+  --ink: #f6f8fa;
+  --ink-dim: rgba(246, 248, 250, 0.62);
+  --accent: #ff6a1a;
   position: fixed;
   inset: 0;
-  display: flex;
-  flex-direction: column;
   background: #000;
-  color: #f4f6f8;
+  color: var(--ink);
   font-family: var(--font, Bahnschrift, 'Segoe UI', system-ui, sans-serif);
   font-variant-numeric: tabular-nums;
 }
@@ -17,60 +23,83 @@
 }
 
 .mini-bar {
+  position: absolute;
+  right: 16px;
+  left: 16px;
+  z-index: 2;
   display: flex;
-  flex: none;
   align-items: center;
-  gap: 22px;
-  min-height: 52px;
-  padding: 4px 18px;
-  background: #0b0d10;
+  gap: 26px;
+  min-height: 58px;
+  padding: 8px 22px;
+  border: 1px solid var(--glass-line);
+  border-radius: 22px;
+  background: var(--glass);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px) saturate(150%);
 }
 
 .mini-top {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  top: 14px;
 }
 
 .mini-bottom {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  bottom: 14px;
 }
 
+/* La fenêtre flottante est déjà une carte posée sur l'écran : sa barre la remplit, sans second cadre. */
 .mini-floating .mini-bar {
+  position: static;
   min-height: 100vh;
   border: 0;
+  border-radius: 0;
+  background: linear-gradient(135deg, #131820, #0b0d10);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .mini-metrics {
   display: flex;
   align-items: baseline;
-  gap: 22px;
+  gap: 0;
 }
 
 .mini-metric {
   display: flex;
   align-items: baseline;
   gap: 5px;
+  padding: 0 20px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.mini-metric:first-child {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .mini-label {
-  color: rgba(244, 246, 248, 0.55);
-  font-size: 12px;
+  color: var(--ink-dim);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .mini-metric b {
   min-width: 2ch;
-  font-size: 22px;
+  font-size: 24px;
   font-style: italic;
+  font-weight: 700;
   text-align: right;
 }
 
 .mini-metric small {
-  color: rgba(244, 246, 248, 0.55);
+  color: var(--ink-dim);
   font-size: 12px;
 }
 
 .mini-power b {
   min-width: 3ch;
-  font-size: 34px;
+  font-size: 36px;
   transition: color 0.3s;
 }
 
@@ -87,8 +116,8 @@
 }
 
 .mini-target b {
-  color: #ff8a2b;
-  font-size: 26px;
+  color: var(--accent);
+  font-size: 28px;
 }
 
 .mini-line {
@@ -103,7 +132,8 @@
   flex: 1;
   min-width: 80px;
   height: 36px;
-  border-radius: 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .mini-fill {
@@ -111,14 +141,18 @@
 }
 
 .mini-time {
+  padding: 5px 13px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
   font-size: 15px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .mini-status {
   position: relative;
   padding-left: 14px;
-  color: rgba(244, 246, 248, 0.55);
+  color: var(--ink-dim);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -140,18 +174,17 @@
 
 .mini-status[data-state='connecting']::before,
 .mini-status[data-state='reconnecting']::before {
-  background: #ff8a2b;
+  background: var(--accent);
 }
 
+/* La vidéo occupe tout l'écran : les barres flottent par-dessus. */
 .mini-stage {
-  position: relative;
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
   background: #000;
 }
 
-/* Posée dans la zone du milieu, jamais plus grande qu'elle : l'image ne passe pas sous les barres. */
 .mini-video {
   position: absolute;
   inset: 0;
@@ -174,39 +207,49 @@
 
 .mini-toast {
   position: fixed;
-  top: 64px;
+  top: 88px;
   left: 50%;
+  z-index: 3;
   max-width: 70vw;
-  padding: 7px 18px;
-  border-radius: 18px;
-  background: rgba(16, 20, 26, 0.86);
+  padding: 8px 20px;
+  border: 1px solid var(--glass-line);
+  border-radius: 20px;
+  background: rgba(14, 18, 24, 0.62);
   font-size: 15px;
   transform: translateX(-50%);
+  backdrop-filter: blur(16px);
 }
 
 .mini-toast[hidden] {
   display: none;
 }
 
+/* Le bouton pour finir la séance se pose au-dessus de la barre du bas, pas dessus. */
+.mini:has(.mini-bottom) ~ .end-ride {
+  bottom: 88px;
+}
+
 @media (max-width: 760px) {
   .mini-bar {
     flex-wrap: wrap;
     gap: 4px 14px;
+    padding: 8px 16px;
   }
 
-  .mini-metrics {
-    gap: 12px;
+  .mini-metric {
+    padding: 0 12px;
   }
 }
 
 /* Écran partagé : un panneau qui remplit sa moitié d'écran, chiffres lisibles de loin, boutons au doigt. */
 .mini-split {
-  background: #0b0d10;
+  background: radial-gradient(120% 90% at 20% 0%, #1a212b, #0b0d10);
 }
 
 .mini-panel {
+  position: absolute;
+  inset: 0;
   display: flex;
-  flex: 1;
   flex-direction: column;
   justify-content: center;
   gap: clamp(14px, 4vmin, 40px);
@@ -224,6 +267,15 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 0;
+  padding: clamp(10px, 2.4vmin, 22px);
+  border: 1px solid var(--glass-line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mini-split .mini-metric:first-child {
+  padding-left: clamp(10px, 2.4vmin, 22px);
+  border-left: 1px solid var(--glass-line);
 }
 
 .mini-split .mini-label,
@@ -265,15 +317,16 @@
   align-self: stretch;
   min-height: 56px;
   padding: 12px 20px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-radius: 14px;
-  background: transparent;
+  border: 1px solid rgba(255, 106, 26, 0.7);
+  border-radius: 18px;
+  background: rgba(255, 106, 26, 0.14);
   color: inherit;
   font: inherit;
   font-size: 18px;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .mini-stop:active {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 106, 26, 0.32);
 }

@@ -127,7 +127,9 @@ toute sortie lancée depuis cet onglet.
 
 - **Capturer l'application dans la page** : le navigateur te demande quelle fenêtre ou quel onglet
   afficher. L'image prend l'espace entre les barres, qui peuvent être en haut, en bas, ou les deux :
-  rien n'est posé sur le film. Seule l'image est capturée, le son reste celui de l'application.
+  rien n'est posé sur le film. Pour un onglet, coche « Partager aussi l'audio de l'onglet » : le jeu
+  rejoue le son et l'onglet d'origine se tait. Diffuser ensuite l'onglet du jeu sur une télé (clic droit,
+  « Diffuser… ») emmène l'image et le son. Une fenêtre, elle, se capture sans son.
 - **Barre flottante** (Chrome ou Edge sur ordinateur) : une petite fenêtre qui reste au-dessus de
   toutes les autres, même d'une vidéo en plein écran. Tu ouvres ton application à côté et tu glisses
   la barre en haut ou en bas.

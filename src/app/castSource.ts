@@ -2,15 +2,23 @@
 // onglet, ou une barre qui flotte par-dessus toutes les fenêtres. Les deux demandent un geste du joueur.
 
 /**
- * Demande au navigateur de capturer une fenêtre ou un onglet, au choix du joueur. Seule l'image est
- * prise : le son reste celui de l'application d'origine, sans écho.
+ * Demande au navigateur de capturer une fenêtre ou un onglet, au choix du joueur. Pour un onglet, le
+ * navigateur propose aussi son son : il est alors rejoué par le jeu, qui fait taire l'onglet d'origine
+ * pour éviter l'écho. Ainsi, diffuser l'onglet du jeu sur une télé emmène l'image et le son.
  */
 export async function startCapture(): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getDisplayMedia) {
     throw new Error('Ce navigateur ne sait pas capturer une application : utilise Chrome ou Edge sur ordinateur, ou l’écran partagé.');
   }
   // Les options propres à Chrome sont ignorées ailleurs : l'écran entier est exclu, car il contiendrait le jeu lui-même.
-  const options = { video: { frameRate: { ideal: 30 } }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include', monitorTypeSurfaces: 'exclude' };
+  const options = {
+    video: { frameRate: { ideal: 30 } },
+    audio: true,
+    suppressLocalAudioPlayback: true,
+    selfBrowserSurface: 'exclude',
+    surfaceSwitching: 'include',
+    monitorTypeSurfaces: 'exclude',
+  };
   try {
     return await navigator.mediaDevices.getDisplayMedia(options as DisplayMediaStreamOptions);
   } catch (err) {
