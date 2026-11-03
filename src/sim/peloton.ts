@@ -60,6 +60,13 @@ export interface PelotonState {
   speedKmh: number;
 }
 
+/** Position et vitesse du joueur. */
+export interface PelotonUser {
+  distM: number;
+  traveledM: number;
+  speedMps: number;
+}
+
 export interface PelotonGap {
   name: string;
   /** Positif : devant le joueur. */
@@ -87,6 +94,8 @@ export class Peloton {
     startM: number,
     startTraveledM: number,
     riders: PelotonRider[] = teammates(ftp),
+    /** Pendant ce temps (s) depuis le départ, le peloton reste avec le joueur, quelle que soit sa vitesse. */
+    private escortS = 0,
   ) {
     this.members = riders.map((info) => {
       const offset = info.startOffsetM ?? 0;
@@ -107,10 +116,20 @@ export class Peloton {
     return this.members.length;
   }
 
-  advance(dt: number): void {
+  /** `user` : où est le joueur ; le peloton s'y accroche tant qu'il l'escorte. */
+  advance(dt: number, user?: PelotonUser): void {
     this.clock += dt;
     const { route } = this;
+    const escorting = user !== undefined && this.clock <= this.escortS;
     for (const m of this.members) {
+      if (escorting) {
+        // Échauffement : le coureur reste à sa place autour du joueur, à sa vitesse.
+        const offset = m.info.startOffsetM ?? 0;
+        m.physics.distanceM = user.distM + offset;
+        m.physics.speedMps = user.speedMps;
+        m.traveledM = user.traveledM + offset;
+        continue;
+      }
       const from = m.physics.distanceM;
       m.physics.advance(dt, { powerW: m.info.powerAt(this.clock), gradePct: route.gradeAt(from), altitudeM: route.eleAt(from) });
       m.traveledM += m.physics.distanceM - from;

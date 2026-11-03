@@ -204,6 +204,7 @@ export class Game {
       start,
       this.traveledM(start),
       groupRiders(options),
+      GROUP_WARMUP_S,
     );
   }
 
@@ -330,7 +331,7 @@ export class Game {
         this.energyJ += power * dt;
         this.maxPower = Math.max(this.maxPower, power);
       }
-      this.peloton?.advance(dt);
+      this.peloton?.advance(dt, { distM: this.physics.distanceM, traveledM: this.traveledM(this.physics.distanceM), speedMps: this.physics.speedMps });
     }
 
     const dist = Math.min(this.physics.distanceM, this.route.lengthM);

@@ -1,14 +1,13 @@
 // Onglet Peloton : un groupe de dix ou quinze coureurs qui roule aux watts par kilo choisis, sur le parcours choisi.
 
 import { CUSTOM_ROUTE_ID } from '../app/profile';
-import { GROUP_RAMP_S, GROUP_SIZES, GROUP_WARMUP_S, GROUP_WARMUP_SHARE, GROUP_WKG_MAX, GROUP_WKG_MIN, GROUP_WKG_STEP } from '../sim/group';
+import { GROUP_SIZES, GROUP_WARMUP_S, GROUP_WKG_MAX, GROUP_WKG_MIN, GROUP_WKG_STEP } from '../sim/group';
 import { WORLD_NAME, WORLD_ROUTE_ID } from '../sim/worldRoute';
 import { fr } from './format';
 import type { MenuContext } from './menu';
 import { worldGradient } from './tabRoutes';
 
 const WARMUP_MIN = GROUP_WARMUP_S / 60;
-const RAMP_MIN = GROUP_RAMP_S / 60;
 
 export function renderPeloton(page: HTMLElement, ctx: MenuContext): void {
   const p = ctx.profile;
@@ -56,8 +55,8 @@ export function renderPeloton(page: HTMLElement, ctx: MenuContext): void {
     q('[data-r="wkg"]').textContent = `${fr(p.groupWkg)} W/kg`;
     q('[data-r="level"]').textContent = `Pour toi, à ${fr(p.riderKg, 1)} kg : ${watts} W, soit ${Math.round((watts / p.ftp) * 100)} % de ta FTP.`;
     q('[data-r="warmup"]').textContent =
-      `Échauffement : pendant ${WARMUP_MIN} minutes, le groupe roule à ${Math.round(GROUP_WARMUP_SHARE * 100)} % (${fr(p.groupWkg * GROUP_WARMUP_SHARE)} W/kg) ` +
-      `pour que tu t'échauffes. Il monte ensuite à ${fr(p.groupWkg)} W/kg à partir de la ${WARMUP_MIN - RAMP_MIN}e minute et s'y tient jusqu'à la fin.`;
+      `Échauffement : pendant ${WARMUP_MIN} minutes, le groupe reste avec toi, à ta vitesse, quel que soit ton rythme. ` +
+      `Il se cale ensuite sur ${fr(p.groupWkg)} W/kg et s'y tient jusqu'à la fin.`;
   };
   q<HTMLInputElement>('[data-g="wkg"]').addEventListener('input', (e) => {
     p.groupWkg = Number((e.target as HTMLInputElement).value);
