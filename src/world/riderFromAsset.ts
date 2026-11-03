@@ -100,6 +100,8 @@ function dressSkin(source: THREE.MeshStandardMaterial, outfit: Outfit): THREE.Me
   const skin = source.clone();
   // Les muscles du dessin de la peau s'adoucissent : un coureur est plus sec qu'un haltérophile.
   skin.normalScale = new THREE.Vector2(0.55, 0.55);
+  // Un teint hâlé de coureur qui roule dehors : plus foncé, un peu plus chaud.
+  skin.color.multiply(new THREE.Color(0.62, 0.42, 0.3));
   const colorOf = (m: THREE.Material): THREE.Color => ((m as THREE.MeshStandardMaterial).color ?? new THREE.Color(0x888888)).clone();
   const colors: Record<(typeof CLOTH_UNIFORMS)[number], THREE.Color> = {
     uJersey: colorOf(outfit.jersey),

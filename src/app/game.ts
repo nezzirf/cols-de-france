@@ -447,11 +447,16 @@ export class Game {
     const state = workoutStateAt(this.workout!, this.elapsedS);
     if (!state) return;
     const watts = Math.round((state.targetPct / 100) * this.ftp);
-    if (watts === this.lastTargetW) return;
+    // Comme en simulation, la cible est renvoyée de temps en temps : après une coupure Bluetooth ou une
+    // commande perdue, le home trainer reprend la bonne puissance au lieu de rester sur l'ancienne.
+    const now = performance.now();
+    if (watts === this.lastTargetW && now - this.lastSentAt < FORCE_RESEND_MS) return;
     this.lastTargetW = watts;
+    this.lastSentAt = now;
     try {
       await this.trainer.setTargetPower(watts);
     } catch (err) {
+      this.lastTargetW = null;
       this.onTrainerError(err instanceof Error ? err.message : String(err));
     }
   }
