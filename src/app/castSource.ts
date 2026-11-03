@@ -1,6 +1,8 @@
 // Ce que le jeu affiche pendant que l'on regarde autre chose : la capture d'une autre fenêtre ou d'un
 // onglet, ou une barre qui flotte par-dessus toutes les fenêtres. Les deux demandent un geste du joueur.
 
+import { pillSupported } from '../hud/pillHud';
+
 /**
  * Demande au navigateur de capturer une fenêtre ou un onglet, au choix du joueur. Pour un onglet, le
  * navigateur propose aussi son son : il est alors rejoué par le jeu, qui fait taire l'onglet d'origine
@@ -30,8 +32,8 @@ export async function startCapture(): Promise<MediaStream> {
 }
 
 /** Ce que ce navigateur sait faire : une tablette ne capture pas d'application et n'a pas de barre flottante. */
-export function castSupport(): { capture: boolean; floating: boolean } {
-  return { capture: !!navigator.mediaDevices?.getDisplayMedia && !isTouchDevice(), floating: floatingBarSupported() };
+export function castSupport(): { capture: boolean; floating: boolean; pill: boolean } {
+  return { capture: !!navigator.mediaDevices?.getDisplayMedia && !isTouchDevice(), floating: floatingBarSupported(), pill: pillSupported() };
 }
 
 /** Les navigateurs de tablette peuvent annoncer getDisplayMedia sans le proposer vraiment : on s'en tient au tactile. */

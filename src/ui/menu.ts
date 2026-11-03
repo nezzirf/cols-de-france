@@ -287,7 +287,7 @@ export class Menu {
     const p = this.profile;
     const { where, routeId } = this.launch;
     if (where === 'app') {
-      const how = p.appMode === 'flottante' ? 'barre flottante' : p.appMode === 'partage' ? 'écran partagé' : { haut: 'barre en haut', bas: 'barre en bas', 'les-deux': 'barres en haut et en bas' }[p.appBars];
+      const how = p.appMode === 'flottante' ? 'barre flottante' : p.appMode === 'pastille' ? 'pastille flottante' : p.appMode === 'partage' ? 'écran partagé' : { haut: 'barre en haut', bas: 'barre en bas', 'les-deux': 'barres en haut et en bas' }[p.appBars];
       return `Média · ${how}`;
     }
     if (where === 'monde' || routeId === WORLD_ROUTE_ID) return `${WORLD_NAME} · boucle de 6 biomes`;

@@ -137,10 +137,17 @@ toute sortie lancée depuis cet onglet.
   application, puis place le jeu à côté d'elle avec l'écran partagé du système ; le jeu n'affiche que
   le panneau de la sortie, en gros, avec un bouton « Terminer la sortie ». Il est proposé d'office sur
   tablette.
+- **Pastille flottante** (Android, Chrome) : les chiffres sont dessinés sur un canvas, diffusé dans la
+  mini-fenêtre vidéo « image dans l'image » du navigateur, qui reste par-dessus les autres applications.
+  Lance la sortie, ouvre Netflix en plein écran, puis déplace ou agrandis la pastille avec les doigts.
+  Fermer la pastille ne coupe pas la sortie : un bouton du jeu la rouvre. Il faut laisser le jeu ouvert
+  en arrière-plan.
 
 Limites : Netflix, Disney+ et d'autres services protégés par DRM s'affichent souvent en noir dans une
-capture, ce que le jeu ne peut pas contourner ; la barre flottante est faite pour ce cas. Rien de
-cela n'a été essayé avec Netflix, et la barre flottante n'a pas pu être testée de bout en bout.
+capture, ce que le jeu ne peut pas contourner ; la barre flottante et la pastille sont faites pour ce
+cas. Rien de cela n'a été essayé avec Netflix ; la barre flottante n'a pas pu être testée de bout en
+bout, et la pastille n'a été essayée que sur ordinateur (ouverture et dessin), pas sur Android, où
+reste à confirmer que le jeu et le Bluetooth continuent en arrière-plan.
 
 ## Choisir son vélo
 

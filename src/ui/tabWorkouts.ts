@@ -35,6 +35,7 @@ const APP_MODES: { id: AppMode; title: string; hint: string }[] = [
   { id: 'capture', title: 'Capturer dans la page', hint: "L'application s'affiche entre les barres" },
   { id: 'flottante', title: 'Barre flottante', hint: 'Une petite fenêtre au-dessus de tout (Chrome, Edge)' },
   { id: 'partage', title: 'Écran partagé', hint: 'Le jeu à côté de ton application (tablette)' },
+  { id: 'pastille', title: 'Pastille flottante', hint: 'Une mini-fenêtre au-dessus de Netflix en plein écran (Android)' },
 ];
 
 const APP_BARS: { id: AppBars; label: string }[] = [
@@ -48,6 +49,8 @@ const APP_NOTES: Record<AppMode, string> = {
     "Au lancement, ton navigateur te demande quelle fenêtre ou quel onglet afficher en fond. Le film reste entier, entre les barres. Netflix et d'autres services protégés peuvent apparaître en noir : dans ce cas, choisis la barre flottante.",
   partage:
     "Pour une tablette : ouvre ton application, puis place le jeu à côté d'elle avec l'écran partagé du système. Le jeu n'affiche que le panneau de la sortie, en gros, avec un bouton pour la terminer.",
+  pastille:
+    "Pour un téléphone ou une tablette Android (Chrome) : le jeu ouvre une petite fenêtre vidéo avec tes chiffres, qui reste par-dessus les autres applications. Lance la sortie, ouvre Netflix en plein écran, puis déplace ou agrandis la pastille avec les doigts. Garde le jeu ouvert en arrière-plan, sans le fermer.",
   flottante:
     "Le jeu ouvre une barre qui reste au-dessus de toutes tes fenêtres, même d'une vidéo en plein écran (Chrome ou Edge sur ordinateur). Ouvre ton application en plein écran, puis glisse la barre en haut ou en bas.",
 };
@@ -186,7 +189,7 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
 
   // Une tablette ne capture pas d'application et n'a pas de barre flottante : on lui propose l'écran partagé.
   const support = castSupport();
-  const usable = (m: AppMode) => (m === 'capture' ? support.capture : m === 'flottante' ? support.floating : true);
+  const usable = (m: AppMode) => (m === 'capture' ? support.capture : m === 'flottante' ? support.floating : m === 'pastille' ? support.pill : true);
   if (!usable(p.appMode)) p.appMode = 'partage';
 
   const showWhere = () => {

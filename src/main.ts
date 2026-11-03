@@ -17,6 +17,7 @@ import type { HeartRateSensor, Trainer } from './hardware/types';
 import { formatTime, Hud } from './hud/hud';
 import './hud/hud.css';
 import { MiniHud } from './hud/miniHud';
+import { PillHud } from './hud/pillHud';
 import { findBike, setupFor, wearing, type Bike } from './sim/bikes';
 import type { GroupOptions } from './sim/group';
 import { buildCustomRoute } from './sim/customRoute';
@@ -55,7 +56,7 @@ class App {
   private bpmBeforeStart: number | null = null;
   private route: Route | null = null;
   private hud: Hud | null = null;
-  private mini: MiniHud | null = null;
+  private mini: MiniHud | PillHud | null = null;
   private miniTimer = 0;
   private endButton: HTMLButtonElement | null = null;
   private cast: MediaStream | null = null;
@@ -290,8 +291,17 @@ class App {
     // Capture et fenêtre flottante exigent un geste récent du joueur : on les demande avant tout le reste.
     let stream: MediaStream | null = null;
     let pip: Window | null = null;
+    let pill: PillHud | null = null;
     if (app.mode === 'partage') {
       // Rien à demander : le système place le jeu à côté de l'application.
+    } else if (app.mode === 'pastille') {
+      pill = new PillHud();
+      try {
+        await pill.open();
+      } catch (err) {
+        pill.dispose();
+        throw new Error(`La pastille n'a pas pu s'ouvrir (${err instanceof Error ? err.message : err}). Essaie « Écran partagé ».`);
+      }
     } else if (app.mode === 'capture') {
       const fake = import.meta.env.DEV ? (window as unknown as { __fakeCast?: () => MediaStream }).__fakeCast : undefined;
       stream = fake ? fake() : await startCapture();
@@ -318,9 +328,22 @@ class App {
 
     this.canvas.style.display = 'none';
     this.root.innerHTML = '';
-    let mini: MiniHud;
+    let mini: MiniHud | PillHud;
     if (app.mode === 'partage') {
       mini = new MiniHud(this.root, { placement: 'haut', steps, split: { onStop: () => this.game?.end() } });
+    } else if (pill) {
+      mini = pill;
+      this.root.innerHTML = `<div class="screen"><div class="result">
+        <h2>Pastille active</h2>
+        <p>${workout ? `Ta séance « ${workout.name} » suit son cours` : 'Ta sortie suit son cours'} dans la petite fenêtre. Ouvre Netflix en plein écran : la pastille reste par-dessus, tu la déplaces et la agrandis avec les doigts.</p>
+        <button class="btn" data-a="reopen" hidden>Rouvrir la pastille</button>
+        <button class="btn primary" data-a="stop">Terminer la sortie</button>
+      </div></div>`;
+      const reopen = this.root.querySelector('[data-a="reopen"]') as HTMLButtonElement;
+      reopen.addEventListener('click', () => void pill!.open().then(() => (reopen.hidden = true), () => {}));
+      this.root.querySelector('[data-a="stop"]')!.addEventListener('click', () => this.game?.end());
+      // Fermer la pastille ne coupe pas la sortie : un bouton permet de la rouvrir.
+      pill.onClosed = () => (reopen.hidden = false);
     } else if (pip) {
       mini = new MiniHud(pip.document.body, { placement: 'haut', steps, floating: true });
       this.pip = pip;
@@ -336,7 +359,8 @@ class App {
         if (this.pip) void this.quit();
       });
     } else {
-      mini = new MiniHud(this.root, { placement: app.bars, steps });
+      const bars = new MiniHud(this.root, { placement: app.bars, steps });
+      mini = bars;
       const video = document.createElement('video');
       video.className = 'mini-video';
       // Le son de l'onglet capturé, s'il a été partagé, passe par le jeu : la diffusion sur une télé l'emporte avec l'image.
@@ -344,11 +368,11 @@ class App {
       video.autoplay = true;
       video.playsInline = true;
       video.srcObject = stream;
-      mini.stage!.appendChild(video);
+      bars.stage!.appendChild(video);
       this.cast = stream;
       stream!.getVideoTracks()[0]?.addEventListener('ended', () => {
         video.remove();
-        mini.say("Le partage est arrêté. Termine la sortie avec Échap, ou relance-la pour choisir une autre application.");
+        bars.say("Le partage est arrêté. Termine la sortie avec Échap, ou relance-la pour choisir une autre application.");
       });
       void video.play().catch(() => {});
     }
