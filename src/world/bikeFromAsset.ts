@@ -51,13 +51,32 @@ function spin(s: Spinner, angle: number): void {
   s.bone.quaternion.copy(s.rest).multiply(turn.setFromAxisAngle(s.axis, angle));
 }
 
+/** Seconde couleur du cadre : elle gagne l'arrière (haubans, tube de selle) ou le bas (tube diagonal, base). */
+export interface AssetCoat {
+  second: number;
+  fade: 'rear' | 'low';
+}
+
+const smooth = (edge0: number, edge1: number, v: number): number => {
+  const t = Math.min(1, Math.max(0, (v - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+};
+
+/** Part de la seconde couleur au point (x vers l'avant, y vers le haut) du cadre, en unités du modèle (le cadre va de -49 à 45 et de 23 à 89). */
+function coatShare(coat: AssetCoat, x: number, y: number): number {
+  return coat.fade === 'rear' ? smooth(-2, -34, x) : smooth(58, 34, y);
+}
+
 /**
  * Le modèle est coloré par ses sommets : un rose pour le cadre, du blanc pour la fourche, le cintre et
  * les jantes, du gris pour les pneus et la transmission. On les remplace pour peindre le cadre à la
  * couleur de l'équipe et noircir les pièces en carbone.
  */
-function paint(source: THREE.BufferGeometry, frame: THREE.Color): THREE.BufferGeometry {
+function paint(source: THREE.BufferGeometry, frame: THREE.Color, coat: AssetCoat | null): THREE.BufferGeometry {
   const geometry = source.clone();
+  const where = geometry.getAttribute('position');
+  const second = coat ? new THREE.Color(coat.second) : frame;
+  const mixed = new THREE.Color();
   const colors = geometry.getAttribute('color');
   const out = new Float32Array(colors.count * 4);
   const carbon = new THREE.Color(0x15171a);
@@ -70,7 +89,7 @@ function paint(source: THREE.BufferGeometry, frame: THREE.Color): THREE.BufferGe
     const b = colors.getZ(i);
     let c = steel;
     if (r > 0.95 && g > 0.95 && b > 0.95) c = carbon;
-    else if (r > 0.7 && g < 0.45 && b < 0.45) c = frame;
+    else if (r > 0.7 && g < 0.45 && b < 0.45) c = coat ? mixed.copy(frame).lerp(second, coatShare(coat, where.getX(i), where.getY(i))) : frame;
     else if (r < 0.2) c = dark;
     else if (r < 0.55) c = rubber;
     out[i * 4] = c.r;
@@ -82,7 +101,7 @@ function paint(source: THREE.BufferGeometry, frame: THREE.Color): THREE.BufferGe
   return geometry;
 }
 
-export function buildAssetBike(wheelRadiusM: number, material: THREE.Material | null, frame: THREE.Color): AssetBike {
+export function buildAssetBike(wheelRadiusM: number, material: THREE.Material | null, frame: THREE.Color, coat: AssetCoat | null = null): AssetBike {
   const group = new THREE.Group();
   const root = cloneBikeAsset();
   // Échelle du modèle : sa roue prend le rayon de roue du jeu.
@@ -98,7 +117,7 @@ export function buildAssetBike(wheelRadiusM: number, material: THREE.Material | 
 
   root.traverse((o) => {
     if (o instanceof THREE.Mesh) {
-      o.geometry = paint(o.geometry, frame);
+      o.geometry = paint(o.geometry, frame, coat);
       o.material =
         material ??
         new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.2, clearcoat: 0.5, clearcoatRoughness: 0.2, side: THREE.DoubleSide });

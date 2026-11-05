@@ -18,6 +18,7 @@ export function dressedRider(bike: Bike): RiderModel {
     {
       ...bikeShape(bike),
       frame: lacquer({ color: bike.frame }),
+      coat: bike.coat,
       paint: lacquer({ color: bike.accent }),
       accent: pbr({ color: livery.trim, roughness: 0.34 }),
       helmet: pbr({ color: livery.helmet, roughness: 0.34 }),

@@ -14,6 +14,17 @@ describe('tenues des équipes', () => {
   it('ne met pas la seconde couleur sur un maillot qui est déjà de cette couleur', () => {
     for (const t of TEAMS.filter((t) => t.livery.style !== 'plain')) expect(t.livery.second).not.toBe(t.jersey);
   });
+  it('peint le cadre de chaque équipe de deux couleurs, la seconde en dégradé', () => {
+    for (const t of TEAMS) {
+      expect(t.coat).not.toBeNull();
+      expect(['rear', 'low']).toContain(t.coat!.fade);
+      expect(t.coat!.second).not.toBe(t.frame);
+    }
+    for (const b of ALL_BIKES.filter((b) => b.team)) expect(b.coat).toBe(b.team!.coat);
+  });
+  it('laisse les vélos sans équipe d’une seule couleur', () => {
+    for (const b of ALL_BIKES.filter((b) => !b.team)) expect(b.coat).toBeNull();
+  });
   it('habille le vélo d’une équipe de sa tenue', () => {
     for (const b of ALL_BIKES.filter((b) => b.team)) expect(b.livery).toBe(b.team!.livery);
   });
