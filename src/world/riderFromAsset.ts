@@ -465,9 +465,11 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
       aim(leg.ankle, leg.ball, ball);
     });
 
+    const slope = fit.handSlope ?? 0.25;
+    const roll = fit.handRoll ?? 0;
     for (const arm of limbs.arms) {
       const grip = world(at(fit.hand[0], fit.hand[1], arm.side * fit.handSide));
-      const wrist = world(at(fit.hand[0] - handLen * 0.97, fit.hand[1] - handLen * 0.24, arm.side * fit.handSide));
+      const wrist = world(at(fit.hand[0] - handLen * Math.cos(slope), fit.hand[1] - handLen * Math.sin(slope), arm.side * fit.handSide));
       // L'épaule suit un peu le bras qui part vers l'avant : sans cela, le haut du bras se tord sous le deltoïde.
       const collarAt = worldPos(arm.collar);
       const rest = worldPos(arm.shoulder).sub(collarAt);
@@ -479,7 +481,7 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
       aim(arm.elbow, arm.wrist, wrist);
       turn(arm.elbow, worldPos(arm.wrist).sub(worldPos(arm.elbow)).normalize(), -arm.side * PRONATION * 0.5);
       aim(arm.wrist, arm.knuckle, grip);
-      turn(arm.wrist, worldPos(arm.knuckle).sub(worldPos(arm.wrist)).normalize(), -arm.side * PRONATION * 0.5);
+      turn(arm.wrist, worldPos(arm.knuckle).sub(worldPos(arm.wrist)).normalize(), -arm.side * (PRONATION * 0.5 - roll));
       // Les doigts se referment sur la cocotte : chaque phalange tourne autour de l'axe latéral, vers le bas.
       const across = new THREE.Vector3(1, 0, 0).applyQuaternion(around);
       for (const [first, second] of arm.fingers) {

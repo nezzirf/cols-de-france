@@ -91,6 +91,8 @@ export function buildRcrBike(wheelRadiusM: number, material: THREE.Material | nu
     head: [hip[0] + 0.67, hip[1] + 0.44],
     hand: onBike(HOOD.fx, HOOD.y),
     handSide: 0.2,
+    handRoll: 0.35,
+    handSlope: 0.4,
     thigh: 0.45,
     shin: 0.44,
   };

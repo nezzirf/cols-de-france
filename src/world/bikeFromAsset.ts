@@ -23,6 +23,9 @@ export interface RiderFit {
   head: Point;
   hand: Point;
   handSide: number;
+  /** Mains roulées vers l'intérieur (radians) et pente de la main, pour épouser la cocotte ; absentes : paumes à plat. */
+  handRoll?: number;
+  handSlope?: number;
   thigh: number;
   shin: number;
 }
