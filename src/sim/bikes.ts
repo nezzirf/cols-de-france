@@ -35,7 +35,7 @@ export const BIKE_KINDS: Record<BikeKind, BikeSpec> = {
 };
 
 /** Vélo modélisé à part, avec sa propre peinture. */
-export type BikeAssetId = 'rcr';
+export type BikeAssetId = 'rcr' | 'y1rs';
 
 /** Peinture du cadre : une seconde couleur qui gagne l'arrière, l'avant, le bas ou le haut, et une fourche à part. */
 export type BikeCoat = { second: number; fade: 'rear' | 'front' | 'low' | 'high'; fork?: number } | null;
@@ -150,7 +150,7 @@ export const TEAMS: Team[] = [
     id: 'uae', name: 'UAE Team Emirates-XRG', brand: 'Colnago', jersey: 0xf2f2f2, accent: 0xc8102e, frame: 0x15171a,
     livery: livery('fade', 0xc8102e, { shorts: 0x16181c, helmet: 0xf2f2f2, trim: 0x16181c }),
     coat: { second: 0xc8102e, fade: 'low' },
-    models: [{ name: 'Y1Rs', kind: 'aero' }, { name: 'V5Rs', kind: 'grimpeur' }, { name: 'TT1', kind: 'clm' }],
+    models: [{ name: 'Y1Rs', kind: 'aero', asset: 'y1rs' }, { name: 'V5Rs', kind: 'grimpeur' }, { name: 'TT1', kind: 'clm' }],
   },
   {
     id: 'unox', name: 'Uno-X Mobility', brand: 'Ridley', jersey: 0xe2231a, accent: 0xf6c21a, frame: 0xc41d16,
