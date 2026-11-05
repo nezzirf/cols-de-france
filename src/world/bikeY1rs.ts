@@ -188,8 +188,9 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   const tilt = (20 * Math.PI) / 180;
   const headLow: Point = [front[0] - 0.405 * Math.sin(tilt), R + 0.405 * Math.cos(tilt)];
   const headTop: Point = [headLow[0] - 0.09 * Math.sin(tilt), headLow[1] + 0.09 * Math.cos(tilt)];
-  const seatJoin = P(176, 150);
   const seatTop = P(152, 104);
+  // Le tube de selle et sa tige sont sur la même droite : le haut du triangle est à 68 % du chemin du boîtier à la selle.
+  const seatJoin: Point = [BB[0] + (seatTop[0] - BB[0]) * 0.68, BB[1] + (seatTop[1] - BB[1]) * 0.68];
   const stayTop = P(171, 182);
   const stem: Point = [headTop[0] + 0.1, headTop[1] + 0.02];
 
@@ -235,6 +236,8 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   group.add(profiled([headTop[0] + 0.004, headTop[1] + 0.004], stem, 0.04, 0.05, mats.white));
   const side0 = (sign: number): THREE.Group => {
     const path = new THREE.CatmullRomCurve3([
+      // Chaque moitié dépasse le milieu : sans cela, la jonction laisse une fente où l'on voit la potence blanche.
+      at(stem[0], stem[1], -sign * 0.025),
       at(stem[0], stem[1], 0),
       at(stem[0] - 0.01, stem[1], sign * 0.09),
       at(stem[0] - 0.03, stem[1] - 0.002, sign * 0.2),
@@ -247,12 +250,18 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
     ]);
     const bar = new THREE.Group();
     bar.add(new THREE.Mesh(new THREE.TubeGeometry(path, 40, 0.0125, 10), mats.black));
+    // Les bouts du guidon sont fermés par un bouchon, comme sur un vrai cintre.
+    for (const end of [at(stem[0] + 0.06, stem[1] - 0.125, sign * 0.213), at(stem[0], stem[1], -sign * 0.025)]) {
+      const cap = ball(0.0125, mats.black);
+      cap.position.copy(end);
+      bar.add(cap);
+    }
     const hood = ball(1, mats.carbon);
-    hood.scale.set(0.02, 0.03, 0.045);
-    hood.position.copy(at(stem[0] + 0.125, stem[1] + 0.04, sign * 0.213));
+    hood.scale.set(0.02, 0.03, 0.055);
+    hood.position.copy(at(stem[0] + 0.135, stem[1] + 0.04, sign * 0.213));
     hood.rotation.x = 0.35;
     bar.add(hood);
-    bar.add(profiled([stem[0] + 0.178, stem[1] + 0.005], [stem[0] + 0.205, stem[1] - 0.065], 0.008, 0.016, mats.carbon, sign * 0.213));
+    bar.add(profiled([stem[0] + 0.172, stem[1] + 0.03], [stem[0] + 0.2, stem[1] - 0.06], 0.009, 0.02, mats.carbon, sign * 0.213));
     return bar;
   };
   group.add(side0(-1), side0(1));
