@@ -242,20 +242,36 @@ function helmetMaterial(accent: THREE.Material, skull: HeadFrame): THREE.Materia
 /** Réglage des lunettes sur la tête : marge de largeur, hauteur par rapport aux yeux, avance de l'écran par rapport au bout du nez. */
 const GLASSES_FIT = { margin: 0.012, lift: -0.028, front: 0.004 };
 
+/** Une sphère déformée en nez : du haut (collé au visage) vers la pointe, la largeur et l'avance grandissent. */
+function noseGeometry(): THREE.BufferGeometry {
+  const g = new THREE.SphereGeometry(1, 24, 16);
+  const p = g.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i);
+    const t = (1 - y) / 2;
+    const grow = t * t * (3 - 2 * t);
+    const width = FACE.noseTopWidth + (FACE.noseBaseWidth - FACE.noseTopWidth) * grow;
+    const depth = FACE.noseTopDepth + (FACE.noseBaseDepth - FACE.noseTopDepth) * grow;
+    // Une section qui reste large jusqu'au bout (au lieu de s'effiler comme une sphère) : la pointe est ronde, pas pointue.
+    const r = Math.sqrt(Math.max(0, 1 - y * y));
+    const blunt = r > 1e-6 ? Math.pow(r, 0.55) / r : 0;
+    p.setXYZ(i, p.getX(i) * blunt * width, y * FACE.noseHeight, p.getZ(i) * blunt * depth);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
 /** Part du chemin que fait la clavicule vers la main (0 : épaule fixe, 1 : elle la vise). */
 const SHOULDER_FOLLOW = 0.3;
 
 const HELMET_FIT = { margin: 0.04, lift: 0.012, forward: 0.012, pitch: -0.12 };
 
 /**
- * Nez et bouche : distance sous les yeux, taille (demi-axes) et avance par rapport à la peau. Le nez a une arête
- * (inclinée de bridgeTilt), une pointe, deux ailes à côté de la pointe et deux narines sous elle.
+ * Nez et bouche : distance sous les yeux, taille (demi-axes) et avance par rapport à la peau. Le nez est un seul
+ * volume lisse, étroit et plat en haut, qui s'élargit et s'avance en descendant jusqu'à la pointe.
  */
 const FACE = {
-  bridgeDrop: 0.032, bridgeWidth: 0.0052, bridgeHeight: 0.017, bridgeDepth: 0.0065, bridgeOut: 0.0015, bridgeTilt: 0.4,
-  tipDrop: 0.056, tipWidth: 0.0072, tipHeight: 0.0068, tipDepth: 0.009, tipOut: 0.0108,
-  wingDrop: 0.052, wingSide: 0.0074, wingWidth: 0.0046, wingHeight: 0.006, wingDepth: 0.0065, wingOut: 0.0055,
-  nostrilSide: 0.0032, nostrilDrop: 0.006, nostrilOut: 0.001,
+  noseDrop: 0.036, noseOut: 0.0, noseHeight: 0.022, noseTopWidth: 0.0036, noseBaseWidth: 0.0092, noseTopDepth: 0.0022, noseBaseDepth: 0.011,
   mouthDrop: 0.09, mouthWidth: 0.02, mouthHeight: 0.0035, mouthDepth: 0.004, mouthOut: 0.0,
 };
 
@@ -332,28 +348,9 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
   }
   // Visage : un nez et une bouche posés sur l'avant du visage lisse.
   const skinColor = ((rig.getObjectByName('SuperHero_Male') as THREE.SkinnedMesh | undefined)?.material as THREE.MeshStandardMaterial | undefined)?.color;
-  const noseMaterial = outfit.mono ? outfit.jersey : pbr({ color: skinColor ?? 0xc99a82, roughness: 0.62 });
-  const nostrilMaterial = outfit.mono ? outfit.jersey : pbr({ color: 0x6b3d33, roughness: 0.8 });
-  // Un nez en quatre volumes : l'arête, qui s'avance en descendant, la pointe arrondie et les deux ailes.
-  const nose = new THREE.Group();
-  const blob = (material: THREE.Material, at: [number, number, number], size: [number, number, number], tilt = 0) => {
-    const part = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), material);
-    part.scale.set(...size);
-    part.position.set(...at);
-    part.rotation.x = tilt;
-    nose.add(part);
-  };
-  const eyeY = skull.eyes.y;
-  const atFace = (drop: number, out: number): [number, number] => [eyeY - drop, skull.faceZ(eyeY - drop) + out];
-  const [bridgeY, bridgeZ] = atFace(FACE.bridgeDrop, FACE.bridgeOut);
-  blob(noseMaterial, [skull.centre.x, bridgeY, bridgeZ], [FACE.bridgeWidth, FACE.bridgeHeight, FACE.bridgeDepth], -FACE.bridgeTilt);
-  const [tipY, tipZ] = atFace(FACE.tipDrop, FACE.tipOut);
-  blob(noseMaterial, [skull.centre.x, tipY, tipZ], [FACE.tipWidth, FACE.tipHeight, FACE.tipDepth]);
-  const [wingY, wingZ] = atFace(FACE.wingDrop, FACE.wingOut);
-  for (const side of [-1, 1]) {
-    blob(noseMaterial, [skull.centre.x + side * FACE.wingSide, wingY, wingZ], [FACE.wingWidth, FACE.wingHeight, FACE.wingDepth]);
-    blob(nostrilMaterial, [skull.centre.x + side * FACE.nostrilSide, tipY - FACE.nostrilDrop, tipZ + FACE.nostrilOut], [0.0026, 0.0016, 0.0032]);
-  }
+  const noseY = skull.eyes.y - FACE.noseDrop;
+  const nose = new THREE.Mesh(noseGeometry(), outfit.mono ? outfit.jersey : pbr({ color: skinColor ?? 0xc99a82, roughness: 0.62 }));
+  nose.position.set(skull.centre.x, noseY, skull.faceZ(noseY) + FACE.noseOut);
   const mouthY = skull.eyes.y - FACE.mouthDrop;
   const mouth = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8), outfit.mono ? outfit.jersey : pbr({ color: 0x8a4a46, roughness: 0.5 }));
   mouth.scale.set(FACE.mouthWidth, FACE.mouthHeight, FACE.mouthDepth);
