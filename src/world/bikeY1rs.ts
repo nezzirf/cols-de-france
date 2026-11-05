@@ -17,7 +17,7 @@ const SPOKES = 14;
 
 /** Point du cadre d'après la photo de profil : pixels (x vers l'avant, y vers le bas) en mètres autour du boîtier. */
 const PX = 0.00399;
-const P = (px: number, py: number): Point => [BB[0] + (px - 190) * PX, BB[1] + (252 - py) * PX];
+const P = (px: number, py: number): Point => [BB[0] + (px - 200) * PX, BB[1] + (252 - py) * PX];
 
 const BLACK = new THREE.Color(0x14161a);
 /** Les parties blanches des photos sont peintes en noir mat : le blanc passait mal sur les captures d'écran. Le vélo est tout noir ; il suffira de changer cette couleur pour retrouver le blanc. */
@@ -192,28 +192,36 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   const R = wheelRadiusM;
   const rear: Point = [P(88, 240)[0], R];
   const front: Point = [P(350, 240)[0], R];
-  // Fourche et tube de direction sur le même axe, penché de 20° : la couronne se tient à 0,405 m de l'axe de roue,
-  // assez haut pour laisser passer le pneu sous le tube diagonal.
-  const tilt = (20 * Math.PI) / 180;
-  const headLow: Point = [front[0] - 0.405 * Math.sin(tilt), R + 0.405 * Math.cos(tilt)];
-  const headTop: Point = [headLow[0] - 0.09 * Math.sin(tilt), headLow[1] + 0.09 * Math.cos(tilt)];
-  const seatTop = P(152, 104);
-  // Le tube de selle et sa tige sont sur la même droite : le haut du triangle est à 68 % du chemin du boîtier à la selle.
-  const seatJoin: Point = [BB[0] + (seatTop[0] - BB[0]) * 0.68, BB[1] + (seatTop[1] - BB[1]) * 0.68];
-  const stayTop = P(171, 182);
-  const stem: Point = [headTop[0] + 0.1, headTop[1] + 0.02];
+  // Fourche et tube de direction sur le même axe, penché de 24° : la couronne est à 0,35 m de l'axe de roue, juste
+  // au-dessus du pneu (sur la photo, le tube diagonal frôle la roue sans l'entamer), et le tube de direction fait 16 cm.
+  const tilt = (24 * Math.PI) / 180;
+  const headLow: Point = [front[0] - 0.35 * Math.sin(tilt), R + 0.35 * Math.cos(tilt)];
+  const headTop: Point = [headLow[0] - 0.16 * Math.sin(tilt), headLow[1] + 0.16 * Math.cos(tilt)];
+  // Le dessus du cadre est celui de la photo : une tige de selle fine et inclinée, qui descend jusqu'à un nœud d'où
+  // part le tube horizontal ; en dessous, le tube de selle s'écarte autour de la roue arrière avant de revenir au boîtier.
+  const seatTop = P(152, 99);
+  const seatJoin = P(175, 140);
+  const seatBow = P(159, 182);
+  const seatLow = P(188, 237);
+  const stem: Point = [headTop[0] + 0.1, headTop[1] + 0.03];
 
   const logos = rimLogos(R - tyreM - tyreM * 0.6 - RIM_DEPTH, R - tyreM - tyreM * 0.6);
   const rimMat = pick(pbr({ color: 0x15171a, roughness: 0.32, metalness: 0.15 }));
   const wheels = [buildWheel(rear[0], R, tyreM, mats, rimMat, logos, mono), buildWheel(front[0], R, tyreM, mats, rimMat, logos, mono)];
   group.add(...wheels);
 
-  // Triangle principal : tube de selle droit, tube horizontal qui blanchit vers l'avant, gros tube diagonal.
-  group.add(profiled(BB, seatJoin, 0.03, 0.074, mats.black));
-  group.add(profiled(seatJoin, seatTop, 0.026, 0.048, mats.carbon));
+  // Triangle principal : tige fine, nœud, tube horizontal, tube de selle en arc, gros tube diagonal.
   const none = mono ? base : null;
-  group.add(...fadedTube(seatJoin, headTop, 0.032, 0.05, 0, (t) => smooth(0.35, 0.8, t), 16, none));
-  group.add(...fadedTube(BB, headLow, 0.046, 0.088, 0, (t) => smooth(0.8, 1, t), 5, none));
+  group.add(strut(seatTop, 0, seatJoin, 0, 0.022, 0.04, mats.black));
+  for (const [a, b] of [[seatJoin, seatBow], [seatBow, seatLow], [seatLow, BB]] as [Point, Point][]) group.add(strut(a, 0, b, 0, 0.03, 0.06, mats.black));
+  for (const joint of [seatJoin, seatBow, seatLow]) {
+    const knuckle = ball(1, mats.black);
+    knuckle.scale.set(0.015, 0.03, 0.03);
+    knuckle.position.copy(at(joint[0], joint[1]));
+    group.add(knuckle);
+  }
+  group.add(...fadedTube(seatJoin, headTop, 0.032, 0.044, 0, (t) => smooth(0.35, 0.8, t), 16, none));
+  group.add(...fadedTube(BB, headLow, 0.046, 0.095, 0, (t) => smooth(0.8, 1, t), 5, none));
   group.add(profiled(headTop, headLow, 0.052, 0.076, mats.white));
   const shell = ball(1, mats.black);
   shell.scale.set(0.045, 0.05, 0.058);
@@ -225,7 +233,7 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   // Bases, haubans plongeants (ils rejoignent le tube de selle très bas), fourche blanche qui noircit vers l'axe.
   for (const side of [-1, 1]) {
     // Les haubans et les bases se rejoignent au tube de selle et au boîtier, et s'appuient sur une patte à l'axe de roue.
-    group.add(strut(rear, side * 0.048, BB, side * 0.03, 0.02, 0.034, mats.black), strut(rear, side * 0.048, stayTop, side * 0.012, 0.014, 0.026, mats.black));
+    group.add(strut(rear, side * 0.048, BB, side * 0.03, 0.02, 0.034, mats.black), strut(rear, side * 0.048, seatBow, side * 0.012, 0.014, 0.026, mats.black));
     for (const hub of [rear, front]) {
       const dropout = ball(1, mats.black);
       dropout.scale.set(0.013, 0.03, 0.03);
@@ -238,13 +246,13 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   // Tige et selle noires.
   const saddle = ball(1, mats.tape);
   saddle.scale.set(0.034, 0.014, 0.135);
-  saddle.position.copy(at(seatTop[0] - 0.012, seatTop[1] + 0.04));
+  saddle.position.copy(at(seatTop[0] - 0.01, seatTop[1] + 0.02));
   group.add(saddle);
   const nose = ball(1, mats.tape);
   nose.scale.set(0.02, 0.011, 0.04);
-  nose.position.copy(at(seatTop[0] + 0.12, seatTop[1] + 0.047));
+  nose.position.copy(at(seatTop[0] + 0.12, seatTop[1] + 0.027));
   group.add(nose);
-  for (const side of [-1, 1]) group.add(link([seatTop[0] - 0.09, seatTop[1] + 0.026], [seatTop[0] + 0.08, seatTop[1] + 0.03], 0.0034, mats.metal, side * 0.026));
+  for (const side of [-1, 1]) group.add(link([seatTop[0] - 0.09, seatTop[1] + 0.006], [seatTop[0] + 0.08, seatTop[1] + 0.01], 0.0034, mats.metal, side * 0.026));
 
   // Cockpit intégré : potence blanche, ailes plates un peu en arrière, puis cocottes et guidon noirs.
   group.add(profiled([headTop[0] + 0.004, headTop[1] + 0.004], stem, 0.04, 0.05, mats.white));
@@ -345,7 +353,7 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   group.add(...nameDecal('COLNAGO', BB, headLow, 0.046));
 
   // Le coureur : bassin sur la selle, mains sur les cocottes ; le buste plus couché que sur les autres vélos, cockpit long.
-  const hip: Point = [seatTop[0] - 0.09, seatTop[1] + 0.04 + 0.075 + 0.02];
+  const hip: Point = [seatTop[0] - 0.09, seatTop[1] + 0.02 + 0.075 + 0.02];
   const fit: RiderFit = {
     bb: BB,
     crank: CRANK,
