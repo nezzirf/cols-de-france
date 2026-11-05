@@ -107,7 +107,7 @@ function buildWheel(x: number, radius: number, tyre: number, mats: Mats, rimMat:
       wheel.add(spoke);
     }
   }
-  const rotor = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.003, 24).rotateZ(Math.PI / 2), mats.metal);
+  const rotor = new THREE.Mesh(new THREE.RingGeometry(0.046, 0.08, 40, 1).rotateY(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x6d7178, metalness: 0.8, roughness: 0.5, side: THREE.DoubleSide }));
   rotor.position.x = -0.05;
   wheel.add(rotor);
   return wheel;
@@ -155,7 +155,7 @@ function nameDecal(text: string, a: Point, b: Point, width: number): THREE.Mesh[
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(length, length * 0.19), material);
     const normal = new THREE.Vector3(side, 0, 0);
     // Le nom se lit de l'arrière vers l'avant à droite du vélo, et dans l'autre sens à gauche.
-    const x = new THREE.Vector3().subVectors(to, from).normalize().multiplyScalar(-side);
+    const x = new THREE.Vector3().subVectors(to, from).normalize().multiplyScalar(side);
     const y = new THREE.Vector3().crossVectors(normal, x);
     plane.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, normal));
     plane.position.copy(from).lerp(to, 0.5);
@@ -198,7 +198,7 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   group.add(profiled(BB, seatJoin, 0.03, 0.074, mats.black));
   group.add(profiled(seatJoin, seatTop, 0.026, 0.048, mats.carbon));
   const none = mono ? base : null;
-  group.add(...fadedTube(seatJoin, headTop, 0.032, 0.05, 0, (t) => smooth(0.35, 0.8, t), 6, none));
+  group.add(...fadedTube(seatJoin, headTop, 0.032, 0.05, 0, (t) => smooth(0.35, 0.8, t), 16, none));
   group.add(...fadedTube(BB, headLow, 0.046, 0.108, 0, (t) => smooth(0.8, 1, t), 5, none));
   group.add(profiled(headTop, headLow, 0.052, 0.076, mats.white));
   const shell = ball(1, mats.black);
@@ -213,7 +213,7 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   // Bases, haubans plongeants (ils rejoignent le tube de selle très bas), fourche blanche qui noircit vers l'axe.
   for (const side of [-1, 1]) {
     group.add(profiled(rear, BB, 0.02, 0.034, mats.black, side * 0.05), profiled(rear, stayTop, 0.014, 0.026, mats.black, side * 0.045));
-    group.add(...fadedTube([headLow[0] + 0.004, headLow[1] - 0.012], front, 0.024, 0.052, side * 0.05, (t) => 1 - smooth(0.1, 0.75, t), 6, none));
+    group.add(...fadedTube([headLow[0] + 0.004, headLow[1] - 0.012], front, 0.024, 0.052, side * 0.05, (t) => 1 - smooth(0.1, 0.75, t), 16, none));
   }
 
   // Tige et selle noires.
@@ -228,7 +228,7 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   for (const side of [-1, 1]) group.add(link([seatTop[0] - 0.09, seatTop[1] + 0.026], [seatTop[0] + 0.08, seatTop[1] + 0.03], 0.0034, mats.metal, side * 0.026));
 
   // Cockpit intégré : potence blanche, ailes plates un peu en arrière, puis cocottes et guidon noirs.
-  group.add(profiled([headTop[0] - 0.002, headTop[1] + 0.012], stem, 0.04, 0.05, mats.white));
+  group.add(profiled([headTop[0] + 0.004, headTop[1] + 0.004], stem, 0.04, 0.05, mats.white));
   const side0 = (sign: number): THREE.Group => {
     const path = new THREE.CatmullRomCurve3([
       at(stem[0], stem[1], 0),
@@ -248,7 +248,7 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
     hood.position.copy(at(stem[0] + 0.125, stem[1] + 0.04, sign * 0.213));
     hood.rotation.x = 0.35;
     bar.add(hood);
-    bar.add(profiled([stem[0] + 0.15, stem[1] + 0.045], [stem[0] + 0.19, stem[1] - 0.04], 0.008, 0.018, mats.carbon, sign * 0.213));
+    bar.add(profiled([stem[0] + 0.178, stem[1] + 0.005], [stem[0] + 0.205, stem[1] - 0.065], 0.008, 0.016, mats.carbon, sign * 0.213));
     return bar;
   };
   group.add(side0(-1), side0(1));
