@@ -8,8 +8,9 @@ import type { AssetBike, RiderFit } from './bikeFromAsset';
 import type { Point } from './modelParts';
 
 const BB = { fx: 0, y: 0.267 };
-/** Rayon du pneu dans le jeu ; celui du modèle est 1,39 fois plus grand. */
-const TYRE_R = 0.335;
+/** Rayon du pneu de la roue de route du jeu (la physique l'utilise) et rayon montré à l'écran : le modèle, lui, a 0,4665. */
+const GAME_TYRE_R = 0.335;
+const TYRE_R = 0.41;
 const MODEL_TYRE_R = 0.4665;
 const HUB_Y = 0.337;
 const REAR_HUB = -0.404;
@@ -33,7 +34,7 @@ const MESH_COUNT = 79;
 export function buildRcrBike(wheelRadiusM: number, material: THREE.Material | null): AssetBike {
   const group = new THREE.Group();
   const root = cloneRcrAsset();
-  const scale = wheelRadiusM / TYRE_R;
+  const scale = wheelRadiusM / GAME_TYRE_R;
   const bb: Point = [0.03, (BB.y - (HUB_Y - TYRE_R)) * scale];
   const onBike = (fx: number, y: number): Point => [bb[0] + (fx - BB.fx) * scale, (y - (HUB_Y - TYRE_R)) * scale];
   // Le modèle regarde vers +X, le jeu vers -Z ; le sol du modèle est sous le moyeu, à un rayon de pneu.
