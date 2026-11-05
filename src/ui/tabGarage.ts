@@ -1,6 +1,7 @@
 // Onglet Garage : choix du vélo et du maillot.
 
 import { ALL_BIKES, BIKE_JERSEY, type Bike, type BikeShape, findBike, JERSEYS, setupFor, wearing } from '../sim/bikes';
+import type { KitStyle, Livery } from '../sim/kits';
 import { steadySpeed } from '../sim/physicsEngine';
 import { esc, fr, hex } from './format';
 import type { MenuContext } from './menu';
@@ -28,12 +29,36 @@ function bikeIcon(b: Bike): string {
   </svg>`;
 }
 
-function jerseyIcon(color: number, accent: number): string {
+let iconCount = 0;
+
+/** Le maillot vu de face, avec le motif de la seconde couleur et les manches de la tenue. */
+function jerseyIcon(color: number, accent: number, livery: Livery | null = null): string {
   const body = 'M38 8 22 14 6 34l14 10 8-9v47h44V35l8 9 14-10L78 14 62 8c-3 6-21 6-24 0Z';
+  const id = `j${iconCount++}`;
+  const second = hex(livery?.second ?? accent);
+  const patterns: Record<KitStyle, string> = {
+    plain: livery ? '' : `<rect x="0" y="44" width="100" height="11" fill="${second}"/>`,
+    band: `<rect x="0" y="36" width="100" height="12" fill="${second}"/>`,
+    hem: `<rect x="0" y="62" width="100" height="30" fill="${second}"/>`,
+    half: `<rect x="0" y="50" width="100" height="42" fill="${second}"/>`,
+    fade: `<rect x="0" y="0" width="100" height="90" fill="url(#${id}f)"/>`,
+    diag: `<polygon points="0,66 0,54 100,18 100,30" fill="${second}"/>`,
+    shoulder: `<polygon points="52,0 100,0 100,34 60,34" fill="${second}"/>`,
+    side: `<rect x="28" y="30" width="10" height="60" fill="${second}"/><rect x="62" y="30" width="10" height="60" fill="${second}"/>`,
+    sweep: `<rect x="0" y="0" width="100" height="90" fill="url(#${id}s)"/>`,
+    center: `<rect x="46" y="0" width="8" height="90" fill="${second}"/><rect x="34" y="0" width="3" height="90" fill="${second}"/><rect x="63" y="0" width="3" height="90" fill="${second}"/>`,
+  };
+  const sleeve = (x: number, w: number, c: number | null | undefined) =>
+    c == null ? '' : `<rect x="${x}" y="0" width="${w}" height="46" fill="${hex(c)}"/>`;
   return `<svg viewBox="0 0 100 90" aria-hidden="true">
-    <defs><clipPath id="j${color}${accent}"><path d="${body}"/></clipPath></defs>
-    <path d="${body}" fill="${hex(color)}" stroke="rgba(0,0,0,.18)" stroke-width="1.5"/>
-    <rect x="0" y="44" width="100" height="11" fill="${hex(accent)}" clip-path="url(#j${color}${accent})"/>
+    <defs>
+      <clipPath id="${id}"><path d="${body}"/></clipPath>
+      <linearGradient id="${id}f" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${second}"/><stop offset="0.85" stop-color="${second}" stop-opacity="0"/></linearGradient>
+      <linearGradient id="${id}s" x1="0" y1="0" x2="1" y2="0"><stop offset="0.2" stop-color="${second}" stop-opacity="0"/><stop offset="0.8" stop-color="${second}"/></linearGradient>
+    </defs>
+    <path d="${body}" fill="${hex(color)}"/>
+    <g clip-path="url(#${id})">${patterns[livery?.style ?? 'plain']}${sleeve(0, 26, livery?.sleeveL)}${sleeve(74, 26, livery?.sleeveR)}</g>
+    <path d="${body}" fill="none" stroke="rgba(0,0,0,.18)" stroke-width="1.5"/>
   </svg>`;
 }
 
@@ -114,13 +139,13 @@ export function renderGarage(page: HTMLElement, ctx: MenuContext): void {
     const bike = wearing(findBike(p.bikeId), BIKE_JERSEY);
     body.innerHTML = `<div class="m-grid m-grid-jersey">
       <button class="m-item" data-j="${BIKE_JERSEY}" aria-pressed="${p.jerseyId === BIKE_JERSEY}">
-        ${jerseyIcon(bike.jersey, bike.accent)}
+        ${jerseyIcon(bike.jersey, bike.accent, bike.team ? bike.livery : null)}
         <b>Tenue du vélo</b>
         <span>${esc(bike.team?.name ?? 'Tenue neutre')}</span>
       </button>
       ${JERSEYS.map(
         (j) => `<button class="m-item" data-j="${j.id}" aria-pressed="${j.id === p.jerseyId}">
-          ${jerseyIcon(j.color, j.accent)}
+          ${jerseyIcon(j.color, j.accent, j.livery)}
           <b>${esc(j.name)}</b>
           <span>${j.team ? 'Équipe' : 'Uni'}</span>
         </button>`,

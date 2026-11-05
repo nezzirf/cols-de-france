@@ -11,14 +11,17 @@ export function bikeShape(bike: Bike): RiderLook {
 
 export function dressedRider(bike: Bike): RiderModel {
   const fabric = fabricTexture();
+  const { livery } = bike;
   return createRiderModel(
     textile({ color: bike.jersey, bumpMap: fabric, bumpScale: 1.4 }),
-    textile({ color: 0x16181c, roughness: 0.55, bumpMap: fabric, bumpScale: 1 }),
+    textile({ color: livery.shorts, roughness: 0.55, bumpMap: fabric, bumpScale: 1 }),
     {
       ...bikeShape(bike),
       frame: lacquer({ color: bike.frame }),
       paint: lacquer({ color: bike.accent }),
-      accent: pbr({ color: bike.accent, roughness: 0.34 }),
+      accent: pbr({ color: livery.trim, roughness: 0.34 }),
+      helmet: pbr({ color: livery.helmet, roughness: 0.34 }),
+      livery,
       brand: bike.brand ?? undefined,
     },
   );

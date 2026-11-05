@@ -3,6 +3,7 @@
 // les cocottes ; le buste reste penché sur le vélo.
 
 import * as THREE from 'three';
+import { KIT_STYLES, type Livery } from '../sim/kits';
 import type { RiderFit } from './bikeFromAsset';
 import { at } from './modelParts';
 import { cloneRiderAsset, type HeadFrame, riderGlasses, riderHead, riderHelmetGeometry } from './riderAsset';
@@ -73,13 +74,16 @@ function joint(from: THREE.Vector3, to: THREE.Vector3, first: number, second: nu
 export interface Outfit {
   jersey: THREE.Material;
   shorts: THREE.Material;
-  /** Casque. */
+  /** Liserés du col, des manches et de la taille. */
   accent: THREE.Material;
+  helmet: THREE.Material;
+  /** Motif du maillot et couleur des manches ; absent, le maillot est uni. */
+  livery?: Livery;
   /** Tout en une seule matière, comme une statue. */
   mono: boolean;
 }
 
-const CLOTH_UNIFORMS = ['uJersey', 'uShorts', 'uGloves', 'uShoes', 'uSocks', 'uAccent'] as const;
+const CLOTH_UNIFORMS = ['uJersey', 'uShorts', 'uGloves', 'uShoes', 'uSocks', 'uAccent', 'uSecond', 'uSleeveL', 'uSleeveR'] as const;
 
 /** Les trois poches dorsales du maillot : centres espacés de 10,5 cm, 9,4 cm de large, 14 cm de haut, au bas du dos. */
 const POCKET_SDF = `
@@ -110,9 +114,14 @@ function dressSkin(source: THREE.MeshStandardMaterial, outfit: Outfit): THREE.Me
     uShoes: new THREE.Color(0xeeeeea),
     uSocks: new THREE.Color(0xf4f4f1),
     uAccent: colorOf(outfit.accent),
+    uSecond: new THREE.Color(outfit.livery?.second ?? 0),
+    uSleeveL: outfit.livery?.sleeveL != null ? new THREE.Color(outfit.livery.sleeveL) : colorOf(outfit.jersey),
+    uSleeveR: outfit.livery?.sleeveR != null ? new THREE.Color(outfit.livery.sleeveR) : colorOf(outfit.jersey),
   };
+  const style = Math.max(0, KIT_STYLES.indexOf(outfit.livery?.style ?? 'plain'));
   skin.onBeforeCompile = (shader) => {
     for (const name of CLOTH_UNIFORMS) shader.uniforms[name] = { value: colors[name] };
+    shader.uniforms.uStyle = { value: style };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\nattribute vec3 aRest;\nvarying vec3 vRest;${POCKET_SDF}`)
       // Les poches du dos sont en léger relief : la peau se gonfle de 7 mm, bords arrondis.
@@ -126,7 +135,7 @@ function dressSkin(source: THREE.MeshStandardMaterial, outfit: Outfit): THREE.Me
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
-        `#include <common>\nvarying vec3 vRest;\nuniform vec3 uJersey;\nuniform vec3 uShorts;\nuniform vec3 uGloves;\nuniform vec3 uShoes;\nuniform vec3 uSocks;\nuniform vec3 uAccent;${POCKET_SDF}`,
+        `#include <common>\nvarying vec3 vRest;\nuniform vec3 uJersey;\nuniform vec3 uShorts;\nuniform vec3 uGloves;\nuniform vec3 uShoes;\nuniform vec3 uSocks;\nuniform vec3 uAccent;\nuniform vec3 uSecond;\nuniform vec3 uSleeveL;\nuniform vec3 uSleeveR;\nuniform float uStyle;${POCKET_SDF}`,
       )
       .replace(
         '#include <map_fragment>',
@@ -158,6 +167,25 @@ function dressSkin(source: THREE.MeshStandardMaterial, outfit: Outfit): THREE.Me
         float lip = pocket * smoothstep(1.185 - w, 1.185 + w, y);
         float zip = (1.0 - smoothstep(0.0025, 0.0045, ax)) * front * jersey;
         vec3 jerseyCol = uJersey;
+        // Motif de la seconde couleur sur le torse (rel : 0 à la taille, 1 au col), puis manches.
+        float rel = clamp((y - 1.03) / (collar - 1.03), 0.0, 1.0);
+        float sx = vRest.x;
+        float panel = 0.0;
+        if (uStyle < 0.5) panel = 0.0;
+        else if (uStyle < 1.5) panel = smoothstep(0.38, 0.41, rel) * (1.0 - smoothstep(0.62, 0.65, rel));
+        else if (uStyle < 2.5) panel = 1.0 - smoothstep(0.2, 0.23, rel);
+        else if (uStyle < 3.5) panel = 1.0 - smoothstep(0.38, 0.41, rel);
+        else if (uStyle < 4.5) panel = 1.0 - smoothstep(0.05, 0.9, rel);
+        else if (uStyle < 5.5) {
+          float v = rel - 0.55 - 1.6 * sx;
+          panel = max(1.0 - smoothstep(0.09, 0.11, abs(v)), 1.0 - smoothstep(0.025, 0.04, abs(v - 0.3)));
+        }
+        else if (uStyle < 6.5) panel = smoothstep(0.02, 0.06, -sx) * smoothstep(0.6, 0.65, rel);
+        else if (uStyle < 7.5) panel = smoothstep(0.11, 0.115, ax);
+        else if (uStyle < 8.5) panel = smoothstep(-0.18, 0.18, sx);
+        else panel = max(1.0 - smoothstep(0.03, 0.036, ax), smoothstep(0.07, 0.074, ax) * (1.0 - smoothstep(0.098, 0.102, ax)));
+        jerseyCol = mix(jerseyCol, uSecond, panel * (1.0 - armZone));
+        jerseyCol = mix(jerseyCol, sx > 0.0 ? uSleeveL : uSleeveR, armZone);
         jerseyCol *= 1.0 - 0.1 * smoothstep(0.11, 0.17, ax) * (1.0 - armZone);
         float weave = fract(sin(dot(floor(vRest.xy * 200.0 + vRest.z * 150.0), vec2(12.9898, 78.233))) * 43758.5453);
         jerseyCol *= 0.985 + 0.03 * weave;
@@ -277,7 +305,7 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
     // Casque modélisé : mis à la largeur de la tête, posé sur le crâne, bordure au niveau du front.
     const box = new THREE.Box3().setFromBufferAttribute(modelled.getAttribute('position') as THREE.BufferAttribute);
     const scale = (skull.width + HELMET_FIT.margin) / (box.max.x - box.min.x);
-    const shell = new THREE.Mesh(modelled, outfit.mono ? outfit.jersey : modelledHelmetMaterial(outfit.accent));
+    const shell = new THREE.Mesh(modelled, outfit.mono ? outfit.jersey : modelledHelmetMaterial(outfit.helmet));
     shell.scale.setScalar(scale);
     shell.rotation.set(HELMET_FIT.pitch, 0, 0);
     shell.position.set(skull.centre.x, skull.top + HELMET_FIT.lift - box.max.y * scale, skull.centre.z + HELMET_FIT.forward);
@@ -289,7 +317,7 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
     lining.position.set(shell.position.x, skull.top + HELMET_FIT.lift - 0.006 - box.max.y * scale * 0.95, shell.position.z);
     fitted.add(lining);
   } else {
-    fitted.add(new THREE.Mesh(skull.shell, outfit.mono ? outfit.jersey : helmetMaterial(outfit.accent, skull)));
+    fitted.add(new THREE.Mesh(skull.shell, outfit.mono ? outfit.jersey : helmetMaterial(outfit.helmet, skull)));
   }
   for (const side of [-1, 1]) {
     const strap = new THREE.Mesh(turned([0.0045, 0.0045], 6), dark);

@@ -327,7 +327,7 @@ export class Menu {
     const go = this.q<HTMLButtonElement>('[data-a="start"]');
     if (!go.disabled) go.textContent = group ? 'Rouler en peloton' : 'Rouler';
 
-    const key = `${bike.id}|${bike.jersey}`;
+    const key = `${bike.id}|${bike.jersey}|${JSON.stringify(bike.livery)}`;
     if (key !== this.shownBike) {
       this.shownBike = key;
       this.preview?.show(bike);

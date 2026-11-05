@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import type { BikeShape } from '../sim/bikes';
+import type { Livery } from '../sim/kits';
 import { BB as BB_POINT, type BikeLook, buildBike, WHEEL_TURNS_PER_CRANK } from './bikeModel';
 import { pbr, skinMaterial } from './materials';
 import { at, ball, place, type Point, sculpt, turned, weldNormals } from './modelParts';
@@ -25,6 +26,10 @@ export { helmetPoint };
 export interface RiderLook extends BikeLook {
   /** Couleur du casque et des bandes du maillot ; absente, elle reprend le maillot. */
   accent?: THREE.Material;
+  /** Couleur du casque ; absente, elle reprend celle des bandes. */
+  helmet?: THREE.Material;
+  /** Motif du maillot, manches et couleurs de la tenue d'équipe. */
+  livery?: Livery;
   /** Une seule matière pour tout le corps, comme une statue. */
   mono?: boolean;
 }
@@ -127,7 +132,7 @@ export function createRiderModel(jersey: THREE.Material, kit: THREE.Material, lo
 
   // Cycliste modélisé : un personnage rigué, dont les membres suivent les pédales et le cintre.
   if (fit && riderAssetReady()) {
-    const body = buildAssetRider(fit, { jersey, shorts: kit, accent, mono });
+    const body = buildAssetRider(fit, { jersey, shorts: kit, accent, helmet: look.helmet ?? accent, livery: look.livery, mono });
     group.add(body.group);
     const pose = (crankAngle: number) => {
       bike.drive(crankAngle);
