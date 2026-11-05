@@ -55,3 +55,12 @@ describe('maillot choisi', () => {
     expect(dressed.livery.style).toBe('plain');
   });
 });
+
+describe('modèles 3D propres à un vélo', () => {
+  it('donne le Van Rysel RCR modélisé au seul RCR-R de Decathlon', () => {
+    const withAsset = ALL_BIKES.filter((b) => b.asset).map((b) => b.id);
+    expect(withAsset).toEqual(['decathlon:RCR-R']);
+    expect(findBike('decathlon:RCR-R').asset).toBe('rcr');
+    expect(findBike('decathlon:RCR-F').asset).toBeUndefined();
+  });
+});

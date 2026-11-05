@@ -1,10 +1,11 @@
 // Vélo détaillé : cadre selon la silhouette du modèle, roues, transmission, poste de pilotage.
 
 import * as THREE from 'three';
-import type { BikeShape } from '../sim/bikes';
+import type { BikeAssetId, BikeShape } from '../sim/bikes';
 import type { FrameDesign } from '../sim/bikeDesigns';
-import { bikeAssetReady } from './bikeAsset';
+import { bikeAssetReady, rcrAssetReady } from './bikeAsset';
 import { type AssetCoat, buildAssetBike, type RiderFit } from './bikeFromAsset';
+import { buildRcrBike } from './bikeRcr';
 import { buildChain, type Wheel } from './chain';
 import { pbr } from './materials';
 import { at, ball, link, place, type Point, profiled, turned } from './modelParts';
@@ -32,6 +33,8 @@ export interface BikeLook {
   paint?: THREE.Material;
   /** Seconde couleur en dégradé sur le cadre du vélo modélisé. */
   coat?: AssetCoat | null;
+  /** Modèle 3D propre au vélo choisi, avec sa peinture d'origine. */
+  asset?: BikeAssetId;
 }
 
 /** Points du cadre, en fonction de la silhouette. */
@@ -234,6 +237,10 @@ function chainringGroup(teeth: number, outer: number, mats: Mats): THREE.Group {
 }
 
 export function buildBike(look: BikeLook, base: THREE.Material, mono: boolean): { group: THREE.Group; wheels: THREE.Group[]; drive(crankAngle: number): void; fit?: RiderFit } {
+  if (look.asset === 'rcr' && look.shape === 'route' && rcrAssetReady()) {
+    const bike = buildRcrBike(look.wheelRadiusM, mono ? base : null);
+    return { group: bike.group, wheels: [], drive: (crank) => bike.drive(crank, crank * WHEEL_TURNS_PER_CRANK), fit: bike.fit };
+  }
   // Vélo de route : le modèle fait par un artiste, quand son fichier est chargé.
   if (look.shape === 'route' && bikeAssetReady()) {
     const paintColor = ((look.frame ?? base) as THREE.MeshStandardMaterial).color ?? new THREE.Color(0xc41d16);

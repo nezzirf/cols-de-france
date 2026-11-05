@@ -34,6 +34,9 @@ export const BIKE_KINDS: Record<BikeKind, BikeSpec> = {
   ville: { label: 'Vélo de ville', kg: 15, cda: 0.53, crr: 0.0066, wheelRadiusM: 0.345, wheelInertia: 0.45, shape: 'ville', tyreM: 0.022 },
 };
 
+/** Vélo modélisé à part, avec sa propre peinture. */
+export type BikeAssetId = 'rcr';
+
 /** Peinture du cadre : une seconde couleur qui gagne l'arrière, l'avant, le bas ou le haut, et une fourche à part. */
 export type BikeCoat = { second: number; fade: 'rear' | 'front' | 'low' | 'high'; fork?: number } | null;
 
@@ -49,7 +52,7 @@ export interface Team {
   livery: Livery;
   /** Seconde couleur du cadre : elle gagne l'arrière ou le bas. */
   coat: BikeCoat;
-  models: { name: string; kind: BikeKind }[];
+  models: { name: string; kind: BikeKind; asset?: BikeAssetId }[];
 }
 
 export const TEAMS: Team[] = [
@@ -69,7 +72,7 @@ export const TEAMS: Team[] = [
     id: 'decathlon', name: 'Decathlon CMA CGM', brand: 'Van Rysel', jersey: 0x1fb0b6, accent: 0xffffff, frame: 0x10285a,
     livery: livery('sweep', 0x1d4fbf, { shorts: 0x0b2f5e, helmet: 0x1fb0b6, trim: 0xe3262e }),
     coat: { second: 0xa8e0c0, fade: 'front', fork: 0xa8e0c0 },
-    models: [{ name: 'RCR-F', kind: 'aero' }, { name: 'RCR-R', kind: 'grimpeur' }, { name: 'RCR-X', kind: 'clm' }],
+    models: [{ name: 'RCR-F', kind: 'aero' }, { name: 'RCR-R', kind: 'grimpeur', asset: 'rcr' }, { name: 'RCR-X', kind: 'clm' }],
   },
   {
     id: 'ef', name: 'EF Education-EasyPost', brand: 'Cannondale', jersey: 0xe8348b, accent: 0x1e2a78, frame: 0xe8348b,
@@ -175,6 +178,8 @@ export interface Bike extends BikeSpec {
   /** Tenue du coureur : motif du maillot, manches, cuissard, casque. */
   livery: Livery;
   coat: BikeCoat;
+  /** Modèle 3D propre à ce vélo ; absent, le jeu habille son vélo de route générique. */
+  asset?: BikeAssetId;
 }
 
 /** Vélos sans équipe, habillés d'une tenue neutre. */
@@ -215,6 +220,7 @@ const teamBikes: Bike[] = TEAMS.flatMap((team) =>
     frame: team.frame,
     livery: team.livery,
     coat: team.coat,
+    asset: m.asset,
   })),
 );
 

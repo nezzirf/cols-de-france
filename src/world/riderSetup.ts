@@ -6,7 +6,7 @@ import { createRiderModel, type RiderLook, type RiderModel } from './rider';
 import { fabricTexture } from './riderTextures';
 
 export function bikeShape(bike: Bike): RiderLook {
-  return { shape: bike.shape, tyreM: bike.tyreM, wheelRadiusM: bike.wheelRadiusM, design: bike.design };
+  return { shape: bike.shape, tyreM: bike.tyreM, wheelRadiusM: bike.wheelRadiusM, design: bike.design, asset: bike.asset };
 }
 
 export function dressedRider(bike: Bike): RiderModel {
