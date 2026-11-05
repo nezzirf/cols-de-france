@@ -16,7 +16,7 @@ const HUB_Y = 0.337;
 const REAR_HUB = -0.404;
 const FRONT_HUB = 0.586;
 const SADDLE = { fx: -0.2, top: 0.97 };
-const HOOD = { fx: 0.58, y: 0.905 };
+const HOOD = { fx: 0.605, y: 0.925 };
 /** Pédale gauche au repos, en haut, un peu en avant ; la droite est en bas, à l'opposé. */
 const LEFT_PEDAL: Point = [0.014, 0.439];
 const RIGHT_PEDAL: Point = [-0.014, 0.095];
