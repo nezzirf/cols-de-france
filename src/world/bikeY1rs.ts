@@ -183,12 +183,15 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   const R = wheelRadiusM;
   const rear: Point = [P(88, 240)[0], R];
   const front: Point = [P(350, 240)[0], R];
-  const headTop = P(298, 128);
-  const headLow = P(320, 180);
+  // Fourche et tube de direction sur le même axe, penché de 20° : la couronne se tient à 0,405 m de l'axe de roue,
+  // assez haut pour laisser passer le pneu sous le tube diagonal.
+  const tilt = (20 * Math.PI) / 180;
+  const headLow: Point = [front[0] - 0.405 * Math.sin(tilt), R + 0.405 * Math.cos(tilt)];
+  const headTop: Point = [headLow[0] - 0.09 * Math.sin(tilt), headLow[1] + 0.09 * Math.cos(tilt)];
   const seatJoin = P(176, 150);
   const seatTop = P(152, 104);
   const stayTop = P(171, 182);
-  const stem: Point = [headTop[0] + 0.115, headTop[1] + 0.04];
+  const stem: Point = [headTop[0] + 0.1, headTop[1] + 0.02];
 
   const logos = rimLogos(R - tyreM - tyreM * 0.6 - RIM_DEPTH, R - tyreM - tyreM * 0.6);
   const rimMat = pick(pbr({ color: 0x15171a, roughness: 0.32, metalness: 0.15 }));
@@ -200,7 +203,7 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   group.add(profiled(seatJoin, seatTop, 0.026, 0.048, mats.carbon));
   const none = mono ? base : null;
   group.add(...fadedTube(seatJoin, headTop, 0.032, 0.05, 0, (t) => smooth(0.35, 0.8, t), 16, none));
-  group.add(...fadedTube(BB, headLow, 0.046, 0.108, 0, (t) => smooth(0.8, 1, t), 5, none));
+  group.add(...fadedTube(BB, headLow, 0.046, 0.088, 0, (t) => smooth(0.8, 1, t), 5, none));
   group.add(profiled(headTop, headLow, 0.052, 0.076, mats.white));
   const shell = ball(1, mats.black);
   shell.scale.set(0.045, 0.05, 0.058);
@@ -208,13 +211,13 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   group.add(shell);
   const crown = ball(1, mats.white);
   crown.scale.set(0.034, 0.03, 0.05);
-  crown.position.copy(at(headLow[0] + 0.006, headLow[1] - 0.01));
+  crown.position.copy(at(headLow[0], headLow[1]));
   group.add(crown);
 
   // Bases, haubans plongeants (ils rejoignent le tube de selle très bas), fourche blanche qui noircit vers l'axe.
   for (const side of [-1, 1]) {
     group.add(profiled(rear, BB, 0.02, 0.034, mats.black, side * 0.05), profiled(rear, stayTop, 0.014, 0.026, mats.black, side * 0.045));
-    group.add(...fadedTube([headLow[0] + 0.004, headLow[1] - 0.012], front, 0.024, 0.052, side * 0.05, (t) => 1 - smooth(0.1, 0.75, t), 16, none));
+    group.add(...fadedTube(headLow, front, 0.024, 0.052, side * 0.05, (t) => 1 - smooth(0.1, 0.75, t), 16, none));
   }
 
   // Tige et selle noires.
