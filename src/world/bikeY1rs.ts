@@ -20,7 +20,8 @@ const PX = 0.00399;
 const P = (px: number, py: number): Point => [BB[0] + (px - 190) * PX, BB[1] + (252 - py) * PX];
 
 const BLACK = new THREE.Color(0x14161a);
-const WHITE = new THREE.Color(0xeceef1);
+/** Un blanc cassé, gris clair : à 0xeceef1 et vernis brillant, il sature en pleine lumière et perd tout relief. */
+const WHITE = new THREE.Color(0xc4c9d0);
 const smooth = (a: number, b: number, v: number): number => {
   const t = Math.min(1, Math.max(0, (v - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -131,7 +132,7 @@ function fadedTube(a: Point, b: Point, width: number, depth: number, side: numbe
     const t1 = (i + 1) / steps;
     const p = (t: number): Point => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
     // Un léger chevauchement évite les fentes entre tronçons.
-    const mat = mono ?? lacquer({ color: BLACK.clone().lerp(WHITE, share((t0 + t1) / 2)), roughness: 0.28, clearcoat: 0.6 });
+    const mat = mono ?? lacquer({ color: BLACK.clone().lerp(WHITE, share((t0 + t1) / 2)), roughness: 0.3 + 0.2 * share((t0 + t1) / 2), clearcoat: 0.6 - 0.45 * share((t0 + t1) / 2) });
     out.push(profiled(p(t0), p(Math.min(1, t1 + 0.02)), width, depth, mat, side));
   }
   return out;
@@ -170,7 +171,7 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   const pick = (m: THREE.Material): THREE.Material => base ?? m;
   const mats: Mats = {
     black: pick(lacquer({ color: BLACK, roughness: 0.28, clearcoat: 0.6 })),
-    white: pick(lacquer({ color: WHITE, roughness: 0.3, clearcoat: 0.6 })),
+    white: pick(lacquer({ color: WHITE, roughness: 0.5, clearcoat: 0.15 })),
     carbon: pick(pbr({ color: 0x1b1d21, roughness: 0.38, metalness: 0.1 })),
     rubber: pick(pbr({ color: 0x141517, roughness: 0.95 })),
     metal: pick(pbr({ color: 0xb4b8bd, roughness: 0.32, metalness: 0.9 })),
