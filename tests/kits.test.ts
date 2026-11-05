@@ -17,7 +17,7 @@ describe('tenues des équipes', () => {
   it('peint le cadre de chaque équipe de deux couleurs, la seconde en dégradé', () => {
     for (const t of TEAMS) {
       expect(t.coat).not.toBeNull();
-      expect(['rear', 'low']).toContain(t.coat!.fade);
+      expect(['rear', 'front', 'low', 'high']).toContain(t.coat!.fade);
       expect(t.coat!.second).not.toBe(t.frame);
     }
     for (const b of ALL_BIKES.filter((b) => b.team)) expect(b.coat).toBe(b.team!.coat);

@@ -34,7 +34,8 @@ export const BIKE_KINDS: Record<BikeKind, BikeSpec> = {
   ville: { label: 'Vélo de ville', kg: 15, cda: 0.53, crr: 0.0066, wheelRadiusM: 0.345, wheelInertia: 0.45, shape: 'ville', tyreM: 0.022 },
 };
 
-export type BikeCoat = { second: number; fade: 'rear' | 'low' } | null;
+/** Peinture du cadre : une seconde couleur qui gagne l'arrière, l'avant, le bas ou le haut, et une fourche à part. */
+export type BikeCoat = { second: number; fade: 'rear' | 'front' | 'low' | 'high'; fork?: number } | null;
 
 export interface Team {
   id: string;
@@ -53,27 +54,27 @@ export interface Team {
 
 export const TEAMS: Team[] = [
   {
-    id: 'alpecin', name: 'Alpecin-Premier Tech', brand: 'Canyon', jersey: 0x1d57b8, accent: 0xe8362e, frame: 0x13357a,
+    id: 'alpecin', name: 'Alpecin-Premier Tech', brand: 'Canyon', jersey: 0x1d57b8, accent: 0xe8362e, frame: 0x15171a,
     livery: livery('hem', 0x0f2f6b, { shorts: 0x10243f, helmet: 0x1d57b8, trim: 0xe8362e }),
-    coat: { second: 0x3a7fd0, fade: 'low' },
+    coat: { second: 0x1d57b8, fade: 'low' },
     models: [{ name: 'Aeroad CFR', kind: 'aero' }, { name: 'Ultimate CFR', kind: 'grimpeur' }, { name: 'Speedmax CFR', kind: 'clm' }],
   },
   {
-    id: 'bahrain', name: 'Bahrain Victorious', brand: 'Bianchi', jersey: 0x0b1f4a, accent: 0x12284c, frame: 0x7fcfc4,
+    id: 'bahrain', name: 'Bahrain Victorious', brand: 'Bianchi', jersey: 0x0b1f4a, accent: 0x12284c, frame: 0x0b1f4a,
     livery: livery('plain', 0x0b1f4a, { sleeveL: 0x69c6e8, sleeveR: 0x69c6e8, shorts: 0x0b1f4a, helmet: 0x0b1f4a, trim: 0x69c6e8 }),
-    coat: { second: 0x0b1f4a, fade: 'low' },
+    coat: { second: 0x7fd6c4, fade: 'low', fork: 0x7fd6c4 },
     models: [{ name: 'Oltre RC', kind: 'aero' }, { name: 'Specialissima RC', kind: 'grimpeur' }, { name: 'Aquila RC', kind: 'clm' }],
   },
   {
-    id: 'decathlon', name: 'Decathlon CMA CGM', brand: 'Van Rysel', jersey: 0x1fb0b6, accent: 0xffffff, frame: 0x1fa8b0,
+    id: 'decathlon', name: 'Decathlon CMA CGM', brand: 'Van Rysel', jersey: 0x1fb0b6, accent: 0xffffff, frame: 0x10285a,
     livery: livery('sweep', 0x1d4fbf, { shorts: 0x0b2f5e, helmet: 0x1fb0b6, trim: 0xe3262e }),
-    coat: { second: 0x1d4fbf, fade: 'rear' },
+    coat: { second: 0xa8e0c0, fade: 'front', fork: 0xa8e0c0 },
     models: [{ name: 'RCR-F', kind: 'aero' }, { name: 'RCR-R', kind: 'grimpeur' }, { name: 'RCR-X', kind: 'clm' }],
   },
   {
     id: 'ef', name: 'EF Education-EasyPost', brand: 'Cannondale', jersey: 0xe8348b, accent: 0x1e2a78, frame: 0xe8348b,
     livery: livery('plain', 0xe8348b, { shorts: 0x1e2a78, helmet: 0xe8348b, trim: 0x1e2a78 }),
-    coat: { second: 0x8a4bd0, fade: 'low' },
+    coat: { second: 0x7a2fc0, fade: 'low' },
     models: [{ name: 'SuperSix Evo', kind: 'polyvalent' }, { name: 'SuperSlice', kind: 'clm' }],
   },
   {
@@ -83,21 +84,21 @@ export const TEAMS: Team[] = [
     models: [{ name: 'Filante SLR ID2', kind: 'aero' }, { name: 'Verticale SLR', kind: 'grimpeur' }, { name: 'Supersonica', kind: 'clm' }],
   },
   {
-    id: 'ineos', name: 'INEOS Grenadiers', brand: 'Pinarello', jersey: 0xff6a13, accent: 0xd7263d, frame: 0xff6a13,
+    id: 'ineos', name: 'INEOS Grenadiers', brand: 'Pinarello', jersey: 0xff6a13, accent: 0xd7263d, frame: 0xe3e5e8,
     livery: livery('half', 0xdfe2e6, { shorts: 0x8d9096, helmet: 0xff6a13, trim: 0x1a1d22 }),
-    coat: { second: 0x14161a, fade: 'low' },
+    coat: { second: 0xff4a1a, fade: 'front', fork: 0xff4a1a },
     models: [{ name: 'Dogma F', kind: 'polyvalent' }, { name: 'Bolide F', kind: 'clm' }],
   },
   {
-    id: 'lidl', name: 'Lidl-Trek', brand: 'Trek', jersey: 0x1f4fa8, accent: 0x0a3a8c, frame: 0xc8102e,
+    id: 'lidl', name: 'Lidl-Trek', brand: 'Trek', jersey: 0x1f4fa8, accent: 0x0a3a8c, frame: 0x1c3f94,
     livery: livery('shoulder', 0xd6202e, { sleeveL: 0xf5d300, shorts: 0x0e2250, helmet: 0xffffff, trim: 0xf2f3f5 }),
-    coat: { second: 0x1f4fa8, fade: 'rear' },
+    coat: { second: 0xf2f3f5, fade: 'high', fork: 0xd6202e },
     models: [{ name: 'Madone SLR', kind: 'aero' }, { name: 'Speed Concept SLR', kind: 'clm' }],
   },
   {
     id: 'lotto', name: 'Lotto Intermarché', brand: 'Orbea', jersey: 0xd1121f, accent: 0xffffff, frame: 0x17191d,
     livery: livery('band', 0xf6d31f, { shorts: 0x16181c, helmet: 0xd1121f, trim: 0xf6d31f }),
-    coat: { second: 0xd1121f, fade: 'rear' },
+    coat: { second: 0xd1121f, fade: 'rear', fork: 0xd1121f },
     models: [{ name: 'Orca Aero', kind: 'aero' }, { name: 'Orca', kind: 'grimpeur' }, { name: 'Ordu', kind: 'clm' }],
   },
   {
@@ -107,15 +108,15 @@ export const TEAMS: Team[] = [
     models: [{ name: 'Aeroad CFR', kind: 'aero' }, { name: 'Ultimate CFR', kind: 'grimpeur' }, { name: 'Speedmax CFR', kind: 'clm' }],
   },
   {
-    id: 'nsn', name: 'NSN Cycling Team', brand: 'Scott', jersey: 0x4aa8e0, accent: 0x31c1d9, frame: 0x14202f,
+    id: 'nsn', name: 'NSN Cycling Team', brand: 'Scott', jersey: 0x4aa8e0, accent: 0x31c1d9, frame: 0xe6e8eb,
     livery: livery('diag', 0xf08a24, { shorts: 0x14202f, helmet: 0x4aa8e0, trim: 0xf08a24 }),
-    coat: { second: 0x4aa8e0, fade: 'rear' },
+    coat: { second: 0x15171a, fade: 'rear' },
     models: [{ name: 'Foil RC', kind: 'aero' }, { name: 'Addict RC', kind: 'grimpeur' }, { name: 'Plasma RC', kind: 'clm' }],
   },
   {
-    id: 'redbull', name: 'Red Bull-Bora-hansgrohe', brand: 'Specialized', jersey: 0xf5f6f8, accent: 0xe1062c, frame: 0x101b33,
+    id: 'redbull', name: 'Red Bull-Bora-hansgrohe', brand: 'Specialized', jersey: 0xf5f6f8, accent: 0xe1062c, frame: 0xf4f5f7,
     livery: livery('band', 0xe1062c, { sleeveL: 0x14295a, sleeveR: 0x14295a, shorts: 0x0d1b3d, helmet: 0xf5f6f8, trim: 0xe1062c }),
-    coat: { second: 0xe1062c, fade: 'rear' },
+    coat: { second: 0x14295a, fade: 'low' },
     models: [{ name: 'S-Works Tarmac SL8', kind: 'polyvalent' }, { name: 'S-Works Shiv', kind: 'clm' }],
   },
   {
@@ -137,15 +138,15 @@ export const TEAMS: Team[] = [
     models: [{ name: 'Xelius DRS', kind: 'polyvalent' }, { name: 'Aerostorm DRS', kind: 'clm' }],
   },
   {
-    id: 'visma', name: 'Team Visma | Lease a Bike', brand: 'Cervélo', jersey: 0xf6d31f, accent: 0x111316, frame: 0xf6d31f,
+    id: 'visma', name: 'Team Visma | Lease a Bike', brand: 'Cervélo', jersey: 0xf6d31f, accent: 0x111316, frame: 0x15171a,
     livery: livery('hem', 0x111316, { shorts: 0x111316, helmet: 0xf6d31f, trim: 0x111316 }),
-    coat: { second: 0x111316, fade: 'low' },
+    coat: { second: 0xf6d31f, fade: 'front', fork: 0xf6d31f },
     models: [{ name: 'S5', kind: 'aero' }, { name: 'R5', kind: 'grimpeur' }, { name: 'P5', kind: 'clm' }],
   },
   {
-    id: 'uae', name: 'UAE Team Emirates-XRG', brand: 'Colnago', jersey: 0xf2f2f2, accent: 0xc8102e, frame: 0x18191c,
+    id: 'uae', name: 'UAE Team Emirates-XRG', brand: 'Colnago', jersey: 0xf2f2f2, accent: 0xc8102e, frame: 0x15171a,
     livery: livery('fade', 0xc8102e, { shorts: 0x16181c, helmet: 0xf2f2f2, trim: 0x16181c }),
-    coat: { second: 0xc8102e, fade: 'rear' },
+    coat: { second: 0xc8102e, fade: 'low' },
     models: [{ name: 'Y1Rs', kind: 'aero' }, { name: 'V5Rs', kind: 'grimpeur' }, { name: 'TT1', kind: 'clm' }],
   },
   {

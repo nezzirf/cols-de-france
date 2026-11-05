@@ -51,10 +51,14 @@ function spin(s: Spinner, angle: number): void {
   s.bone.quaternion.copy(s.rest).multiply(turn.setFromAxisAngle(s.axis, angle));
 }
 
-/** Seconde couleur du cadre : elle gagne l'arrière (haubans, tube de selle) ou le bas (tube diagonal, base). */
+/**
+ * Seconde couleur du cadre : elle gagne l'arrière (haubans, tube de selle), l'avant (tube de direction, fourche),
+ * le bas (tube diagonal, base) ou le haut (tube horizontal, tige de selle). La fourche peut avoir sa propre couleur.
+ */
 export interface AssetCoat {
   second: number;
-  fade: 'rear' | 'low';
+  fade: 'rear' | 'front' | 'low' | 'high';
+  fork?: number;
 }
 
 const smooth = (edge0: number, edge1: number, v: number): number => {
@@ -64,7 +68,15 @@ const smooth = (edge0: number, edge1: number, v: number): number => {
 
 /** Part de la seconde couleur au point (x vers l'avant, y vers le haut) du cadre, en unités du modèle (le cadre va de -49 à 45 et de 23 à 89). */
 function coatShare(coat: AssetCoat, x: number, y: number): number {
-  return coat.fade === 'rear' ? smooth(-2, -34, x) : smooth(58, 34, y);
+  if (coat.fade === 'rear') return smooth(-2, -34, x);
+  if (coat.fade === 'front') return smooth(8, 30, x);
+  if (coat.fade === 'high') return smooth(50, 68, y);
+  return smooth(58, 34, y);
+}
+
+/** La fourche descend en oblique de la direction (en haut, x ≈ 34) à l'axe de roue (en bas, x ≈ 45). */
+function onFork(x: number, y: number): boolean {
+  return y < 76 && Math.abs(x - (45 - 0.27 * (y - 33))) < 5.5;
 }
 
 /**
@@ -76,6 +88,7 @@ function paint(source: THREE.BufferGeometry, frame: THREE.Color, coat: AssetCoat
   const geometry = source.clone();
   const where = geometry.getAttribute('position');
   const second = coat ? new THREE.Color(coat.second) : frame;
+  const fork = new THREE.Color(coat?.fork ?? 0);
   const mixed = new THREE.Color();
   const colors = geometry.getAttribute('color');
   const out = new Float32Array(colors.count * 4);
@@ -89,7 +102,11 @@ function paint(source: THREE.BufferGeometry, frame: THREE.Color, coat: AssetCoat
     const b = colors.getZ(i);
     let c = steel;
     if (r > 0.95 && g > 0.95 && b > 0.95) c = carbon;
-    else if (r > 0.7 && g < 0.45 && b < 0.45) c = coat ? mixed.copy(frame).lerp(second, coatShare(coat, where.getX(i), where.getY(i))) : frame;
+    else if (r > 0.7 && g < 0.45 && b < 0.45) {
+      const x = where.getX(i);
+      const y = where.getY(i);
+      c = !coat ? frame : coat.fork !== undefined && onFork(x, y) ? fork : mixed.copy(frame).lerp(second, coatShare(coat, x, y));
+    }
     else if (r < 0.2) c = dark;
     else if (r < 0.55) c = rubber;
     out[i * 4] = c.r;
