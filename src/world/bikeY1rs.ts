@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import type { AssetBike, RiderFit } from './bikeFromAsset';
 import { buildChain, type Wheel } from './chain';
 import { lacquer, pbr } from './materials';
-import { at, ball, link, place, type Point, profiled } from './modelParts';
+import { at, ball, link, place, type Point, profiled, turned } from './modelParts';
 
 const BB: Point = [0.03, 0.287];
 const CRANK = 0.172;
@@ -138,6 +138,15 @@ function fadedTube(a: Point, b: Point, width: number, depth: number, side: numbe
   return out;
 }
 
+/** Tube ovale entre deux points qui n'ont pas le même écart latéral : sert aux haubans et à la couronne, qui doivent se rejoindre. */
+function strut(a: Point, sideA: number, b: Point, sideB: number, width: number, depth: number, mat: THREE.Material): THREE.Mesh {
+  const g = turned([1, 1], 14);
+  g.scale(width / 2, 1, depth / 2);
+  const m = new THREE.Mesh(g, mat);
+  place(m, at(a[0], a[1], sideA), at(b[0], b[1], sideB));
+  return m;
+}
+
 function nameDecal(text: string, a: Point, b: Point, width: number): THREE.Mesh[] {
   const texture = textTexture((g, size) => {
     g.fillStyle = '#ffffff';
@@ -210,14 +219,19 @@ export function buildY1rsBike(wheelRadiusM: number, tyreM: number, base: THREE.M
   shell.scale.set(0.045, 0.05, 0.058);
   shell.position.copy(at(BB[0], BB[1]));
   group.add(shell);
-  const crown = ball(1, mats.white);
-  crown.scale.set(0.034, 0.03, 0.05);
-  crown.position.copy(at(headLow[0], headLow[1]));
-  group.add(crown);
+  // Couronne de fourche : une barre qui relie les deux fourreaux sous le tube de direction.
+  group.add(strut(headLow, -0.056, headLow, 0.056, 0.04, 0.054, mats.white));
 
   // Bases, haubans plongeants (ils rejoignent le tube de selle très bas), fourche blanche qui noircit vers l'axe.
   for (const side of [-1, 1]) {
-    group.add(profiled(rear, BB, 0.02, 0.034, mats.black, side * 0.05), profiled(rear, stayTop, 0.014, 0.026, mats.black, side * 0.045));
+    // Les haubans et les bases se rejoignent au tube de selle et au boîtier, et s'appuient sur une patte à l'axe de roue.
+    group.add(strut(rear, side * 0.048, BB, side * 0.03, 0.02, 0.034, mats.black), strut(rear, side * 0.048, stayTop, side * 0.012, 0.014, 0.026, mats.black));
+    for (const hub of [rear, front]) {
+      const dropout = ball(1, mats.black);
+      dropout.scale.set(0.013, 0.03, 0.03);
+      dropout.position.copy(at(hub[0], hub[1], side * 0.05));
+      group.add(dropout);
+    }
     group.add(...fadedTube(headLow, front, 0.024, 0.052, side * 0.05, (t) => 1 - smooth(0.1, 0.75, t), 16, none));
   }
 
