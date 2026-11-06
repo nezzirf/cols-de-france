@@ -10,6 +10,8 @@ import { formatTime } from './hud';
 // Très allongée : le rapport 2,39 est le plus large qu'Android accepte pour une fenêtre flottante.
 const WIDTH = 860;
 const HEIGHT = 360;
+/** Résolution de l'image : le double de la taille de dessin, pour rester nette quand on agrandit la fenêtre. */
+const SCALE = 2;
 const UPDATE_MS = 200;
 const TOAST_MS = 5000;
 /** Écart toléré entre la puissance et la cible avant de colorer le chiffre. */
@@ -47,9 +49,10 @@ export class PillHud {
   onClosed: () => void = () => {};
 
   constructor(private steps: WorkoutStep[] | null = null) {
-    this.canvas.width = WIDTH;
-    this.canvas.height = HEIGHT;
+    this.canvas.width = WIDTH * SCALE;
+    this.canvas.height = HEIGHT * SCALE;
     this.ctx = this.canvas.getContext('2d')!;
+    this.ctx.scale(SCALE, SCALE);
     this.draw(performance.now());
     this.video.muted = true;
     this.video.playsInline = true;
