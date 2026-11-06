@@ -755,28 +755,27 @@ input:focus-visible {
 }
 
 /*
- * Tablette et écrans étroits : version épurée. On garde le chrono, la distance, les écarts, la pente, l'altitude et
- * les métriques essentielles ; le rapport engagé passe en orange et plus gros. Disparaissent l'aide des touches,
- * les segments chronométrés, la vitesse moyenne et les deux profils d'altitude.
+ * Tablette et écrans étroits : version épurée et plus petite. Les profils d'altitude restent, mais tous les panneaux
+ * rétrécissent ; le rapport engagé passe en orange et plus gros. Disparaissent l'aide des touches, les segments
+ * chronométrés et la vitesse moyenne.
  */
 @media (max-width: 1180px), (pointer: coarse) {
   .hud-hint,
   .hud-segments,
   .hud-time-label,
-  .profile,
-  .profile-legend,
-  .strip,
   .metric:has([data-m='avg']) {
     display: none;
   }
 
   .hud-left {
-    width: 196px;
-    padding: 8px 12px 10px;
+    left: 12px;
+    width: 176px;
+    padding: 6px 10px 8px;
+    border-radius: 14px;
   }
 
   .hud-time {
-    font-size: 30px;
+    font-size: 26px;
   }
 
   .hud-route {
@@ -784,30 +783,80 @@ input:focus-visible {
   }
 
   .hud-route-values b {
-    font-size: 18px;
+    font-size: 16px;
   }
 
   .hud-right {
-    width: auto;
-    padding: 8px 12px;
+    right: 12px;
+    width: 232px;
+    padding: 8px 10px;
   }
 
   .hud-right-head {
-    margin: 0;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .slope {
+    min-width: 88px;
+    padding: 2px 8px;
+    font-size: 28px;
+  }
+
+  .slope small {
+    font-size: 15px;
+  }
+
+  .hud-right-info {
+    font-size: 16px;
+  }
+
+  .hud-right-info .dim {
+    font-size: 11px;
+  }
+
+  .profile {
+    height: 64px;
+  }
+
+  .profile-legend {
+    margin: 2px 2px 4px;
+    font-size: 10px;
+  }
+
+  .strip {
+    height: 16px;
   }
 
   .metric-gear .metric-value {
     color: var(--accent);
-    font-size: 34px;
+    font-size: 28px;
   }
 
   .hud-center {
-    padding: 8px 6px;
+    padding: 5px 4px;
+    border-radius: 14px;
   }
 
   .metric {
-    min-width: 70px;
-    padding: 0 8px;
+    min-width: 62px;
+    padding: 0 6px;
+  }
+
+  .metric-value {
+    font-size: 22px;
+  }
+
+  .metric-main {
+    min-width: 92px;
+  }
+
+  .metric-main .metric-value {
+    font-size: 32px;
+  }
+
+  .metric-label {
+    font-size: 11px;
   }
 
   .hud-lock {
