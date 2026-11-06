@@ -7,6 +7,7 @@ import type { BuildingData, Route } from '../sim/route';
 import { buildBuildings } from './buildings';
 import { buildCliffRocks } from './cliffs';
 import { ambienceOf, biomeAt, biomeLabel, type BiomeName } from './biomes';
+import { type Habitat, habitatOfBiome, type Soundscape } from './soundscape';
 import { HeightField } from './heightField';
 import { LandCover } from './landCover';
 import { Water } from './water';
@@ -71,6 +72,9 @@ export class World {
   private worldFog = { color: new THREE.Color(), density: 0 };
   private targetFog = new THREE.Color(0xcad9e2);
   private targetDensity = 0.00009;
+  /** Ambiance sonore, quand le joueur l'a choisie : elle suit le milieu traversé. */
+  sound: Soundscape | null = null;
+  private lastSound = 0;
   cameraMode: CameraMode = 'poursuite';
   free: FreeCamera | null = null;
   onBiomeChange: (label: string) => void = () => {};
@@ -255,6 +259,12 @@ export class World {
     if (!first) this.onBiomeChange(WORLD_STYLE[biome].label);
   }
 
+  /** Les milieux autour du cycliste et leur poids : tout le monde d'entraînement, ou l'étage du col. */
+  private habitats(): { habitat: Habitat; weight: number }[] {
+    if (this.world) return this.world.zones.map((zone, k) => ({ habitat: zone.biome as Habitat, weight: this.worldWeights[k] ?? 0 }));
+    return this.biome ? [{ habitat: habitatOfBiome(this.biome), weight: 1 }] : [];
+  }
+
   private updateBiome(ele: number, x: number): void {
     if (this.world) {
       this.updateWorldBiome(x);
@@ -324,6 +334,10 @@ export class World {
     if (this.free) focus = this.updateFreeCamera(this.free, dt);
     else this.updateCamera(distM, dt);
     this.updateBiome(focus.ele, focus.x);
+    if (this.sound && now - this.lastSound > 250) {
+      this.lastSound = now;
+      this.sound.setHabitats(this.habitats());
+    }
     this.water?.update(dt);
     this.updateSun(focus.x, focus.ele, focus.z);
     // La brume du lieu, teintée par le moment et grisée par la météo.

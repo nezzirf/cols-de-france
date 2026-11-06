@@ -27,6 +27,8 @@ export interface Profile {
   peloton: boolean;
   /** Courir contre sa meilleure sortie sur le même parcours. */
   ghost: boolean;
+  /** Sons d'ambiance : vagues à la plage, oiseaux en forêt, vent en montagne. */
+  sound: boolean;
   /** Sortie en peloton : nombre de coureurs, watts par kilo du groupe et parcours. */
   groupRiders: GroupSize;
   groupWkg: number;
@@ -67,6 +69,7 @@ const DEFAULT_PROFILE: Profile = {
   moment: 'jour',
   peloton: false,
   ghost: true,
+  sound: true,
   groupRiders: 10,
   groupWkg: 3,
   groupRouteId: '',

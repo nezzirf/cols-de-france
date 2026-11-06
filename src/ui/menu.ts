@@ -141,6 +141,7 @@ export class Menu {
             </div>
             <label class="m-check" data-r="pelotonRow"><input type="checkbox" data-o="peloton"> Rouler avec un peloton</label>
             <label class="m-check"><input type="checkbox" data-o="ghost"> Fantôme de ma meilleure sortie</label>
+            <label class="m-check"><input type="checkbox" data-o="sound"> Sons d'ambiance (forêt, plage, vent)</label>
             <div class="m-bots" data-r="bots">
               <div class="m-bots-head"><span>Fantômes</span><button class="m-bots-add" data-a="addBot">+ Ajouter</button></div>
               <div data-r="botList"></div>
@@ -181,7 +182,7 @@ export class Menu {
       });
     });
     this.root.querySelectorAll<HTMLInputElement>('input[data-o]').forEach((box) => {
-      const key = box.dataset.o as 'peloton' | 'ghost';
+      const key = box.dataset.o as 'peloton' | 'ghost' | 'sound';
       box.checked = this.profile[key];
       box.addEventListener('change', () => {
         this.profile[key] = box.checked;

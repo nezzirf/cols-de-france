@@ -33,8 +33,9 @@ import { paintWorldGround } from './world/worldGround';
 import { type FreeCamera, MOVE_KEYS } from './world/freeCamera';
 import { NoWorld } from './world/noWorld';
 import { World } from './world/scene';
+import { Soundscape } from './world/soundscape';
 
-const DEMO_HINT = '↑ ↓ puissance · Maj : ±50 W · L verrouiller les watts · + − vitesses · F caméra libre · Pg↑ Pg↓ ±1 km · P pause · V caméra · Échap quitter';
+const DEMO_HINT = '↑ ↓ puissance · Maj : ±50 W · L verrouiller les watts · M son · + − vitesses · F caméra libre · Pg↑ Pg↓ ±1 km · P pause · V caméra · Échap quitter';
 const FREE_HINT = 'ZQSD déplacer · clic + souris regarder · A E descendre, monter · Maj vite · molette vitesse · T poser le cycliste ici · F sortir';
 const JUMP_M = 1000;
 const EXPLORE_REFRESH_MS = 150;
@@ -59,6 +60,7 @@ class App {
   private hud: Hud | null = null;
   private mini: MiniHud | PillHud | null = null;
   private miniTimer = 0;
+  private sound: Soundscape | null = null;
   private endButton: HTMLButtonElement | null = null;
   private cast: MediaStream | null = null;
   private pip: Window | null = null;
@@ -242,6 +244,17 @@ class App {
     const trainer = this.trainer!;
 
     this.world = new World(this.canvas, route, heights, buildings, this.bike, ortho, { weather: this.profile.weather, moment: this.profile.moment });
+    // Sons d'ambiance : ils démarrent avec la sortie (le clic sur « Rouler » autorise le son) et suivent le milieu traversé.
+    this.sound?.dispose();
+    this.sound = null;
+    if (this.profile.sound && typeof AudioContext !== 'undefined') {
+      try {
+        this.sound = new Soundscape({ moment: this.profile.moment, weather: this.profile.weather });
+        this.world.sound = this.sound;
+      } catch {
+        this.sound = null;
+      }
+    }
     const steps = workout ? expandBlocks(workout.blocks) : null;
     const game = new Game(route, this.world, trainer, setupFor(this.bike, this.profile.riderKg), this.bike.shape, steps, this.profile.ftp);
     game.difficulty = this.profile.difficulty / 100;
@@ -262,7 +275,7 @@ class App {
     trainer.onState = (state) => hud.setConnection(trainer.label, state);
     this.route = route;
     this.hud = hud;
-    hud.setHint(demo ? DEMO_HINT : '+ − vitesses · L verrouiller les watts · P pause · V caméra · Échap quitter');
+    hud.setHint(demo ? DEMO_HINT : '+ − vitesses · L verrouiller les watts · M son · P pause · V caméra · Échap quitter');
     if (demo) {
       hud.enableExplore((d) => game.jumpTo(d));
       this.canvas.addEventListener('pointerdown', this.onPointerDown);
@@ -279,6 +292,8 @@ class App {
 
     game.onFrame = (s) => {
       hud.update(s, performance.now());
+      this.sound?.setSpeed(s.speedKmh / 3.6);
+      this.sound?.setPaused(s.paused);
       if (demo) this.refreshExplore(s.distanceM);
     };
     game.onToast = (t) => hud.toast(t);
@@ -298,7 +313,10 @@ class App {
     this.releaseLock = keepAwake();
     game.start();
     this.addEndButton();
-    if (import.meta.env.DEV) (window as unknown as { __game: Game }).__game = game;
+    if (import.meta.env.DEV) {
+      (window as unknown as { __game: Game }).__game = game;
+      (window as unknown as { __sound: Soundscape | null }).__sound = this.sound;
+    }
   }
 
   /**
@@ -517,6 +535,10 @@ class App {
       case 'L':
         this.game.toggleLock();
         break;
+      case 'm':
+      case 'M':
+        if (this.sound) this.hud?.toast(this.sound.toggleMute() ? 'Son coupé' : 'Son rétabli');
+        break;
       case '+':
         this.game.shift(1);
         break;
@@ -581,6 +603,8 @@ class App {
   }
 
   private showResult(name: string, s: RideSummary): void {
+    this.sound?.dispose();
+    this.sound = null;
     this.endButton?.remove();
     this.endButton = null;
     // La sortie entre dans l'historique et n'est plus « interrompue » : le récap compare aux records d'avant.
@@ -599,6 +623,8 @@ class App {
   }
 
   private async quit(): Promise<void> {
+    this.sound?.dispose();
+    this.sound = null;
     this.endButton?.remove();
     this.endButton = null;
     window.removeEventListener('keydown', this.onKey);
