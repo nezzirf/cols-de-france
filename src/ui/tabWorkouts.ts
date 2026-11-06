@@ -125,7 +125,7 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
             ${ctx.routes
               .map((r) => `<button class="m-option" data-route="${r.id}"><b>${r.name}</b><span>${r.massif} · ${fr(r.climb.lengthKm)} km · ${fr(r.climb.avgGradePct)} % · ${r.climb.topM} m</span></button>`)
               .join('')}
-            <button class="m-option" data-route="${CUSTOM_ROUTE_ID}"><b>Personnalisé</b><span>${WARMUP_KM} km de plat, puis la montée que tu choisis</span></button>
+            <button class="m-option" data-route="${CUSTOM_ROUTE_ID}"><b>Personnalisé</b><span>${WARMUP_KM} km de plat, puis la montée que tu choisis (jusqu'à ${MAX_CLIMB_KM} km), en boucle</span></button>
           </div>
         </div>
         <div class="m-group m-custom-row" data-r="customRow">

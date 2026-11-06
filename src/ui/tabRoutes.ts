@@ -78,7 +78,7 @@ export function renderRoutes(page: HTMLElement, ctx: MenuContext): void {
     <p class="m-lead">Une route imaginaire, de la plage au désert : chaque paysage se fond dans le suivant.</p>
     ${worldCard()}
     <h2 class="m-title">Parcours personnalisé</h2>
-    <p class="m-lead">${WARMUP_KM} km de plat pour s'échauffer, puis la montée que tu choisis.</p>
+    <p class="m-lead">${WARMUP_KM} km de plat pour s'échauffer, puis la montée que tu choisis, jusqu'à ${MAX_CLIMB_KM} km. Le parcours est une boucle : au sommet, tu repars du départ, la sortie ne s'arrête pas toute seule.</p>
     <section class="m-custom" data-id="${CUSTOM_ROUTE_ID}" role="group" aria-label="Parcours personnalisé">
       <div class="m-custom-fields">
         <label><span>Distance de la montée <b data-r="km"></b></span>

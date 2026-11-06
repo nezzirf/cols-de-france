@@ -1,4 +1,5 @@
-// Manettes Zwift Play en Bluetooth : seuls les boutons de vitesse sont lus. Zwift ne publie pas ce
+// Manettes Zwift Play en Bluetooth : les boutons de vitesse, plus le Y de la manette de droite et les flèches haut et bas
+// de celle de gauche (verrouillage et réglage des watts). Zwift ne publie pas ce
 // protocole. Les valeurs viennent du projet libre BikeControl et d'analyses indépendantes.
 
 export const ZWIFT_COMPANY_ID = 0x094a;
@@ -19,6 +20,13 @@ const FIELD_SHIFT = 7;
 const FIELD_BUTTON_MAP = 1;
 const SHIFT_DOWN_MASK = 0x100 | 0x200;
 const SHIFT_UP_MASK = 0x1000 | 0x2000;
+// Firmware 1 : sur la manette de gauche, les quatre boutons du pavé (haut, gauche, droite, bas) occupent les champs Y, Z, A, B.
+const FIELD_TOP_BUTTON = 2;
+const FIELD_BOTTOM_BUTTON = 5;
+// Firmware 2 : masques de la carte de boutons commune.
+const ARROW_UP_MASK = 0x2;
+const ARROW_DOWN_MASK = 0x8;
+const Y_MASK = 0x40;
 const RECONNECT_MS = 5000;
 const MIN_SHIFT_INTERVAL_MS = 180;
 
@@ -84,6 +92,66 @@ export function parseShiftFrame(frame: Uint8Array): ShiftButtons | null {
   return null;
 }
 
+export interface PadButtons {
+  /** Bouton Y, manette de droite. */
+  y: boolean;
+  /** Flèche du haut, manette de gauche. */
+  up: boolean;
+  /** Flèche du bas, manette de gauche. */
+  down: boolean;
+}
+
+/** État de Y et des flèches haut et bas dans une trame, ou `null` si elle n'en parle pas. */
+export function parsePadButtons(frame: Uint8Array): PadButtons | null {
+  const fields = readVarintFields(frame.subarray(1));
+  if (!fields) return null;
+  if (frame[0] === PLAY_KEYPAD_FRAME) {
+    const right = (fields.get(FIELD_RIGHT_PAD) ?? RIGHT_PAD) === RIGHT_PAD;
+    const pressed = (field: number): boolean => (fields.get(field) ?? PRESSED) === PRESSED;
+    return right ? { y: pressed(FIELD_TOP_BUTTON), up: false, down: false } : { y: false, up: pressed(FIELD_TOP_BUTTON), down: pressed(FIELD_BOTTOM_BUTTON) };
+  }
+  if (frame[0] === RIDE_KEYPAD_FRAME) {
+    const map = fields.get(FIELD_BUTTON_MAP);
+    if (map === undefined) return null;
+    const buttons = map % 0x10000;
+    const pressed = (mask: number): boolean => (buttons & mask) !== mask;
+    return { y: pressed(Y_MASK), up: pressed(ARROW_UP_MASK), down: pressed(ARROW_DOWN_MASK) };
+  }
+  return null;
+}
+
+/** Verrouiller les watts (Y), les monter ou les descendre d'un watt (flèches). */
+export type ZwiftAction = 'lock' | 'powerUp' | 'powerDown';
+
+/** Un appui, pas un maintien : l'action part quand le bouton passe de relâché à enfoncé. */
+export class ActionDetector {
+  private held: PadButtons = { y: false, up: false, down: false };
+
+  update(frame: Uint8Array): ZwiftAction[] {
+    const now = parsePadButtons(frame);
+    if (!now) return [];
+    const before = this.held;
+    this.held = now;
+    const out: ZwiftAction[] = [];
+    if (now.y && !before.y) out.push('lock');
+    if (now.up && !before.up) out.push('powerUp');
+    if (now.down && !before.down) out.push('powerDown');
+    return out;
+  }
+}
+
+/** Une seule action par appui, même si plusieurs connexions rapportent le même bouton. */
+export class ActionGate {
+  private last = new Map<ZwiftAction, number>();
+
+  pass(action: ZwiftAction, nowMs: number): boolean {
+    const before = this.last.get(action);
+    if (before !== undefined && nowMs - before < MIN_SHIFT_INTERVAL_MS) return false;
+    this.last.set(action, nowMs);
+    return true;
+  }
+}
+
 /** La manette répète son état toutes les 90 ms : seul l'appui compte, pas le maintien. */
 export class ShiftDetector {
   private held: ShiftButtons = { up: false, down: false };
@@ -112,9 +180,11 @@ export class ShiftGate {
 
 export class ZwiftPlay {
   onShift: (direction: ShiftDirection) => void = () => {};
+  onAction: (action: ZwiftAction) => void = () => {};
   onConnection: (connected: boolean) => void = () => {};
   private device: BluetoothDevice | null = null;
   private detector = new ShiftDetector();
+  private actions = new ActionDetector();
   private retryTimer = 0;
   private closing = false;
   private listening: BluetoothRemoteGATTCharacteristic[] = [];
@@ -159,8 +229,10 @@ export class ZwiftPlay {
   private onFrame = (e: Event): void => {
     const view = (e.target as BluetoothRemoteGATTCharacteristic).value;
     if (!view) return;
-    const direction = this.detector.update(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+    const frame = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+    const direction = this.detector.update(frame);
     if (direction) this.onShift(direction);
+    for (const action of this.actions.update(frame)) this.onAction(action);
   };
 
   /** Une manette s'endort vite : on la reprend dès qu'elle se réveille. */

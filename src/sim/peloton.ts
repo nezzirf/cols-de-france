@@ -21,6 +21,8 @@ export interface PelotonRider {
   massKg?: number;
   /** Avance (+) ou retard (−) au départ, par rapport au joueur. */
   startOffsetM?: number;
+  /** Fantôme : dessiné translucide, de cette teinte, avec le vélo du joueur plutôt que celui d'une équipe. */
+  ghostTint?: number;
   /** Puissance (W) à l'instant `clockS`, en secondes depuis le départ du peloton. */
   powerAt(clockS: number): number;
 }
@@ -58,6 +60,8 @@ export interface PelotonState {
   /** Distance parcourue depuis le départ, tours compris. */
   traveledM: number;
   speedKmh: number;
+  /** Teinte d'un fantôme ; absente pour un coureur habillé aux couleurs de son équipe. */
+  ghostTint?: number;
 }
 
 /** Position et vitesse du joueur. */
@@ -153,6 +157,7 @@ export class Peloton {
       lateralM: m.info.lateralM,
       traveledM: m.traveledM,
       speedKmh: m.physics.speedMps * 3.6,
+      ghostTint: m.info.ghostTint,
     }));
   }
 

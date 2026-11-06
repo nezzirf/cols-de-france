@@ -1,5 +1,6 @@
 // Parcours personnalisé : un tracé généré, sans lien avec une route réelle, fait de 5 km de plat
-// pour s'échauffer puis d'une montée à la pente choisie.
+// pour s'échauffer puis d'une montée à la pente choisie (jusqu'à 100 km). C'est une boucle : à la fin de la montée, le
+// cycliste repart du départ au lieu de terminer la sortie, de sorte qu'on peut rouler aussi longtemps qu'on veut.
 
 import { Route, type RouteData } from './route';
 
@@ -10,7 +11,9 @@ export interface CustomRouteOptions {
 }
 
 export const WARMUP_KM = 5;
-export const MAX_CLIMB_KM = 60;
+export const MAX_CLIMB_KM = 100;
+/** Où le cycliste repart à chaque tour : un peu après le premier point, pour qu'il y ait de la route derrière lui. */
+export const LOOP_START_M = 12;
 export const MAX_GRADE_PCT = 20;
 
 const STEP_M = 10;
@@ -97,7 +100,7 @@ export function buildCustomRoute({ climbKm, gradePct }: CustomRouteOptions): { r
   const data: RouteData = {
     id: `perso-${round(climb)}-${round(grade)}`,
     name,
-    subtitle: `${WARMUP_KM} km de plat puis ${round(climb)} km à ${round(grade)} %`,
+    subtitle: `${WARMUP_KM} km de plat puis ${round(climb)} km à ${round(grade)} %, en boucle`,
     massif: 'Personnalisé',
     stepM: STEP_M,
     origin: { lat: 45, lon: 6 },
@@ -121,6 +124,7 @@ export function buildCustomRoute({ climbKm, gradePct }: CustomRouteOptions): { r
     segments: [{ id: `perso:${round(climb)}:${round(grade)}`, name: 'Montée personnalisée', startM: footM, endM }],
     terrain: { file: '', cols, rows, stepM: TERRAIN_STEP_M, x0, z0, scale: 1, ortho: { file: '', width: 0, height: 0 } },
     sources: [],
+    loop: { fromM: LOOP_START_M, toM: endM },
   };
   return { route: new Route(data), heights };
 }

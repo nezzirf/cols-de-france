@@ -1,6 +1,7 @@
 // Profil du joueur, conservé d'une séance à l'autre.
 
 import { BIKE_JERSEY, DEFAULT_BIKE_ID } from '../sim/bikes';
+import { sanitizeBots } from '../sim/bots';
 import type { GroupSize } from '../sim/group';
 import type { Moment, Weather } from '../world/ambiance';
 
@@ -30,6 +31,8 @@ export interface Profile {
   groupRiders: GroupSize;
   groupWkg: number;
   groupRouteId: string;
+  /** Fantômes : le niveau en W/kg de chacun, cinq au plus. */
+  bots: number[];
 }
 
 export const CUSTOM_ROUTE_ID = 'perso';
@@ -67,11 +70,13 @@ const DEFAULT_PROFILE: Profile = {
   groupRiders: 10,
   groupWkg: 3,
   groupRouteId: '',
+  bots: [],
 };
 
 export function loadProfile(): Profile {
   try {
-    return { ...DEFAULT_PROFILE, ...JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}') };
+    const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}');
+    return { ...DEFAULT_PROFILE, ...saved, bots: sanitizeBots(saved.bots) };
   } catch {
     return { ...DEFAULT_PROFILE };
   }

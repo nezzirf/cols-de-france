@@ -48,7 +48,7 @@ La position exacte (kilomètre, altitude, coordonnées GPS) s'affiche sous la ba
 
 ## Le menu
 
-- **Parcours** : les cols réels, et un parcours personnalisé dont on choisit la distance et la pente.
+- **Parcours** : les cols réels, et un parcours personnalisé dont on choisit la distance (jusqu'à 100 km) et la pente. C'est une boucle : au sommet, on repart du départ, la sortie ne se termine pas toute seule.
   Il commence toujours par 5 km de plat pour s'échauffer ; sa route et son paysage sont générés, ils
   ne représentent aucun lieu réel.
 - **Entraînement** : un créateur de séances par blocs (échauffement, stable, rampe, intervalles,
@@ -80,9 +80,18 @@ La FTP, le poids et le nom se règlent en haut de l'écran. Sous le bouton « Ro
   ne fait pas d'abri du vent.
 - **Fantôme de ma meilleure sortie** : sur un col, un cycliste translucide rejoue ta sortie la plus
   rapide sur ce parcours, tant qu'aucun record de segment ne prend le relais.
+- **Fantômes** : à droite du menu, « + Ajouter » fait rouler jusqu'à cinq coureurs virtuels, chacun à
+  ses watts par kilo réglés avant la sortie. Ils ont ton vélo et ton poids, partent avec toi et tiennent
+  leur niveau jusqu'à la fin, quoi que tu fasses. Chacun est translucide, d'une teinte différente ; l'écran
+  donne le plus proche devant et le plus proche derrière. Ils ne reprennent pas après une coupure.
 
 ## Pendant la sortie
 
+- **Verrouiller les watts** (hors séance) : le bouton « Verrouiller les watts » (touche L, ou Y sur la manette
+  de droite du Zwift Play) fige la puissance à celle du moment : le home trainer passe en ERG et la pente
+  n'agit plus. Une fois verrouillé, ↑ et ↓ (ou la flèche du haut et celle du bas de la manette de gauche)
+  montent ou descendent d'un watt, et un second appui libère. Pas de verrouillage pendant une séance, qui
+  impose déjà sa puissance.
 - **Zones de puissance** : la puissance prend la couleur de sa zone (modèle de Coggan, de Z1 à Z7, en
   % de la FTP) ; le récap donne le temps passé dans chacune.
 - **Pause automatique** : si tu t'arrêtes de pédaler et que le vélo s'arrête (moins de 5 km/h), le
@@ -174,6 +183,8 @@ séance, puisque le home trainer impose alors la puissance.
 Clique sur **Zwift Play** dans le menu : un bouton de vitesse pressé s'affiche sous « Rouler ». En
 firmware 1, chaque manette se connecte à part : reclique pour la deuxième. Le bouton droit monte une
 vitesse, le gauche la descend. Les touches + et − font la même chose et activent aussi les vitesses.
+
+Le bouton Y de la manette de droite et les flèches haut et bas de celle de gauche règlent les watts verrouillés (voir « Pendant la sortie »). Leur lecture n'a pas été vérifiée sur une vraie manette.
 
 Zwift ne publie pas ce protocole : `src/hardware/zwiftPlay.ts` s'appuie sur le projet libre
 BikeControl et sur des analyses indépendantes, et une mise à jour de firmware pourrait le casser.

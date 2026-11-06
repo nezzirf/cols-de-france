@@ -80,7 +80,7 @@ export class World {
     private route: Route,
     rawHeights: Float32Array,
     buildings: BuildingData[],
-    bike: Bike,
+    private bike: Bike,
     ortho: HTMLImageElement | HTMLCanvasElement,
     ambiance: Ambiance = DEFAULT_AMBIANCE,
   ) {
@@ -184,9 +184,9 @@ export class World {
       if (!mate) {
         if (!near || created >= PELOTON_BUILDS_PER_FRAME) continue;
         created++;
-        const bike = ALL_BIKES.find((b) => b.team?.id === s.teamId) ?? findBike('');
-        const model = dressedRider(bike);
-        model.group.traverse((o) => (o.castShadow = true));
+        // Un fantôme a le vélo du joueur, en translucide et à sa teinte ; un coéquipier, celui de son équipe.
+        const model = s.ghostTint !== undefined ? this.ghostModel(s.ghostTint) : dressedRider(ALL_BIKES.find((b) => b.team?.id === s.teamId) ?? findBike(''));
+        if (s.ghostTint === undefined) model.group.traverse((o) => (o.castShadow = true));
         this.scene.add(model.group);
         mate = { model, crank: Math.random() * Math.PI * 2 };
         this.mates.set(s.name, mate);
@@ -197,6 +197,11 @@ export class World {
       mate.model.pose(-mate.crank);
       this.placeOnRoad(mate.model.group, s.distM, s.lateralM);
     }
+  }
+
+  private ghostModel(tint: number): RiderModel {
+    const material = new THREE.MeshBasicMaterial({ color: tint, transparent: true, opacity: 0.45, depthWrite: false });
+    return createRiderModel(material, material, bikeShape(this.bike));
   }
 
   /** Démarre la caméra libre à l'endroit et dans la direction de la caméra actuelle. */

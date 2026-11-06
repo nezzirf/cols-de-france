@@ -6,6 +6,7 @@ import type { SavedRide } from '../app/rideAutosave';
 import type { HistoryEntry } from '../app/rideHistory';
 import { type Moment, MOMENTS, type Weather, WEATHERS } from '../world/ambiance';
 import { findBike, findJersey, wearing, type Bike } from '../sim/bikes';
+import { BOT_TINTS, BOT_WKG_MAX, BOT_WKG_MIN, BOT_WKG_STEP, DEFAULT_BOT_WKG, MAX_BOTS } from '../sim/bots';
 import type { GroupOptions } from '../sim/group';
 import { SALON_ROUTE_ID } from '../sim/salonRoute';
 import { WORLD_NAME, WORLD_ROUTE_ID } from '../sim/worldRoute';
@@ -140,6 +141,10 @@ export class Menu {
             </div>
             <label class="m-check" data-r="pelotonRow"><input type="checkbox" data-o="peloton"> Rouler avec un peloton</label>
             <label class="m-check"><input type="checkbox" data-o="ghost"> Fantôme de ma meilleure sortie</label>
+            <div class="m-bots" data-r="bots">
+              <div class="m-bots-head"><span>Fantômes</span><button class="m-bots-add" data-a="addBot">+ Ajouter</button></div>
+              <div data-r="botList"></div>
+            </div>
           </div>
           <button class="m-go" data-a="start">Rouler</button>
           <p class="m-msg" data-r="msg">Sans home trainer connecté, la sortie démarre en mode démo au clavier.</p>
@@ -183,6 +188,15 @@ export class Menu {
         this.changed();
       });
     });
+    this.q('[data-a="addBot"]').addEventListener('click', () => {
+      if (this.profile.bots.length >= MAX_BOTS) return;
+      // Le nouveau fantôme part du niveau du précédent : on règle ensuite chacun à son goût.
+      const last = this.profile.bots[this.profile.bots.length - 1];
+      this.profile.bots.push(last ?? DEFAULT_BOT_WKG);
+      this.renderBots();
+      this.changed();
+    });
+    this.renderBots();
     this.q('[data-a="start"]').addEventListener('click', () => void this.start());
 
     this.preview = new BikePreview(this.q('[data-r="preview"]'));
@@ -195,6 +209,48 @@ export class Menu {
     if (!known && this.profile.routeId !== CUSTOM_ROUTE_ID && this.profile.routeId !== WORLD_ROUTE_ID) this.profile.routeId = this.context.routes[0]?.id ?? CUSTOM_ROUTE_ID;
     this.openTab(this.tab);
     this.changed();
+  }
+
+  /** Les fantômes choisis : un curseur de W/kg chacun, jusqu'à cinq ; leur vélo et leur poids sont les tiens. */
+  private renderBots(): void {
+    const p = this.profile;
+    const list = this.q('[data-r="botList"]');
+    list.innerHTML = p.bots.length
+      ? p.bots
+          .map(
+            (w, i) => `<div class="m-bot">
+              <i style="background:${hex(BOT_TINTS[i])}"></i>
+              <label><span>Fantôme ${i + 1} <b data-r="bot${i}"></b></span>
+                <input type="range" min="${BOT_WKG_MIN}" max="${BOT_WKG_MAX}" step="${BOT_WKG_STEP}" data-bot="${i}" value="${w}"></label>
+              <button data-rm="${i}" aria-label="Retirer le fantôme ${i + 1}">×</button>
+            </div>`,
+          )
+          .join('')
+      : '<p class="m-bots-empty">Aucun fantôme. Jusqu’à 5 coureurs virtuels, à la puissance par kilo de ton choix, avec ton vélo et ton poids.</p>';
+    list.querySelectorAll<HTMLInputElement>('[data-bot]').forEach((input) =>
+      input.addEventListener('input', () => {
+        p.bots[Number(input.dataset.bot)] = Math.round(Number(input.value) * 10) / 10;
+        this.showBotWatts();
+        this.changed();
+      }),
+    );
+    list.querySelectorAll<HTMLElement>('[data-rm]').forEach((b) =>
+      b.addEventListener('click', () => {
+        p.bots.splice(Number(b.dataset.rm), 1);
+        this.renderBots();
+        this.changed();
+      }),
+    );
+    this.q<HTMLButtonElement>('[data-a="addBot"]').hidden = p.bots.length >= MAX_BOTS;
+    this.showBotWatts();
+  }
+
+  private showBotWatts(): void {
+    const p = this.profile;
+    p.bots.forEach((w, i) => {
+      const out = this.root.querySelector<HTMLElement>(`[data-r="bot${i}"]`);
+      if (out) out.textContent = `${fr(w)} W/kg · ${Math.round(w * p.riderKg)} W`;
+    });
   }
 
   private openTab(tab: TabId): void {
@@ -307,6 +363,7 @@ export class Menu {
     avatar.style.color = (bike.jersey & 0xff) + ((bike.jersey >> 8) & 0xff) + (bike.jersey >> 16) > 560 ? '#1d2329' : '#fff';
     this.q('[data-r="wkg"]').textContent = fr(p.ftp / p.riderKg, 2);
     this.q('[data-r="difficulty"]').textContent = `${p.difficulty} %`;
+    this.showBotWatts();
 
     const { group } = this.launch;
     const workout = group ? null : this.workout;

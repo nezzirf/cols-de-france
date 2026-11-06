@@ -8,6 +8,7 @@ import { AutoPause, STOPPED_SPEED_MPS } from '../sim/autoPause';
 import { EffortAlerts } from '../sim/effortAlerts';
 import { DEFAULT_GEAR, GEAR_COUNT, shiftedGrade } from '../sim/gears';
 import { GROUP_WARMUP_S, type GroupOptions, groupRiders } from '../sim/group';
+import { botRiders } from '../sim/bots';
 import { Peloton, type PelotonGap, type PelotonState } from '../sim/peloton';
 import { type RideSample, rideStats, type RideStats } from '../sim/rideStats';
 import { powerZone } from '../sim/zones';
@@ -26,6 +27,8 @@ const FORCE_RESEND_MS = 10000;
 const GRADE_LOOKAHEAD_M = 0.5;
 /** Intervalle entre deux points de reprise de la sortie. */
 const CHECKPOINT_EVERY_S = 30;
+/** Plafond de la puissance verrouillée. */
+const LOCK_MAX_W = 2000;
 
 /** Ce que la boucle de jeu demande à l'affichage : un décor 3D, ou rien quand on roule devant un écran. */
 export interface GameWorld {
@@ -68,6 +71,8 @@ export interface RideSnapshot {
   /** Zone de puissance (1 à 7), ou 0 sans FTP. */
   zone: number;
   peloton: PelotonSnapshot | null;
+  /** Puissance verrouillée (mode ERG hors séance), ou null quand la résistance suit la pente. */
+  lockedW: number | null;
 }
 
 export interface WorkoutSnapshot {
@@ -127,6 +132,10 @@ export class Game {
   private alerts = new EffortAlerts();
   private peloton: Peloton | null = null;
   private groupOptions: GroupOptions | null = null;
+  /** Les fantômes choisis avant la sortie, qui tiennent chacun leur niveau. */
+  private bots: Peloton | null = null;
+  /** Puissance imposée au home trainer, hors séance : la résistance ne suit plus la pente. */
+  private lockedW: number | null = null;
   /** Distance parcourue par seconde de la sortie de référence, pour courir contre soi-même. */
   private reference: number[] | null = null;
   /** Facteur 0..1 appliqué à la pente envoyée au frein. */
@@ -209,6 +218,21 @@ export class Game {
     );
   }
 
+  /** Fait rouler des fantômes (leurs niveaux en W/kg) à partir de la position actuelle, avec le vélo et le poids du joueur. */
+  enableBots(wkgs: number[]): void {
+    if (wkgs.length === 0) return;
+    const { route } = this;
+    const start = this.physics.distanceM;
+    this.bots = new Peloton(
+      { lengthM: route.lengthM, loop: route.data.loop, gradeAt: (d) => route.gradeAt(d), eleAt: (d) => route.eleAt(d) },
+      this.physics.setup,
+      this.ftp,
+      start,
+      this.traveledM(start),
+      botRiders(wkgs, this.physics.setup.riderKg),
+    );
+  }
+
   /** Une sortie passée sur ce parcours : un fantôme la rejoue, tant qu'aucun record de segment ne prend le relais. */
   setReference(samples: RideSample[] | null): void {
     this.reference = samples && samples.length > 1 ? samples.map((s) => s.distanceM) : null;
@@ -272,6 +296,50 @@ export class Game {
     this.gearsOn = true;
   }
 
+  /** Puissance verrouillée, ou null. */
+  get lockedPowerW(): number | null {
+    return this.lockedW;
+  }
+
+  /**
+   * Verrouille les watts à ceux du moment, ou les libère : le home trainer passe en ERG à cette puissance, puis revient à
+   * la résistance de la pente. Sans effet pendant une séance, qui impose déjà sa puissance.
+   */
+  toggleLock(): void {
+    if (this.workout) return;
+    if (this.lockedW !== null) {
+      this.lockedW = null;
+      this.lastSent = null;
+      this.lastSentAt = 0;
+      this.lastSend = 0;
+      this.onToast('Watts libérés : la résistance suit de nouveau la pente');
+      return;
+    }
+    const watts = Math.round(this.data.powerW);
+    if (watts < 1) {
+      this.onToast('Pédale d’abord : les watts se verrouillent à ceux du moment');
+      return;
+    }
+    this.setLock(watts);
+    this.onToast(`Watts verrouillés à ${watts} W`);
+  }
+
+  /** Monte ou descend la puissance verrouillée (1 W par pas). */
+  adjustLock(deltaW: number): void {
+    if (this.workout) return;
+    if (this.lockedW === null) {
+      this.onToast('Verrouille d’abord les watts (touche L, ou bouton Y de la manette de droite)');
+      return;
+    }
+    this.setLock(Math.max(1, Math.min(LOCK_MAX_W, this.lockedW + deltaW)));
+  }
+
+  private setLock(watts: number): void {
+    this.lockedW = watts;
+    this.lastTargetW = null;
+    this.lastSend = 0;
+  }
+
   shift(delta: number): void {
     if (this.workout) return;
     this.enableGears();
@@ -333,6 +401,7 @@ export class Game {
         this.maxPower = Math.max(this.maxPower, power);
       }
       this.peloton?.advance(dt, { distM: this.physics.distanceM, traveledM: this.traveledM(this.physics.distanceM), speedMps: this.physics.speedMps });
+      this.bots?.advance(dt);
     }
 
     const dist = Math.min(this.physics.distanceM, this.route.lengthM);
@@ -413,6 +482,10 @@ export class Game {
       await this.sendWorkoutTarget();
       return;
     }
+    if (this.lockedW !== null) {
+      await this.sendTarget(this.lockedW);
+      return;
+    }
     const road = trainerCommand(
       this.route.gradeAt(dist + GRADE_LOOKAHEAD_M),
       this.route.eleAt(dist),
@@ -447,7 +520,11 @@ export class Game {
   private async sendWorkoutTarget(): Promise<void> {
     const state = workoutStateAt(this.workout!, this.elapsedS);
     if (!state) return;
-    const watts = Math.round((state.targetPct / 100) * this.ftp);
+    await this.sendTarget(Math.round((state.targetPct / 100) * this.ftp));
+  }
+
+  /** Impose une puissance au home trainer (mode ERG). */
+  private async sendTarget(watts: number): Promise<void> {
     // Comme en simulation, la cible est renvoyée de temps en temps : après une coupure Bluetooth ou une
     // commande perdue, le home trainer reprend la bonne puissance au lieu de rester sur l'ancienne.
     const now = performance.now();
@@ -497,7 +574,7 @@ export class Game {
     this.lastFrame = time;
     const dist = Math.min(this.physics.distanceM, this.route.lengthM);
     const ghost = this.exploring ? null : (this.tracker.ghostDistance(this.elapsedS) ?? this.referenceDistance(this.elapsedS));
-    this.world.render(dist, this.paused ? 0 : this.data.cadenceRpm, ghost, dt, time, this.peloton?.states());
+    this.world.render(dist, this.paused ? 0 : this.data.cadenceRpm, ghost, dt, time, [...(this.peloton?.states() ?? []), ...(this.bots?.states() ?? [])]);
     this.onFrame(this.snapshot(dist));
     this.rafId = requestAnimationFrame((t) => this.frame(t));
   }
@@ -524,17 +601,29 @@ export class Game {
       totalM: this.traveledM(dist),
       autoPaused: this.autoPause.paused,
       zone: powerZone(this.data.powerW, this.ftp),
-      peloton: this.peloton ? this.pelotonSnapshot(this.peloton, this.traveledM(dist)) : null,
+      peloton: this.peloton || this.bots ? this.pelotonSnapshot(this.traveledM(dist)) : null,
+      lockedW: this.lockedW,
     };
   }
 
-  private pelotonSnapshot(peloton: Peloton, traveledM: number): PelotonSnapshot {
+  /** Le coéquipier ou le fantôme le plus proche devant, et le plus proche derrière. */
+  private pelotonSnapshot(traveledM: number): PelotonSnapshot {
     const group = this.groupOptions;
+    const peloton = this.peloton;
+    const a = peloton?.neighbours(traveledM);
+    const b = this.bots?.neighbours(traveledM);
+    const nearest = (x: PelotonGap | null | undefined, y: PelotonGap | null | undefined, sign: 1 | -1): PelotonGap | null => {
+      if (!x) return y ?? null;
+      if (!y) return x;
+      return sign * x.gapM <= sign * y.gapM ? x : y;
+    };
     return {
-      ...peloton.neighbours(traveledM),
-      group: group
-        ? { wkg: group.wkg, riders: group.riders, warmupLeftS: Math.max(0, GROUP_WARMUP_S - peloton.clockS), countAhead: peloton.counts(traveledM).ahead, countBehind: peloton.counts(traveledM).behind }
-        : null,
+      ahead: nearest(a?.ahead, b?.ahead, 1),
+      behind: nearest(a?.behind, b?.behind, -1),
+      group:
+        group && peloton
+          ? { wkg: group.wkg, riders: group.riders, warmupLeftS: Math.max(0, GROUP_WARMUP_S - peloton.clockS), countAhead: peloton.counts(traveledM).ahead, countBehind: peloton.counts(traveledM).behind }
+          : null,
     };
   }
 
@@ -549,7 +638,7 @@ export class Game {
     cancelAnimationFrame(this.rafId);
     // Une séance laisse le frein sur sa dernière puissance imposée : on le rend libre, pour finir en roue libre
     // au lieu de pédaler contre un effort que la séance n'ordonne plus.
-    if (this.workout && !this.released) {
+    if ((this.workout || this.lockedW !== null) && !this.released) {
       this.released = true;
       const free = trainerCommand(0, 0, this.physics.setup, 1);
       void this.trainer.setSimulation(free).catch(() => {});

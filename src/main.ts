@@ -12,7 +12,7 @@ import { DemoTrainer } from './hardware/demoTrainer';
 import { BluetoothHeartRate } from './hardware/heartRate';
 import { KickrAnt } from './hardware/antUsb';
 import { KickrBluetooth } from './hardware/kickrBluetooth';
-import { type ShiftDirection, ShiftGate, ZwiftPlay } from './hardware/zwiftPlay';
+import { ActionGate, type ShiftDirection, ShiftGate, type ZwiftAction, ZwiftPlay } from './hardware/zwiftPlay';
 import type { HeartRateSensor, Trainer } from './hardware/types';
 import { formatTime, Hud } from './hud/hud';
 import './hud/hud.css';
@@ -34,7 +34,7 @@ import { type FreeCamera, MOVE_KEYS } from './world/freeCamera';
 import { NoWorld } from './world/noWorld';
 import { World } from './world/scene';
 
-const DEMO_HINT = '↑ ↓ puissance · Maj : ±50 W · + − vitesses · F caméra libre · Pg↑ Pg↓ ±1 km · P pause · V caméra · Échap quitter';
+const DEMO_HINT = '↑ ↓ puissance · Maj : ±50 W · L verrouiller les watts · + − vitesses · F caméra libre · Pg↑ Pg↓ ±1 km · P pause · V caméra · Échap quitter';
 const FREE_HINT = 'ZQSD déplacer · clic + souris regarder · A E descendre, monter · Maj vite · molette vitesse · T poser le cycliste ici · F sortir';
 const JUMP_M = 1000;
 const EXPLORE_REFRESH_MS = 150;
@@ -50,6 +50,7 @@ class App {
   private hr: HeartRateSensor | null = null;
   private play: ZwiftPlay[] = [];
   private shiftGate = new ShiftGate();
+  private actionGate = new ActionGate();
   private menu: Menu | null = null;
   private game: Game | null = null;
   private world: World | null = null;
@@ -130,6 +131,7 @@ class App {
   private async connectZwiftPlay(): Promise<string> {
     const play = new ZwiftPlay();
     play.onShift = (direction) => this.onShift(direction);
+    play.onAction = (action) => this.onZwiftAction(action);
     if (!(await play.connect(this.play.map((p) => p.deviceId)))) {
       return 'Cette manette est déjà connectée. Appuie sur l’autre pour la réveiller, puis reclique sur Zwift Play.';
     }
@@ -144,6 +146,17 @@ class App {
     if (!this.shiftGate.pass(direction, performance.now())) return;
     if (this.game) this.game.shift(direction === 'up' ? 1 : -1);
     else this.menu?.say(`Bouton reçu : vitesse ${direction === 'up' ? 'supérieure' : 'inférieure'}.`);
+  }
+
+  /** Y verrouille les watts, les flèches haut et bas les règlent d'un watt ; seulement pendant une sortie. */
+  private onZwiftAction(action: ZwiftAction): void {
+    if (!this.game || !this.actionGate.pass(action, performance.now())) return;
+    this.lockAction(action === 'lock' ? 'toggle' : action === 'powerUp' ? 'up' : 'down');
+  }
+
+  private lockAction(action: 'toggle' | 'up' | 'down'): void {
+    if (action === 'toggle') this.game?.toggleLock();
+    else this.game?.adjustLock(action === 'up' ? 1 : -1);
   }
 
   private async loadTrack(routeId: string) {
@@ -242,12 +255,14 @@ class App {
 
     this.root.innerHTML = '';
     const hud = new Hud(this.root, route);
+    hud.onLock = (a) => this.lockAction(a);
+    hud.setLockAvailable(!steps);
     if (steps) hud.showWorkout(steps);
     hud.setConnection(trainer.label, trainer.state);
     trainer.onState = (state) => hud.setConnection(trainer.label, state);
     this.route = route;
     this.hud = hud;
-    hud.setHint(demo ? DEMO_HINT : '+ − vitesses · P pause · V caméra · Échap quitter');
+    hud.setHint(demo ? DEMO_HINT : '+ − vitesses · L verrouiller les watts · P pause · V caméra · Échap quitter');
     if (demo) {
       hud.enableExplore((d) => game.jumpTo(d));
       this.canvas.addEventListener('pointerdown', this.onPointerDown);
@@ -258,7 +273,9 @@ class App {
     const intro = route.data.world
       ? `${route.data.name} · boucle de ${fr(route.data.climb.lengthKm, 0)} km, de la plage au désert, à répéter sans fin`
       : `${route.data.name} · ${fr(route.data.footM / 1000)} km d'approche avant le pied du col`;
-    hud.toast(workout ? `${workout.name} · ${route.data.name}` : intro);
+    const bots = resume ? [] : this.profile.bots;
+    const botNote = bots.length > 0 ? ` · ${bots.length} fantôme${bots.length > 1 ? 's' : ''} : ${bots.map((w) => fr(w)).join(' · ')} W/kg` : '';
+    hud.toast((workout ? `${workout.name} · ${route.data.name}` : intro) + botNote);
 
     game.onFrame = (s) => {
       hud.update(s, performance.now());
@@ -273,6 +290,7 @@ class App {
     // Un groupe choisi dans l'onglet Peloton ; à défaut, les quatre coéquipiers de l'option du menu. La reprise ne les retrouve pas.
     if (group && !resume) game.enableGroup(group);
     else if (this.profile.peloton && !steps) game.enablePeloton();
+    game.enableBots(bots);
 
     window.addEventListener('keydown', this.onKey);
     window.addEventListener('keyup', this.onKeyUp);
@@ -484,12 +502,20 @@ class App {
     }
     const demo = this.trainer instanceof DemoTrainer ? this.trainer : null;
     const step = e.shiftKey ? 50 : 10;
+    const locked = this.game.lockedPowerW !== null;
     switch (e.key) {
       case 'ArrowUp':
-        demo?.adjust(step);
+        // Watts verrouillés : la flèche règle le verrou, d'un watt (cinq avec Maj) ; sinon, la puissance du mode démo.
+        if (locked) this.game.adjustLock(e.shiftKey ? 5 : 1);
+        else demo?.adjust(step);
         break;
       case 'ArrowDown':
-        demo?.adjust(-step);
+        if (locked) this.game.adjustLock(e.shiftKey ? -5 : -1);
+        else demo?.adjust(-step);
+        break;
+      case 'l':
+      case 'L':
+        this.game.toggleLock();
         break;
       case '+':
         this.game.shift(1);

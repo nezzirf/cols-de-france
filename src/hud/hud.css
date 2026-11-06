@@ -668,3 +668,45 @@ input:focus-visible {
 .peloton-head b { font-size: 16px; }
 .peloton-head span { color: var(--dim); font-size: 13px; text-align: right; }
 .peloton-head small { grid-column: 1 / -1; color: var(--dim); font-size: 12px; }
+
+/* Verrouillage des watts : un bouton en bas à gauche, avec deux pas d'un watt une fois verrouillé. */
+.hud-lock {
+  position: absolute;
+  left: 16px;
+  bottom: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.hud-lock button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 24px;
+  background: rgba(16, 20, 26, 0.82);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.hud-lock button:hover {
+  background: rgba(40, 46, 54, 0.9);
+}
+
+.hud-lock[data-locked='true'] .hud-lock-main {
+  border-color: var(--accent);
+  background: #e4540a;
+}
+
+/* La puissance verrouillée se repère d'un coup d'œil : un liseré orange sous la valeur. */
+.metric[data-locked='true'] .metric-value {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 4px;
+}

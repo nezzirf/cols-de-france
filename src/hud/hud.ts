@@ -62,6 +62,12 @@ export class Hud {
   private slider: HTMLInputElement | null = null;
   private dragging = false;
   private workout: { steps: WorkoutStep[]; chart: HTMLCanvasElement; target: HTMLElement; left: HTMLElement } | null = null;
+  private lockBox: HTMLElement;
+  private lockMain: HTMLElement;
+  private lockSteps: HTMLElement[];
+  private lockedShown: number | null | undefined;
+  /** Verrouiller les watts, ou les monter et descendre d'un watt. */
+  onLock: (action: 'toggle' | 'up' | 'down') => void = () => {};
 
   constructor(
     parent: HTMLElement,
@@ -107,6 +113,11 @@ export class Hud {
       <div class="hud-status" data-r="status"></div>
       <div class="hud-hint" data-r="hint" hidden></div>
       <div class="hud-pause" data-r="pause" hidden>Pause</div>
+      <div class="hud-lock" data-r="lockBox">
+        <button class="hud-lock-step" data-r="lockDown" aria-label="Descendre d'un watt" hidden>−1 W</button>
+        <button class="hud-lock-main" data-r="lock">Verrouiller les watts</button>
+        <button class="hud-lock-step" data-r="lockUp" aria-label="Monter d'un watt" hidden>+1 W</button>
+      </div>
     `;
     parent.appendChild(this.el);
     const q = <T extends HTMLElement>(name: string) => this.el.querySelector(`[data-r="${name}"]`) as T;
@@ -134,6 +145,26 @@ export class Hud {
     this.pause = q('pause');
     this.hint = q('hint');
     this.el.querySelectorAll<HTMLElement>('[data-m]').forEach((e) => this.values.set(e.dataset.m!, e));
+    this.lockBox = q('lockBox');
+    this.lockMain = q('lock');
+    this.lockSteps = [q('lockDown'), q('lockUp')];
+    this.lockMain.addEventListener('click', () => this.onLock('toggle'));
+    q('lockDown').addEventListener('click', () => this.onLock('down'));
+    q('lockUp').addEventListener('click', () => this.onLock('up'));
+  }
+
+  /** Pendant une séance la puissance est imposée : le verrouillage n'a pas lieu d'être. */
+  setLockAvailable(available: boolean): void {
+    this.lockBox.hidden = !available;
+  }
+
+  private showLock(lockedW: number | null): void {
+    if (lockedW === this.lockedShown) return;
+    this.lockedShown = lockedW;
+    const locked = lockedW !== null;
+    this.lockMain.textContent = locked ? `Watts verrouillés · ${lockedW} W (appuie pour libérer)` : 'Verrouiller les watts';
+    this.lockBox.dataset.locked = String(locked);
+    for (const step of this.lockSteps) step.hidden = !locked;
   }
 
   update(s: RideSnapshot, now: number): void {
@@ -176,9 +207,11 @@ export class Hud {
     this.pause.hidden = !(s.paused || s.autoPaused);
     this.pause.textContent = s.paused ? 'Pause' : 'Pause automatique';
     const power = this.values.get('power')!.parentElement!;
+    power.dataset.locked = String(s.lockedW !== null);
     if (s.zone > 0) power.dataset.zone = String(s.zone);
     else delete power.dataset.zone;
     this.renderPeloton(s);
+    this.showLock(s.lockedW);
     if (this.workout && s.workout) {
       this.workout.target.textContent = String(s.workout.targetW);
       this.workout.left.textContent = formatTime(Math.ceil(s.workout.stepLeftS));
