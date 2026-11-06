@@ -162,7 +162,7 @@ export class Hud {
     if (lockedW === this.lockedShown) return;
     this.lockedShown = lockedW;
     const locked = lockedW !== null;
-    this.lockMain.textContent = locked ? `Watts verrouillés · ${lockedW} W (appuie pour libérer)` : 'Verrouiller les watts';
+    this.lockMain.textContent = locked ? `Verrouillé · ${lockedW} W` : 'Verrouiller les watts';
     this.lockBox.dataset.locked = String(locked);
     for (const step of this.lockSteps) step.hidden = !locked;
   }

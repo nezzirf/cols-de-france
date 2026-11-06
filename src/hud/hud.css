@@ -674,15 +674,38 @@ input:focus-visible {
   position: absolute;
   left: 16px;
   bottom: 40px;
-  display: flex;
-  align-items: center;
+  /* Le bouton, avec les deux pas d'un watt au-dessus : une petite colonne, qui ne passe jamais sous le panneau du centre. */
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas: 'down up' 'main main';
   gap: 8px;
+  width: min(220px, 20vw);
   pointer-events: auto;
+}
+
+.hud-lock[hidden] {
+  display: none;
+}
+
+.hud-lock-main {
+  grid-area: main;
+}
+
+.hud-lock-step:first-child {
+  grid-area: down;
+}
+
+.hud-lock-step:last-child {
+  grid-area: up;
+}
+
+.hud-lock-step[hidden] {
+  display: none;
 }
 
 .hud-lock button {
   min-height: 44px;
-  padding: 10px 16px;
+  padding: 8px 10px;
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 24px;
   background: rgba(16, 20, 26, 0.82);
@@ -709,4 +732,90 @@ input:focus-visible {
   text-decoration-color: var(--accent);
   text-decoration-thickness: 3px;
   text-underline-offset: 4px;
+}
+
+/* Sur un écran tactile il n'y a pas de clavier : l'aide des touches ne sert à rien, et elle chevauche les boutons. */
+@media (pointer: coarse) {
+  .hud-hint {
+    display: none;
+  }
+}
+
+/* Tablette : on dégage le bas de l'écran, où se serrent les métriques, le verrouillage et le bouton de fin. */
+@media (max-width: 1180px) {
+  .hud-lock {
+    bottom: 44px;
+    width: min(200px, 22vw);
+  }
+
+  .hud-lock button {
+    min-height: 40px;
+    font-size: 14px;
+  }
+}
+
+/*
+ * Tablette et écrans étroits : version épurée. On garde le chrono, la distance, les écarts, la pente, l'altitude et
+ * les métriques essentielles ; le rapport engagé passe en orange et plus gros. Disparaissent l'aide des touches,
+ * les segments chronométrés, la vitesse moyenne et les deux profils d'altitude.
+ */
+@media (max-width: 1180px), (pointer: coarse) {
+  .hud-hint,
+  .hud-segments,
+  .hud-time-label,
+  .profile,
+  .profile-legend,
+  .strip,
+  .metric:has([data-m='avg']) {
+    display: none;
+  }
+
+  .hud-left {
+    width: 196px;
+    padding: 8px 12px 10px;
+  }
+
+  .hud-time {
+    font-size: 30px;
+  }
+
+  .hud-route {
+    margin-top: 6px;
+  }
+
+  .hud-route-values b {
+    font-size: 18px;
+  }
+
+  .hud-right {
+    width: auto;
+    padding: 8px 12px;
+  }
+
+  .hud-right-head {
+    margin: 0;
+  }
+
+  .metric-gear .metric-value {
+    color: var(--accent);
+    font-size: 34px;
+  }
+
+  .hud-center {
+    padding: 8px 6px;
+  }
+
+  .metric {
+    min-width: 70px;
+    padding: 0 8px;
+  }
+
+  .hud-lock {
+    width: min(190px, 20vw);
+  }
+
+  .hud-lock button {
+    min-height: 38px;
+    font-size: 13px;
+  }
 }
