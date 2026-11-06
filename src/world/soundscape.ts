@@ -25,7 +25,7 @@ const PROFILE: Record<Habitat, Partial<Levels>> = {
 };
 
 /** Force de chaque couche à pleine intensité : de quoi que rien ne couvre le reste ni ne sature. */
-const LAYER_GAIN: Levels = { wind: 0.22, whistle: 0.12, surf: 0.34, gulls: 0.12, birds: 0.24, leaves: 0.14, crickets: 0.035, bells: 0.09, rain: 0.2 };
+const LAYER_GAIN: Levels = { wind: 0.22, whistle: 0.12, surf: 0.34, gulls: 0.12, birds: 0.24, leaves: 0.14, crickets: 0.022, bells: 0.09, rain: 0.2 };
 
 /** Nom d'un milieu du monde d'entraînement ou d'un col, pour l'oreille. */
 export function habitatOfBiome(name: string): Habitat {
@@ -223,8 +223,26 @@ export class Soundscape {
     this.noise().connect(this.filter('highpass', 1200)).connect(this.filter('lowpass', 9000)).connect(this.layers.rain);
   }
 
-  /** Grillons : une note aiguë hachée très vite, avec un second grillon un peu à côté. */
+  /**
+   * Grillons : une note aiguë hachée très vite, avec un second grillon un peu à côté. Ils ne chantent pas en continu, ce
+   * qui finirait par agacer : une courte tirade de quelques secondes, puis un long silence.
+   */
   private buildCrickets(): void {
+    const gate = this.ctx.createGain();
+    gate.gain.value = 0;
+    gate.connect(this.layers.crickets);
+    this.every(
+      () => {
+        if (this.levels.crickets < 0.05) return;
+        const t = this.ctx.currentTime;
+        gate.gain.cancelScheduledValues(t);
+        gate.gain.setValueAtTime(gate.gain.value, t);
+        gate.gain.linearRampToValueAtTime(1, t + 1.5);
+        gate.gain.linearRampToValueAtTime(1, t + rand(3, 6));
+        gate.gain.linearRampToValueAtTime(0, t + rand(8, 11));
+      },
+      () => rand(45, 110),
+    );
     for (const [pitch, rate] of [[4300, 16], [4650, 13]] as const) {
       const carrier = this.ctx.createOscillator();
       carrier.frequency.value = pitch;
@@ -236,7 +254,7 @@ export class Soundscape {
       const depth = this.ctx.createGain();
       depth.gain.value = 0.5;
       lfo.connect(depth).connect(am.gain);
-      carrier.connect(am).connect(this.layers.crickets);
+      carrier.connect(am).connect(gate);
       carrier.start();
       lfo.start();
     }
