@@ -6,8 +6,6 @@ import type { SavedRide } from '../app/rideAutosave';
 import type { HistoryEntry } from '../app/rideHistory';
 import { type Moment, MOMENTS, type Weather, WEATHERS } from '../world/ambiance';
 import { findBike, findJersey, wearing, type Bike } from '../sim/bikes';
-import { bleatVoice, mooVoice } from '../world/animalVoices';
-import { loadBleatSample, playBleatSample } from '../world/sampleBleat';
 import { BOT_TINTS, BOT_WKG_MAX, BOT_WKG_MIN, BOT_WKG_STEP, DEFAULT_BOT_WKG, MAX_BOTS } from '../sim/bots';
 import type { GroupOptions } from '../sim/group';
 import { SALON_ROUTE_ID } from '../sim/salonRoute';
@@ -77,7 +75,6 @@ export class Menu {
   private tab: TabId = 'parcours';
   private preview: BikePreview | null = null;
   private shownBike = '';
-  private testAudio: AudioContext | null = null;
   private context: MenuContext;
 
   constructor(
@@ -145,7 +142,6 @@ export class Menu {
             <label class="m-check" data-r="pelotonRow"><input type="checkbox" data-o="peloton"> Rouler avec un peloton</label>
             <label class="m-check"><input type="checkbox" data-o="ghost"> Fantôme de ma meilleure sortie</label>
             <label class="m-check"><input type="checkbox" data-o="sound"> Sons d'ambiance (forêt, plage, vent)</label>
-            <div class="m-sound-test">Écouter <button data-a="mooTest">une vache</button><button data-a="bleatTest">un mouton</button></div>
             <div class="m-bots" data-r="bots">
               <div class="m-bots-head"><span>Fantômes</span><button class="m-bots-add" data-a="addBot">+ Ajouter</button></div>
               <div data-r="botList"></div>
@@ -202,18 +198,6 @@ export class Menu {
       this.changed();
     });
     this.renderBots();
-    // Pour juger les voix sans aller jusqu'aux prairies : le clic autorise le son.
-    for (const [action, voice] of [['mooTest', mooVoice], ['bleatTest', bleatVoice]] as const) {
-      this.q(`[data-a="${action}"]`).addEventListener('click', () => {
-        this.testAudio ??= new AudioContext();
-        const ctx = this.testAudio;
-        void ctx.resume();
-        const options = { loudness: 0.9, pan: 0, distance01: 0.15 };
-        // Le mouton, c'est l'enregistrement quand il est là ; la vache reste synthétique.
-        if (action === 'bleatTest') void loadBleatSample(ctx).then((sample) => (sample ? playBleatSample(ctx, ctx.destination, sample, options) : voice(ctx, ctx.destination, options)));
-        else voice(ctx, ctx.destination, options);
-      });
-    }
     this.q('[data-a="start"]').addEventListener('click', () => void this.start());
 
     this.preview = new BikePreview(this.q('[data-r="preview"]'));
@@ -328,8 +312,6 @@ export class Menu {
   close(): void {
     this.preview?.dispose();
     this.preview = null;
-    void this.testAudio?.close().catch(() => {});
-    this.testAudio = null;
   }
 
   /** Redessine l'aperçu du cycliste, par exemple quand un modèle vient d'être chargé. */
