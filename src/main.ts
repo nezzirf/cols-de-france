@@ -331,7 +331,7 @@ class App {
     if (app.mode === 'partage') {
       // Rien à demander : le système place le jeu à côté de l'application.
     } else if (app.mode === 'pastille') {
-      pill = new PillHud();
+      pill = new PillHud(workout ? expandBlocks(workout.blocks) : null);
       try {
         await pill.open();
       } catch (err) {

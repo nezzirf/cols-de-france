@@ -4,9 +4,11 @@
 
 import type { RideSnapshot } from '../app/game';
 import type { ConnectionState } from '../hardware/types';
+import { totalDuration, zoneColor, type WorkoutStep } from '../sim/workout';
 import { formatTime } from './hud';
 
-const WIDTH = 640;
+// Très allongée : le rapport 2,39 est le plus large qu'Android accepte pour une fenêtre flottante.
+const WIDTH = 860;
 const HEIGHT = 360;
 const UPDATE_MS = 200;
 const TOAST_MS = 5000;
@@ -44,7 +46,7 @@ export class PillHud {
   /** Appelé quand le joueur ferme la pastille avec sa croix. */
   onClosed: () => void = () => {};
 
-  constructor() {
+  constructor(private steps: WorkoutStep[] | null = null) {
     this.canvas.width = WIDTH;
     this.canvas.height = HEIGHT;
     this.ctx = this.canvas.getContext('2d')!;
@@ -109,36 +111,34 @@ export class PillHud {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    text('PUISSANCE', 32, 54, 24, DIM);
-    text(s ? String(power) : '--', 28, 206, 156, STATE_COLOR[powerState(power, plan?.targetW ?? null)], { italic: true });
-    text('W', 32, 250, 34, DIM);
-
-    // La colonne de droite : la cible quand il y a une séance, sinon la vitesse, puis cadence et cœur.
+    // Première ligne : tous les chiffres côte à côte.
+    text('PUISSANCE', 28, 40, 22, DIM);
+    text(s ? String(power) : '--', 24, 168, 132, STATE_COLOR[powerState(power, plan?.targetW ?? null)], { italic: true });
+    text('W', 250, 168, 32, DIM);
     const side: [string, string, string][] = [
       plan ? ['CIBLE', String(plan.targetW), ACCENT] : ['VITESSE', s ? s.speedKmh.toFixed(1).replace('.', ',') : '--', INK],
       ['CADENCE', s ? String(Math.round(s.cadenceRpm)) : '--', INK],
       ['CARDIO', s?.heartRateBpm == null ? '--' : String(Math.round(s.heartRateBpm)), INK],
     ];
     side.forEach(([label, value, color], i) => {
-      const y = 54 + i * 84;
-      text(label, 608, y, 20, DIM, { align: 'right' });
-      text(value, 608, y + 46, 54, color, { italic: true, align: 'right' });
+      const x = 400 + i * 150;
+      text(label, x, 40, 20, DIM);
+      text(value, x - 4, 118, 66, color, { italic: true });
     });
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.fillRect(28, 192, WIDTH - 56, 2);
 
-    if (plan) {
-      const done = plan.totalS > 0 ? Math.min(1, plan.elapsedS / plan.totalS) : 0;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-      ctx.fillRect(32, 282, WIDTH - 64, 8);
-      ctx.fillStyle = ACCENT;
-      ctx.fillRect(32, 282, (WIDTH - 64) * done, 8);
+    // Seconde ligne : les blocs de la séance, avec la place où l'on en est.
+    if (plan && this.steps && this.steps.length > 0) {
+      this.drawBlocks(28, 206, WIDTH - 56, 94, plan.elapsedS);
     }
     const time = plan ? `${formatTime(plan.elapsedS)} / ${formatTime(plan.totalS)}` : s ? `${formatTime(s.elapsedS)} · ${(s.totalM / 1000).toFixed(1).replace('.', ',')} km` : '00:00';
-    text(time, 32, 336, 30, INK);
-    if (plan) text(`Bloc ${formatTime(Math.ceil(plan.stepLeftS))}`, 330, 336, 26, DIM);
+    text(time, 28, 342, 30, INK);
+    if (plan) text(`Bloc ${formatTime(Math.ceil(plan.stepLeftS))}`, 330, 342, 26, DIM);
     if (this.link) {
       ctx.fillStyle = LINK_COLOR[this.link.state];
       ctx.beginPath();
-      ctx.arc(592, 326, 7, 0, Math.PI * 2);
+      ctx.arc(WIDTH - 36, 332, 7, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -147,7 +147,33 @@ export class PillHud {
       ctx.fillRect(0, 150, WIDTH, 60);
       text(this.toastText, WIDTH / 2, 190, 28, INK, { align: 'center' });
     } else if (this.link && this.link.state !== 'connected') {
-      text(`${this.link.label} · ${LINK_NAME[this.link.state]}`, 608, 300, 20, DIM, { align: 'right' });
+      text(`${this.link.label} · ${LINK_NAME[this.link.state]}`, WIDTH - 56, 340, 20, DIM, { align: 'right' });
     }
+  }
+
+  /** Les blocs de la séance en barres (hauteur = consigne, couleur = zone) ; la partie déjà faite est assombrie. */
+  private drawBlocks(x: number, y: number, w: number, h: number, elapsedS: number): void {
+    const { ctx } = this;
+    const steps = this.steps!;
+    const total = totalDuration(steps);
+    if (total <= 0) return;
+    const peak = Math.max(135, ...steps.flatMap((st) => [st.fromPct, st.toPct])) * 1.06;
+    const top = (pct: number) => y + h - (pct / peak) * h;
+    const perS = w / total;
+    for (const st of steps) {
+      const x0 = x + st.startS * perS;
+      const width = st.durationS * perS;
+      const slices = st.fromPct === st.toPct ? 1 : Math.max(1, Math.ceil(width / 5));
+      for (let i = 0; i < slices; i++) {
+        const pct = st.fromPct + ((st.toPct - st.fromPct) * (i + 0.5)) / slices;
+        ctx.fillStyle = zoneColor(pct);
+        ctx.fillRect(x0 + (width * i) / slices, top(pct), width / slices + 0.6, y + h - top(pct));
+      }
+    }
+    const cursor = x + Math.min(w, Math.max(0, elapsedS) * perS);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(x, y, cursor - x, h);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(cursor - 1.5, y - 4, 3, h + 8);
   }
 }
