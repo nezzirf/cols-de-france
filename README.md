@@ -91,7 +91,8 @@ La FTP, le poids et le nom se règlent en haut de l'écran. Sous le bouton « Ro
   météo. Case « Sons d'ambiance » dans le menu, touche M pendant la sortie.
 - **Troupeaux** : dans les prairies du monde d'entraînement, des vaches et des moutons paissent à côté de la route,
   toujours aux mêmes endroits, à plus d'un kilomètre les uns des autres. En passant devant, on les entend meugler ou
-  bêler, plus fort à mesure qu'on s'approche, du côté où ils se trouvent.
+  bêler, plus fort à mesure qu'on s'approche, du côté où ils se trouvent. Le bêlement est un enregistrement de mouton (les trois premières secondes
+  de `public/sounds/mouton.mp3`, fourni par le joueur, dont la licence n'est pas connue) ; le meuglement est synthétisé.
 
 ## Pendant la sortie
 

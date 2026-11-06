@@ -5,6 +5,7 @@
 import type { Moment, Weather } from './ambiance';
 import { bleatVoice, mooVoice } from './animalVoices';
 import type { NearHerd } from './herds';
+import { loadBleatSample, playBleatSample } from './sampleBleat';
 
 export type Habitat = 'plage' | 'prairie' | 'foret' | 'montagne' | 'canyon' | 'desert' | 'vallee' | 'alpage' | 'haute-montagne';
 
@@ -97,6 +98,9 @@ export class Soundscape {
   private volume = 0.7;
   private disposed = false;
   private herd: NearHerd | null = null;
+  /** Le bêlement enregistré, dès qu'il est chargé ; jusque-là, la voix synthétique. */
+  private bleat: Awaited<ReturnType<typeof loadBleatSample>> = null;
+  private bleatUntil = 0;
 
   constructor(options: { moment?: Moment; weather?: Weather; volume?: number } = {}) {
     this.moment = options.moment ?? 'jour';
@@ -129,6 +133,7 @@ export class Soundscape {
     this.scheduleGulls();
     this.scheduleBells();
     this.scheduleHerd();
+    void loadBleatSample(this.ctx).then((sample) => (this.bleat = sample));
     void this.ctx.resume().catch(() => {});
   }
 
@@ -378,8 +383,11 @@ export class Soundscape {
         if (loudness < 0.03) return;
         const voice = { loudness: loudness * 1.5, pan: herd.pan, distance01: herd.distanceM / Soundscape.HERD_RANGE_M };
         if (herd.kind === 'vache') mooVoice(this.ctx, this.master, voice);
-        else {
-          // Les moutons bêlent souvent à deux ou trois, l'un après l'autre.
+        else if (this.bleat) {
+          // L'enregistrement dure trois secondes et contient déjà deux bêlements : on attend qu'il soit fini avant de le rejouer.
+          if (this.ctx.currentTime >= this.bleatUntil) this.bleatUntil = this.ctx.currentTime + playBleatSample(this.ctx, this.master, this.bleat, voice) + 0.8;
+        } else {
+          // Sans l'enregistrement, les moutons bêlent à deux ou trois, l'un après l'autre.
           const calls = 1 + Math.floor(rand(0, 3));
           for (let i = 0; i < calls; i++) {
             window.setTimeout(() => {

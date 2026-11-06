@@ -7,6 +7,7 @@ import type { HistoryEntry } from '../app/rideHistory';
 import { type Moment, MOMENTS, type Weather, WEATHERS } from '../world/ambiance';
 import { findBike, findJersey, wearing, type Bike } from '../sim/bikes';
 import { bleatVoice, mooVoice } from '../world/animalVoices';
+import { loadBleatSample, playBleatSample } from '../world/sampleBleat';
 import { BOT_TINTS, BOT_WKG_MAX, BOT_WKG_MIN, BOT_WKG_STEP, DEFAULT_BOT_WKG, MAX_BOTS } from '../sim/bots';
 import type { GroupOptions } from '../sim/group';
 import { SALON_ROUTE_ID } from '../sim/salonRoute';
@@ -205,8 +206,12 @@ export class Menu {
     for (const [action, voice] of [['mooTest', mooVoice], ['bleatTest', bleatVoice]] as const) {
       this.q(`[data-a="${action}"]`).addEventListener('click', () => {
         this.testAudio ??= new AudioContext();
-        void this.testAudio.resume();
-        voice(this.testAudio, this.testAudio.destination, { loudness: 0.9, pan: 0, distance01: 0.15 });
+        const ctx = this.testAudio;
+        void ctx.resume();
+        const options = { loudness: 0.9, pan: 0, distance01: 0.15 };
+        // Le mouton, c'est l'enregistrement quand il est là ; la vache reste synthétique.
+        if (action === 'bleatTest') void loadBleatSample(ctx).then((sample) => (sample ? playBleatSample(ctx, ctx.destination, sample, options) : voice(ctx, ctx.destination, options)));
+        else voice(ctx, ctx.destination, options);
       });
     }
     this.q('[data-a="start"]').addEventListener('click', () => void this.start());
