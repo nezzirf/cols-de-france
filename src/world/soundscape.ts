@@ -86,6 +86,8 @@ export class Soundscape {
   private master: GainNode;
   private layers = {} as Record<LayerName, GainNode>;
   private rush: GainNode;
+  /** Les rafales modulent un peu le souffle de la vitesse. */
+  private rushGust: GainNode;
   private analyser: AnalyserNode;
   private noiseBuffer: AudioBuffer;
   private stops: (() => void)[] = [];
@@ -121,6 +123,9 @@ export class Soundscape {
     this.rush = this.ctx.createGain();
     this.rush.gain.value = 0;
     this.rush.connect(this.master);
+    this.rushGust = this.ctx.createGain();
+    this.rushGust.gain.value = 0.55;
+    this.rushGust.connect(this.rush);
     this.noiseBuffer = this.makeNoise();
     this.master.gain.value = this.volume;
     this.buildWind();
@@ -183,18 +188,45 @@ export class Soundscape {
     this.stops.push(() => clearTimeout(timer));
   }
 
-  /** Vent : un souffle grave qui enfle et retombe, et un sifflement qui se promène quand le terrain est rocheux. */
+  /**
+   * Vent : presque calme, avec des rafales légères. Une rafale monte en une ou deux secondes, se tient un instant puis
+   * retombe plus doucement, toutes les sept à seize secondes ; le sifflement des roches ne vient qu'avec elle, et le
+   * souffle de la vitesse en prend un peu.
+   */
   private buildWind(): void {
+    const calm = 0.12;
     const gust = this.ctx.createGain();
-    gust.gain.value = 0.5;
+    gust.gain.value = calm;
     this.noise().connect(this.filter('lowpass', 520)).connect(gust).connect(this.layers.wind);
-    this.every(() => gust.gain.setTargetAtTime(rand(0.3, 1), this.ctx.currentTime, 1.2), () => rand(2.5, 6));
 
     const whistle = this.filter('bandpass', 420, 10);
+    const whistleGust = this.ctx.createGain();
+    whistleGust.gain.value = 0;
     const whistleGain = this.ctx.createGain();
     whistleGain.gain.value = 0.7;
-    this.noise().connect(whistle).connect(whistleGain).connect(this.layers.whistle);
+    this.noise().connect(whistle).connect(whistleGust).connect(whistleGain).connect(this.layers.whistle);
     this.every(() => whistle.frequency.setTargetAtTime(rand(300, 720), this.ctx.currentTime, 1.6), () => rand(2, 5));
+
+    const swell = (param: AudioParam, base: number, peak: number, up: number, hold: number, down: number): void => {
+      const t = this.ctx.currentTime;
+      param.cancelScheduledValues(t);
+      param.setValueAtTime(param.value, t);
+      param.linearRampToValueAtTime(peak, t + up);
+      param.linearRampToValueAtTime(peak * 0.9, t + up + hold);
+      param.linearRampToValueAtTime(base, t + up + hold + down);
+    };
+    this.every(
+      () => {
+        const strength = rand(0.5, 0.9);
+        const up = rand(1.2, 2.4);
+        const hold = rand(0.8, 2.2);
+        const down = rand(2.5, 4.5);
+        swell(gust.gain, calm, strength, up, hold, down);
+        swell(whistleGust.gain, 0, strength * 0.8, up, hold, down);
+        swell(this.rushGust.gain, 0.55, 0.55 + strength * 0.4, up, hold, down);
+      },
+      () => rand(7, 16),
+    );
   }
 
   /** Vagues : un bruit qui monte en trois secondes puis se retire. */
@@ -271,7 +303,7 @@ export class Soundscape {
 
   /** Vent relatif : le souffle dans les oreilles grandit avec la vitesse. */
   private buildRush(): void {
-    this.noise().connect(this.filter('bandpass', 750, 0.4)).connect(this.rush);
+    this.noise().connect(this.filter('bandpass', 750, 0.4)).connect(this.rushGust);
   }
 
   private scheduleBirds(): void {
