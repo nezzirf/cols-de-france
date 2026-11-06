@@ -28,7 +28,7 @@ const PROFILE: Record<Habitat, Partial<Levels>> = {
 };
 
 /** Force de chaque couche à pleine intensité : de quoi que rien ne couvre le reste ni ne sature. */
-const LAYER_GAIN: Levels = { wind: 0.22, whistle: 0.12, surf: 0.34, gulls: 0.12, birds: 0.24, leaves: 0.14, crickets: 0.022, bells: 0.09, rain: 0.2 };
+const LAYER_GAIN: Levels = { wind: 0.165, whistle: 0.09, surf: 0.34, gulls: 0.12, birds: 0.24, leaves: 0.14, crickets: 0.022, bells: 0.09, rain: 0.2 };
 
 /** Nom d'un milieu du monde d'entraînement ou d'un col, pour l'oreille. */
 export function habitatOfBiome(name: string): Habitat {
@@ -427,7 +427,7 @@ export class Soundscape {
   /** Vitesse du cycliste (m/s). */
   setSpeed(mps: number): void {
     const share = Math.min(1, Math.max(0, mps / FULL_RUSH_MPS));
-    this.rush.gain.setTargetAtTime(Math.pow(share, 1.4) * 0.5, this.ctx.currentTime, 0.4);
+    this.rush.gain.setTargetAtTime(Math.pow(share, 1.4) * 0.38, this.ctx.currentTime, 0.4);
   }
 
   /** En pause, le paysage se tait. */
