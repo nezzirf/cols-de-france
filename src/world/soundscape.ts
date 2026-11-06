@@ -3,6 +3,7 @@
 // d'un milieu à l'autre, les sons se fondent. Le vent dans les oreilles suit la vitesse, la pluie suit la météo.
 
 import type { Moment, Weather } from './ambiance';
+import type { NearHerd } from './herds';
 
 export type Habitat = 'plage' | 'prairie' | 'foret' | 'montagne' | 'canyon' | 'desert' | 'vallee' | 'alpage' | 'haute-montagne';
 
@@ -94,6 +95,7 @@ export class Soundscape {
   private paused = false;
   private volume = 0.7;
   private disposed = false;
+  private herd: NearHerd | null = null;
 
   constructor(options: { moment?: Moment; weather?: Weather; volume?: number } = {}) {
     this.moment = options.moment ?? 'jour';
@@ -125,6 +127,7 @@ export class Soundscape {
     this.scheduleBirds();
     this.scheduleGulls();
     this.scheduleBells();
+    this.scheduleHerd();
     void this.ctx.resume().catch(() => {});
   }
 
@@ -359,6 +362,76 @@ export class Soundscape {
       },
       () => rand(5, 13) / Math.max(0.3, this.levels.bells),
     );
+  }
+
+  /** Rayon (m) dans lequel un troupeau s'entend. */
+  static readonly HERD_RANGE_M = 110;
+
+  /** Beuglements et bêlements : seulement quand un troupeau est tout près, de plus en plus fort à mesure qu'on s'en approche. */
+  private scheduleHerd(): void {
+    this.every(
+      () => {
+        const herd = this.herd;
+        if (!herd || herd.distanceM > Soundscape.HERD_RANGE_M) return;
+        const loudness = Math.pow(1 - herd.distanceM / Soundscape.HERD_RANGE_M, 1.6);
+        if (loudness < 0.03) return;
+        if (herd.kind === 'vache') this.moo(loudness, herd.pan);
+        else this.bleat(loudness, herd.pan);
+      },
+      () => rand(2.2, 5.5),
+    );
+  }
+
+  setHerd(herd: NearHerd | null): void {
+    this.herd = herd;
+  }
+
+  /** Une voix : une dent de scie grave passée dans un filtre, comme une gorge. */
+  private voice(options: { from: number; peak: number; to: number; formant: number; q: number; seconds: number; tremolo?: number; loudness: number; pan: number }): void {
+    const t = this.ctx.currentTime + 0.02;
+    const { from, peak, to, formant, q, seconds, tremolo, loudness, pan } = options;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(from, t);
+    osc.frequency.linearRampToValueAtTime(peak, t + seconds * 0.3);
+    osc.frequency.linearRampToValueAtTime(to, t + seconds);
+    const body = this.filter('bandpass', formant, q);
+    const tone = this.filter('lowpass', formant * 3);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.55 * loudness, t + 0.09);
+    gain.gain.setValueAtTime(0.5 * loudness, t + seconds * 0.7);
+    gain.gain.linearRampToValueAtTime(0, t + seconds);
+    const stereo = this.ctx.createStereoPanner();
+    stereo.pan.value = pan;
+    osc.connect(body).connect(tone).connect(gain).connect(stereo).connect(this.master);
+    const stops: OscillatorNode[] = [osc];
+    if (tremolo) {
+      // Le bêlement tremble : un battement rapide sur le volume.
+      const lfo = this.ctx.createOscillator();
+      lfo.frequency.value = tremolo;
+      const depth = this.ctx.createGain();
+      depth.gain.value = 0.35 * loudness;
+      lfo.connect(depth).connect(gain.gain);
+      stops.push(lfo);
+    }
+    for (const node of stops) {
+      node.start(t);
+      node.stop(t + seconds + 0.05);
+    }
+  }
+
+  private moo(loudness: number, pan: number): void {
+    this.voice({ from: 105, peak: 150, to: 88, formant: 560, q: 2.2, seconds: rand(1.1, 1.5), loudness: loudness * 1.6, pan });
+  }
+
+  private bleat(loudness: number, pan: number): void {
+    const bleats = Math.random() < 0.4 ? 2 : 1;
+    for (let i = 0; i < bleats; i++) {
+      window.setTimeout(() => {
+        if (!this.disposed) this.voice({ from: 330, peak: 380, to: 300, formant: 1250, q: 3.4, seconds: rand(0.55, 0.8), tremolo: 26, loudness: loudness * 1.4, pan });
+      }, i * 750);
+    }
   }
 
   private apply(): void {

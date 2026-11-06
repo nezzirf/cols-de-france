@@ -7,6 +7,8 @@ import type { BuildingData, Route } from '../sim/route';
 import { buildBuildings } from './buildings';
 import { buildCliffRocks } from './cliffs';
 import { ambienceOf, biomeAt, biomeLabel, type BiomeName } from './biomes';
+import { Herds } from './herds';
+import { planHerds } from '../sim/herds';
 import { type Habitat, habitatOfBiome, type Soundscape } from './soundscape';
 import { HeightField } from './heightField';
 import { LandCover } from './landCover';
@@ -74,6 +76,7 @@ export class World {
   private targetDensity = 0.00009;
   /** Ambiance sonore, quand le joueur l'a choisie : elle suit le milieu traversé. */
   sound: Soundscape | null = null;
+  private herds: Herds | null = null;
   private lastSound = 0;
   cameraMode: CameraMode = 'poursuite';
   free: FreeCamera | null = null;
@@ -139,6 +142,11 @@ export class World {
     if (this.world) {
       this.water = new Water(this.field, this.renderer, this.world.seaLevelM);
       this.scene.add(this.water.mesh);
+    }
+    // Des vaches et des moutons paissent dans les prairies du monde d'entraînement, jamais deux troupeaux côte à côte.
+    if (this.world) {
+      const herds = this.world.zones.filter((zone) => zone.biome === 'prairie').flatMap((zone) => planHerds(zone.fromM, zone.toM));
+      this.herds = new Herds(route, this.field, this.scene, herds);
     }
     this.events = new Landmarks(route, this.field, this.scene).events;
 
@@ -337,6 +345,8 @@ export class World {
     if (this.sound && now - this.lastSound > 250) {
       this.lastSound = now;
       this.sound.setHabitats(this.habitats());
+      // Un troupeau qui s'approche meugle ou bêle, plus fort à mesure qu'on passe devant.
+      this.sound.setHerd(this.herds?.nearest(p.x, p.z, Math.cos(p.heading), Math.sin(p.heading)) ?? null);
     }
     this.water?.update(dt);
     this.updateSun(focus.x, focus.ele, focus.z);

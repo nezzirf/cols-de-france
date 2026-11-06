@@ -85,6 +85,14 @@ La FTP, le poids et le nom se règlent en haut de l'écran. Sous le bouton « Ro
   leur niveau jusqu'à la fin, quoi que tu fasses. Chacun est translucide, d'une teinte différente ; l'écran
   donne le plus proche devant et le plus proche derrière. Ils ne reprennent pas après une coupure.
 
+- **Sons d'ambiance** : fabriqués en direct par le navigateur, sans fichier. Vagues et mouettes à la plage, oiseaux et
+  feuilles en forêt, vent et sifflements en montagne, au canyon et au désert ; en prairie, des oiseaux et, rarement,
+  quelques grillons. Les sons se fondent d'un milieu à l'autre ; le souffle du vent suit la vitesse, la pluie suit la
+  météo. Case « Sons d'ambiance » dans le menu, touche M pendant la sortie.
+- **Troupeaux** : dans les prairies du monde d'entraînement, des vaches et des moutons paissent à côté de la route,
+  toujours aux mêmes endroits, à plus d'un kilomètre les uns des autres. En passant devant, on les entend meugler ou
+  bêler, plus fort à mesure qu'on s'approche, du côté où ils se trouvent.
+
 ## Pendant la sortie
 
 - **Verrouiller les watts** (hors séance) : le bouton « Verrouiller les watts » (touche L, ou Y sur la manette
