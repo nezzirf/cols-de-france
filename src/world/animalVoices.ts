@@ -33,6 +33,10 @@ interface VoiceSpec {
   rasp?: { subharmonic: number; drive: number };
   /** Une attaque en « b » : un petit claquement de souffle au début du cri. */
   plosive?: number;
+  /** Coupe les graves de la voix sous cette fréquence (Hz) : celle d'un mouton est nasillarde, pauvre en grave. */
+  highpass?: number;
+  /** Souffle sans voix avant le cri, comme une inspiration : niveau au cours du temps, et fréquence centrale (Hz). */
+  lead?: { track: Track; hz: number };
   /** Irrégularité de la hauteur, de 1 (normale) à plus : la voix du mouton déraille davantage. */
   unsteady?: number;
   /** Rattrapage du niveau : les résonances retirent beaucoup d'énergie à l'onde. */
@@ -137,6 +141,14 @@ function speak(ctx: BaseAudioContext, out: AudioNode, spec: VoiceSpec, options: 
     voiced.connect(shaper);
     vocal = shaper;
   }
+  if (spec.highpass) {
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = spec.highpass;
+    hp.Q.value = 0.8;
+    vocal.connect(hp);
+    vocal = hp;
+  }
   for (const formant of spec.formants) {
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
@@ -185,6 +197,22 @@ function speak(ctx: BaseAudioContext, out: AudioNode, spec: VoiceSpec, options: 
     puff.connect(puffFilter).connect(puffGain).connect(air);
     puff.start(t);
     puff.stop(t + 0.1);
+  }
+
+  if (spec.lead) {
+    const hiss = ctx.createBufferSource();
+    hiss.buffer = noiseBuffer(ctx);
+    hiss.loop = true;
+    const hissFilter = ctx.createBiquadFilter();
+    hissFilter.type = 'bandpass';
+    hissFilter.frequency.value = spec.lead.hz;
+    hissFilter.Q.value = 0.7;
+    const hissGain = ctx.createGain();
+    hissGain.gain.setValueAtTime(0, t);
+    for (const [at, level] of spec.lead.track) hissGain.gain.linearRampToValueAtTime(level * loudness, t + at * seconds);
+    hiss.connect(hissFilter).connect(hissGain).connect(air);
+    hiss.start(t);
+    hiss.stop(stop);
   }
 
   let last: AudioNode = envelope;
@@ -244,35 +272,61 @@ export function mooVoice(ctx: BaseAudioContext, out: AudioNode, options: VoiceOp
 }
 
 /**
- * « Bêêê » : une voix de brebis, plutôt grave, nasillarde et éraillée, qui démarre sur un petit « b », monte puis
- * retombe en tremblant ; l'agneau a la même voix, plus aiguë et plus courte.
+ * « Bêêê » d'une brebis, réglé sur un enregistrement : deux bêlements de suite. Le premier, long, commence par un souffle
+ * sans voix, puis une voix grave (autour de 215 Hz) qui monte à 260 Hz avant de retomber un peu et de s'arrêter net ; son
+ * timbre est clair et nasillard, avec beaucoup d'énergie vers 2 et 3,5 kHz. Le second, plus court et plus aigu (240 à
+ * 340 Hz), a une voyelle plus ronde, dont la première résonance monte de 520 à 950 Hz. Aucun tremblement du volume : la
+ * voix reste lisse, seule la hauteur bouge.
  */
 export function bleatVoice(ctx: BaseAudioContext, out: AudioNode, options: VoiceOptions): void {
-  const lamb = Math.random() < 0.22;
-  const base = (lamb ? 1.6 : 1) * rand(0.9, 1.12);
-  const seconds = lamb ? rand(0.55, 0.8) : rand(0.95, 1.4);
+  const lamb = Math.random() < 0.18;
+  const base = (lamb ? 1.55 : 1) * rand(0.93, 1.08);
   const hz = (v: number): number => v * base;
+  if (Math.random() < 0.55) {
+    // Le long bêlement, avec son souffle d'attaque.
+    speak(
+      ctx,
+      out,
+      {
+        seconds: lamb ? 0.9 : 1.45,
+        pitch: [[0, hz(205)], [0.17, hz(208)], [0.3, hz(215)], [0.55, hz(216)], [0.62, hz(237)], [0.68, hz(256)], [0.74, hz(262)], [0.88, hz(259)], [0.96, hz(248)], [1, hz(240)]],
+        formants: [
+          { gain: 0.25, q: 4, track: [[0, 650], [1, 800]] },
+          { gain: 1, q: 6, track: [[0, 1850], [0.5, 1950], [1, 2100]] },
+          { gain: 1.6, q: 7, track: [[0, 2750], [0.5, 3200], [1, 3550]] },
+          { gain: 0.35, q: 8, track: [[0, 4300], [1, 4400]] },
+        ],
+        amp: [[0, 0], [0.16, 0], [0.2, 0.35], [0.32, 0.55], [0.55, 0.8], [0.7, 1], [0.9, 0.95], [0.97, 0.5], [1, 0]],
+        lead: { track: [[0, 0], [0.1, 0.1], [0.17, 0.3], [0.2, 0.15], [0.3, 0.03], [1, 0.02]], hz: 2100 },
+        vibrato: { hz: 5.5, cents: 6 },
+        highpass: 650,
+        breath: 0.1,
+        unsteady: 0.5,
+        makeup: 1.05,
+      },
+      options,
+    );
+    return;
+  }
+  // Le bêlement court, plus aigu et plus rond.
   speak(
     ctx,
     out,
     {
-      seconds,
-      pitch: [[0, hz(255)], [0.06, hz(320)], [0.22, hz(345)], [0.55, hz(318)], [0.85, hz(270)], [1, hz(225)]],
+      seconds: lamb ? 0.5 : 0.7,
+      pitch: [[0, hz(240)], [0.12, hz(300)], [0.25, hz(325)], [0.55, hz(338)], [0.8, hz(310)], [1, hz(285)]],
       formants: [
-        { gain: 0.5, q: 4, track: [[0, 280], [1, 260]] },
-        { gain: 1, q: 4.5, track: [[0, 620], [0.2, 760], [0.6, 700], [1, 560]] },
-        { gain: 0.9, q: 6, track: [[0, 1350], [0.25, 1750], [0.6, 1650], [1, 1300]] },
-        { gain: 0.38, q: 8, track: [[0, 2600], [1, 2500]] },
-        { gain: 0.15, q: 8, track: [[0, 3500], [1, 3300]] },
+        { gain: 1, q: 4, track: [[0, 520], [0.3, 800], [1, 950]] },
+        { gain: 0.9, q: 4, track: [[0, 1150], [1, 1250]] },
+        { gain: 0.3, q: 6, track: [[0, 1800], [1, 2100]] },
+        { gain: 0.12, q: 8, track: [[0, 3300], [1, 3400]] },
       ],
-      amp: [[0, 0], [0.025, 0.85], [0.1, 1], [0.7, 0.8], [0.9, 0.4], [1, 0]],
-      vibrato: { hz: 24, cents: 70 },
-      tremolo: { hz: 23, depth: 0.62 },
-      breath: 0.16,
-      rasp: { subharmonic: 0.45, drive: 2.2 },
-      plosive: 0.35,
-      unsteady: 2.2,
-      makeup: 0.8,
+      amp: [[0, 0], [0.06, 0.5], [0.15, 0.9], [0.55, 1], [0.85, 0.6], [1, 0]],
+      vibrato: { hz: 5.5, cents: 6 },
+      highpass: 480,
+      breath: 0.08,
+      unsteady: 0.5,
+      makeup: 0.9,
     },
     options,
   );
