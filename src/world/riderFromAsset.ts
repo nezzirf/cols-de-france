@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { KIT_STYLES, type Livery } from '../sim/kits';
 import type { RiderFit } from './bikeFromAsset';
 import { at } from './modelParts';
-import { cloneRiderAsset, type HeadFrame, riderGlasses, riderHead, riderHelmetGeometry } from './riderAsset';
+import { cloneRiderAsset, type HeadFrame, riderGlasses, riderHead, riderHeadModel, riderHelmetGeometry } from './riderAsset';
 import { place, turned } from './modelParts';
 import { pbr } from './materials';
 
@@ -23,6 +23,48 @@ const LUMBAR_TILT = [-0.2, -0.1, 0.12, 0.18] as const;
 const TORSO_BONES = ['pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01', 'Head'] as const;
 /** Inclinaison de la tête par rapport à l'horizontale, pour regarder la route. */
 const HEAD_PITCH = -0.12;
+
+/**
+ * Matière de la tête modélisée : le casque est rouge dans la texture, et seule cette calotte prend la couleur du casque de
+ * l'équipe, en gardant ombres et reflets. Les lunettes (à l'avant, à hauteur des yeux), le col et la peau restent tels quels.
+ */
+function teamHeadMaterial(map: THREE.Texture | null, team: THREE.Color): THREE.Material {
+  const material = new THREE.MeshStandardMaterial({ map, color: 0xffffff, roughness: 0.6, side: THREE.DoubleSide });
+  const uniform = { value: team.clone() };
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uTeam = uniform;
+    shader.vertexShader = shader.vertexShader
+      .replace('void main() {', 'varying vec3 vRawPos;\nvoid main() {')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRawPos = position;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('void main() {', 'uniform vec3 uTeam;\nvarying vec3 vRawPos;\nvoid main() {')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        {
+          vec3 c = diffuseColor.rgb;
+          float redness = smoothstep(0.32, 0.5, c.r - max(c.g, c.b));
+          // Repère de la tête d'origine : visage vers +X, y de -0,49 (cou) à +0,49 (sommet du casque).
+          bool glasses = vRawPos.x > 0.2 && vRawPos.y < 0.15;
+          bool neckZone = vRawPos.y < -0.12;
+          if (glasses || neckZone) redness = 0.0;
+          float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+          diffuseColor.rgb = mix(c, uTeam * clamp(lum / 0.2, 0.0, 1.6), redness);
+          // Le cou est teinté de rouge dans la texture (reflet du col) : il prend la couleur de la peau du visage.
+          float neck = smoothstep(0.0, -0.12, vRawPos.y) * smoothstep(0.12, 0.3, c.r - max(c.g, c.b)) * (1.0 - redness);
+          vec3 skinTone = vec3(0.62, 0.33, 0.25);
+          diffuseColor.rgb = mix(diffuseColor.rgb, skinTone * clamp(0.55 + lum * 1.4, 0.6, 1.15), neck);
+        }`,
+      );
+  };
+  material.customProgramCacheKey = () => 'team-head';
+  return material;
+}
+/** Tête modélisée : largeur (casque compris), hauteur des yeux et pointe du nez dans son repère d'origine ; réglages de pose. */
+const HEAD_MODEL_WIDTH = 0.68;
+const HEAD_MODEL_EYES = 0.02;
+const HEAD_MODEL_NOSE = 0.448;
+const HEAD_MODEL_FIT = { margin: 0.03, lift: 0, front: 0.012 };
 /** Part du redressement du cou par rapport au dos : 0 le prolonge, 1 le rend vertical. */
 const NECK_RISE = 0.12;
 
@@ -323,7 +365,17 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
   fitted.matrix.copy(skull.restInverse);
   headBone.add(fitted);
   const modelled = riderHelmetGeometry();
-  if (modelled) {
+  const newHead = riderHeadModel();
+  if (newHead) {
+    // Tête modélisée avec son casque et ses lunettes : elle regarde vers +X, le mannequin vers +Z.
+    const scale = (skull.width + HEAD_MODEL_FIT.margin) / HEAD_MODEL_WIDTH;
+    const material = outfit.mono ? outfit.jersey : teamHeadMaterial(newHead.map, (outfit.helmet as THREE.MeshStandardMaterial).color);
+    const head3d = new THREE.Mesh(newHead.geometry, material);
+    head3d.scale.setScalar(scale);
+    head3d.rotation.y = -Math.PI / 2;
+    head3d.position.set(skull.centre.x, skull.eyes.y + HEAD_MODEL_FIT.lift - HEAD_MODEL_EYES * scale, skull.centre.z + skull.size.z / 2 + HEAD_MODEL_FIT.front - HEAD_MODEL_NOSE * scale);
+    fitted.add(head3d);
+  } else if (modelled) {
     // Casque modélisé : mis à la largeur de la tête, posé sur le crâne, bordure au niveau du front.
     const box = new THREE.Box3().setFromBufferAttribute(modelled.getAttribute('position') as THREE.BufferAttribute);
     const scale = (skull.width + HELMET_FIT.margin) / (box.max.x - box.min.x);
@@ -341,7 +393,7 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
   } else {
     fitted.add(new THREE.Mesh(skull.shell, outfit.mono ? outfit.jersey : helmetMaterial(outfit.helmet, skull)));
   }
-  for (const side of [-1, 1]) {
+  for (const side of newHead ? [] : [-1, 1]) {
     const strap = new THREE.Mesh(turned([0.0045, 0.0045], 6), dark);
     place(strap, new THREE.Vector3(skull.temple.x * side, skull.temple.y, skull.temple.z), new THREE.Vector3(skull.chin.x * side, skull.chin.y, skull.chin.z));
     fitted.add(strap);
@@ -355,11 +407,11 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
   const mouth = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8), outfit.mono ? outfit.jersey : pbr({ color: 0x8a4a46, roughness: 0.5 }));
   mouth.scale.set(FACE.mouthWidth, FACE.mouthHeight, FACE.mouthDepth);
   mouth.position.set(skull.centre.x, mouthY, skull.faceZ(mouthY) + FACE.mouthOut);
-  fitted.add(nose, mouth);
+  if (!newHead) fitted.add(nose, mouth);
 
   // Lunettes de sport : à la largeur de la tête, le milieu de l'écran à hauteur des yeux, l'avant de l'écran
   // juste devant le front.
-  const sunglasses = riderGlasses();
+  const sunglasses = newHead ? null : riderGlasses();
   if (sunglasses) {
     const box = new THREE.Box3().setFromBufferAttribute(sunglasses.geometry.getAttribute('position') as THREE.BufferAttribute);
     const scale = (skull.width + GLASSES_FIT.margin) / (box.max.x - box.min.x);

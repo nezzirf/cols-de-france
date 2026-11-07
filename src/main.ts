@@ -92,7 +92,7 @@ class App {
     // Le vélo modélisé arrive après le menu : l'aperçu se refait dès qu'il est là.
     void bikeLoading.then(() => this.menu?.refreshPreview());
     // Les vélos d'un seul maillage (Cannondale, SL9, Pinarello, Trinity) arrivent encore après : l'aperçu se refait aussi quand ils sont là.
-    void bikeModelsLoaded().then(() => this.menu?.refreshPreview());
+    void bikeModelsLoaded().then(() => this.menu?.refreshPreview('meshes'));
   }
 
   private get bike(): Bike {

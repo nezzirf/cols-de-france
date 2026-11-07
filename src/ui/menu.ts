@@ -91,6 +91,8 @@ export class Menu {
   private mode: Mode = 'sortie';
   private preview: BikePreview | null = null;
   private shownBike = '';
+  /** Les modèles 3D arrivent après le menu : tant qu'ils ne sont pas là, on n'affiche pas l'ancien cycliste dessiné par le code. */
+  private loaded = { base: false, meshes: false };
   private context: MenuContext;
   private themeQuery: MediaQueryList | null = null;
   private onSystemTheme = (): void => this.applyTheme();
@@ -265,6 +267,13 @@ export class Menu {
     requestAnimationFrame(() => this.paintHub());
   }
 
+  /** Le cycliste et son vélo modélisés sont-ils chargés ? Les vélos d'un seul maillage arrivent après les autres. */
+  private modelsReady(bike: Bike): boolean {
+    if (!this.loaded.base) return false;
+    const slow = bike.asset === 'ef' || bike.asset === 'sl9' || bike.asset === 'pinarello' || bike.asset === 'trinity';
+    return !slow || this.loaded.meshes;
+  }
+
   /** Le déroulé de la séance choisie en fond de « Entraînement », et le cycliste de profil sur son vélo dans « Garage ». */
   private paintHub(): void {
     if (this.tab !== 'accueil') return;
@@ -277,6 +286,10 @@ export class Menu {
     const img = this.root.querySelector<HTMLImageElement>('.m-hub-bike');
     if (!img) return;
     const bike = this.bike;
+    if (!this.modelsReady(bike)) {
+      img.hidden = true;
+      return;
+    }
     const key = `${bike.id}|${bike.jersey}|${JSON.stringify(bike.livery)}`;
     let url = stills.get(key);
     if (!url) {
@@ -346,7 +359,8 @@ export class Menu {
   }
 
   /** Redessine l'aperçu du cycliste, par exemple quand un modèle vient d'être chargé. */
-  refreshPreview(): void {
+  refreshPreview(step: 'base' | 'meshes' = 'base'): void {
+    this.loaded[step] = true;
     this.shownBike = '';
     // Le vélo modélisé vient d'arriver : les images dessinées avec l'ancien modèle ne valent plus.
     stills.clear();
@@ -418,7 +432,10 @@ export class Menu {
     if (!go.disabled) go.textContent = group ? 'Rouler en peloton' : 'Rouler';
 
     const key = `${bike.id}|${bike.jersey}|${JSON.stringify(bike.livery)}`;
-    if (key !== this.shownBike) {
+    if (!this.modelsReady(bike)) {
+      this.shownBike = '';
+      this.preview?.hide();
+    } else if (key !== this.shownBike) {
       this.shownBike = key;
       this.preview?.show(bike);
     }

@@ -73,6 +73,11 @@ export class BikePreview {
     this.turntable.add(rider.group);
   }
 
+  /** Retire le cycliste affiché : pendant le chargement des modèles, on ne montre rien plutôt que l'ancien dessin. */
+  hide(): void {
+    this.clear();
+  }
+
   private clear(): void {
     if (!this.model) return;
     this.turntable.remove(this.model);

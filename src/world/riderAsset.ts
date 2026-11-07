@@ -35,6 +35,64 @@ let asset: THREE.Object3D | null = null;
 let head: HeadFrame | null = null;
 let loading: Promise<void> | null = null;
 
+/** Tête modélisée (visage, casque et lunettes), allégée à une trentaine de milliers de triangles : elle remplace celle du mannequin. */
+export const HEAD_MODEL_URL = `${import.meta.env.BASE_URL}models/pogi/pogi-head.glb`;
+let headModel: { geometry: THREE.BufferGeometry; map: THREE.Texture | null } | null = null;
+
+/** Tête modélisée, ou rien si elle n'a pas pu être chargée : le jeu garde alors la tête du mannequin. */
+export const riderHeadModel = (): { geometry: THREE.BufferGeometry; map: THREE.Texture | null } | null => headModel;
+
+/** Texture ramenée à 1024 px : une seule image sert à tous les coureurs. */
+function shrink(map: THREE.Texture | null): THREE.Texture | null {
+  const image = map?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
+  if (!map || !image || typeof document === 'undefined') return map;
+  const size = 1024;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  canvas.getContext('2d')?.drawImage(image, 0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.flipY = map.flipY;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+async function loadHeadModel(): Promise<void> {
+  try {
+    const gltf = await new GLTFLoader().loadAsync(HEAD_MODEL_URL);
+    gltf.scene.updateMatrixWorld(true);
+    gltf.scene.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || headModel) return;
+      const material = (Array.isArray(o.material) ? o.material[0] : o.material) as THREE.MeshStandardMaterial;
+      headModel = { geometry: o.geometry.clone().applyMatrix4(o.matrixWorld), map: shrink(material.map ?? null) };
+    });
+  } catch {
+    headModel = null;
+  }
+}
+
+/** Retire la tête du mannequin (les triangles dont tous les points sont portés par l'os de la tête) : celle du modèle la remplace. */
+function removeMannequinHead(body: THREE.SkinnedMesh, eyes: THREE.SkinnedMesh): void {
+  const geometry = body.geometry;
+  const joints = geometry.getAttribute('skinIndex');
+  const weights = geometry.getAttribute('skinWeight');
+  const names = body.skeleton.bones.map((bone) => bone.name);
+  const onHead = (v: number): boolean => {
+    let best = 0;
+    for (let k = 1; k < 4; k++) if (weights.getComponent(v, k) > weights.getComponent(v, best)) best = k;
+    return names[joints.getComponent(v, best)] === 'Head';
+  };
+  const index = geometry.getIndex()!;
+  const kept: number[] = [];
+  for (let t = 0; t < index.count; t += 3) {
+    const [a, b, c] = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
+    if (!(onHead(a) && onHead(b) && onHead(c))) kept.push(a, b, c);
+  }
+  geometry.setIndex(kept);
+  eyes.visible = false;
+}
+
 /** Casque de route modélisé : en mètres, dôme vers le haut (y), avant vers +Z, posé sur sa bordure en y = 0. */
 export const HELMET_URL = `${import.meta.env.BASE_URL}models/casque/helmet.glb`;
 let helmet: THREE.BufferGeometry | null = null;
@@ -260,7 +318,7 @@ export function preloadRiderAsset(): Promise<void> {
   loading ??= new GLTFLoader()
     .loadAsync(RIDER_ASSET_URL)
     .then(async (gltf) => {
-      await Promise.all([loadHelmet(), loadGlasses()]);
+      await Promise.all([loadHelmet(), loadGlasses(), loadHeadModel()]);
       gltf.scene.updateMatrixWorld(true);
       let body: THREE.SkinnedMesh | null = null;
       let eyes: THREE.SkinnedMesh | null = null;
@@ -272,6 +330,7 @@ export function preloadRiderAsset(): Promise<void> {
         slimUpperBody(body);
         keepRestPositions(body);
         head = measureHead(body, eyes, gltf.scene.getObjectByName('Head')!);
+        if (headModel) removeMannequinHead(body, eyes);
       }
       asset = gltf.scene;
     })
