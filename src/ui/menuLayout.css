@@ -30,8 +30,8 @@
 .m-gear {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border-radius: 50%;
   background: var(--m-card);
@@ -43,8 +43,8 @@
 }
 
 .m-gear svg {
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
 }
 
 .m-gear:hover {
@@ -53,8 +53,8 @@
 }
 
 .m-gear[aria-selected='true'] {
-  background: var(--m-text);
-  color: var(--m-card) !important;
+  background: var(--m-card);
+  box-shadow: 0 0 0 3px var(--m-accent);
 }
 
 .m-tabs[hidden] {
@@ -555,8 +555,7 @@
   background: rgba(255, 255, 255, 0.07);
 }
 
-.m-root[data-theme='dark'] .m-tab[aria-selected='true'],
-.m-root[data-theme='dark'] .m-gear[aria-selected='true'] {
+.m-root[data-theme='dark'] .m-tab[aria-selected='true'] {
   background: #e9eef3;
   color: #12171d !important;
 }
