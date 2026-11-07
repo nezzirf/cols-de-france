@@ -177,7 +177,7 @@ export function buildMeshBike(spec: MeshBikeSpec, cloneAsset: () => THREE.Object
     arm.rotation.x = side < 0 ? 0 : Math.PI;
     crankset.add(arm);
     const pedal = new THREE.Group();
-    pedal.position.set(side * 0.072, 0, side < 0 ? -CRANK : CRANK);
+    pedal.position.set(side * 0.11, 0, side < 0 ? -CRANK : CRANK);
     pedal.add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, 0.1), dark));
     crankset.add(pedal);
     pedals.push(pedal);

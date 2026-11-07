@@ -10,9 +10,11 @@ import { cloneRiderAsset, type HeadFrame, riderGlasses, riderHead, riderHeadMode
 import { place, turned } from './modelParts';
 import { pbr } from './materials';
 
-const PEDAL_SIDE = 0.072;
+const PEDAL_SIDE = 0.11;
+/** Écart supplémentaire de chaque hanche vers l'extérieur (m) : les jambes entières s'ouvrent, pas seulement le pied. */
+const HIP_SPREAD = 0.035;
 /** Les genoux montent droit vers l'avant, au plus près du cadre : léger rappel vers l'intérieur (0 : droit, plus : vers le cadre). */
-const KNEE_IN = 0.05;
+const KNEE_IN = 0.012;
 /** Avant-pied par rapport à l'axe de la pédale : en avant (m), épaisseur de la pédale au-dessus de l'axe, hauteur de l'os de l'avant-pied au-dessus de la semelle. */
 const CLEAT_FORWARD = 0.005;
 const PEDAL_TOP = 0.012;
@@ -434,6 +436,17 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
   const hips = worldPos(bone('thigh_l')).add(worldPos(bone('thigh_r'))).multiplyScalar(0.5);
   rig.position.add(at(fit.hip[0], fit.hip[1], 0).sub(hips));
   rig.updateMatrixWorld(true);
+  // Les jambes entières s'écartent : chaque hanche glisse vers l'extérieur, comme le pied et le genou.
+  {
+    const left = bone('thigh_l');
+    const right = bone('thigh_r');
+    const outward = worldPos(right).sub(worldPos(left)).normalize().multiplyScalar(HIP_SPREAD);
+    for (const [thighBone, shift] of [[left, outward.clone().negate()], [right, outward]] as const) {
+      const here = worldPos(thighBone);
+      thighBone.position.copy(thighBone.parent!.worldToLocal(here.add(shift)));
+    }
+    rig.updateMatrixWorld(true);
+  }
 
   // Longueurs des segments, mesurées sur le personnage à sa taille finale.
   const length = (a: string, b: string) => worldPos(bone(a)).distanceTo(worldPos(bone(b)));
@@ -502,6 +515,19 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
     group.updateWorldMatrix(true, false);
     group.getWorldQuaternion(around);
     rig.updateMatrixWorld(true);
+
+    // Le haut du corps vit un peu avec le pédalage : le buste roule d'un côté puis de l'autre, les épaules tournent
+    // à contretemps, et le dos monte et descend légèrement à chaque demi-tour. Le bassin reste sur la selle et les mains
+    // sur le guidon (leurs cibles sont recalculées ensuite). Presque rien en contre-la-montre, où la position doit rester figée.
+    const calm = fit.headPitch !== undefined ? 0.25 : 1;
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(around);
+    const vertical = new THREE.Vector3(0, 1, 0).applyQuaternion(around);
+    const lateral = new THREE.Vector3(1, 0, 0).applyQuaternion(around);
+    for (const name of ['spine_01', 'spine_02', 'spine_03'] as const) {
+      turn(bone(name), forward, Math.sin(crankAngle) * 0.011 * calm);
+      turn(bone(name), vertical, Math.sin(crankAngle + 0.6) * 0.014 * calm);
+      turn(bone(name), lateral, Math.sin(crankAngle * 2) * 0.005 * calm);
+    }
 
     limbs.legs.forEach((leg, i) => {
       const angle = crankAngle + i * Math.PI;

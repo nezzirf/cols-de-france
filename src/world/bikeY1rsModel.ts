@@ -58,8 +58,8 @@ export function buildY1rsModelBike(wheelRadiusM: number, material: THREE.Materia
 
   need(part(BOTTLE_CAGE)).visible = false;
   // Les pédales du fichier sont à 16 cm de l'axe ; le cycliste a les pieds à 7 cm : on les rapproche.
-  need(part(RIGHT_PEDAL)).position.x -= 0.1 - PEDAL_X;
-  need(part(LEFT_PEDAL)).position.x += 0.099 - PEDAL_X;
+  need(part(RIGHT_PEDAL)).position.x -= 0.062 - PEDAL_X;
+  need(part(LEFT_PEDAL)).position.x += 0.061 - PEDAL_X;
 
   // Un pivot par ensemble qui tourne ; les pièces y gardent leur place dans l'espace (attach).
   const pivot = (z: number, y: number, names: string[], parent: THREE.Object3D = root): THREE.Group => {
