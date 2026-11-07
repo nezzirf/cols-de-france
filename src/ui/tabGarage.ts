@@ -3,8 +3,10 @@
 import { ALL_BIKES, BIKE_JERSEY, type Bike, type BikeShape, findBike, JERSEYS, setupFor, wearing } from '../sim/bikes';
 import type { KitStyle, Livery } from '../sim/kits';
 import { steadySpeed } from '../sim/physicsEngine';
+import { bikeModelReady, bikeModelsLoaded } from '../world/bikeAsset';
 import { esc, fr, hex } from './format';
 import type { MenuContext } from './menu';
+import { renderBikeStill } from './preview';
 
 type GarageView = 'velo' | 'maillot';
 
@@ -16,7 +18,22 @@ const CATEGORIES: { id: string; label: string; shapes: BikeShape[]; teams?: bool
   { id: 'ville', label: 'Ville', shapes: ['ville'] },
 ];
 
+const thumbs = new Map<string, string>();
+
+/** Miniature du vélo : son modèle 3D, vu de profil, quand il en a un et qu'il est chargé ; sinon un schéma. */
 function bikeIcon(b: Bike): string {
+  if (b.asset && bikeModelReady(b.asset)) {
+    let url = thumbs.get(b.id);
+    if (!url) {
+      try {
+        url = renderBikeStill(b, 480, 272);
+        thumbs.set(b.id, url);
+      } catch {
+        url = undefined;
+      }
+    }
+    if (url) return `<img src="${url}" alt="" draggable="false">`;
+  }
   const frame = hex(b.frame);
   const r = b.shape === 'vtt' ? 21 : 19;
   return `<svg viewBox="0 0 120 68" aria-hidden="true">
@@ -79,6 +96,10 @@ export function renderGarage(page: HTMLElement, ctx: MenuContext): void {
     </div>
     <div data-r="garage"></div>`;
   const body = page.querySelector('[data-r="garage"]') as HTMLElement;
+  // Les modèles 3D arrivent en arrière-plan : leurs miniatures remplacent les schémas dès qu'ils sont là.
+  void bikeModelsLoaded().then(() => {
+    if (view === 'velo' && page.isConnected) showBikes();
+  });
 
   const showHeader = (): string => {
     const bike = findBike(p.bikeId);

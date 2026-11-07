@@ -19,6 +19,7 @@ let rcr: THREE.Object3D | null = null;
 let y1rs: THREE.Object3D | null = null;
 const meshBikes = new Map<string, THREE.Object3D>();
 let loading: Promise<void> | null = null;
+const meshLoads: Promise<void>[] = [];
 
 const load = (url: string, prepare?: (scene: THREE.Object3D) => void): Promise<THREE.Object3D | null> =>
   new GLTFLoader()
@@ -38,9 +39,11 @@ export function preloadBikeAsset(): Promise<void> {
     y1rs = colnago;
     // Les vélos d'un seul maillage pèsent de 13 à 18 Mo : on les charge en arrière-plan, sans retarder le départ.
     for (const spec of Object.values(MESH_BIKES)) {
-      void load(spec.url, splitMeshBike(spec)).then((model) => {
-        if (model) meshBikes.set(spec.id, model);
-      });
+      meshLoads.push(
+        load(spec.url, splitMeshBike(spec)).then((model) => {
+          if (model) meshBikes.set(spec.id, model);
+        }),
+      );
     }
   });
   return loading;
@@ -50,6 +53,16 @@ export const bikeAssetReady = (): boolean => asset !== null;
 export const rcrAssetReady = (): boolean => rcr !== null;
 export const y1rsAssetReady = (): boolean => y1rs !== null;
 export const meshBikeReady = (id: string): boolean => meshBikes.has(id);
+
+/** Tous les vélos modélisés sont chargés (ou ont échoué) : pour redessiner les miniatures du Garage. */
+export const bikeModelsLoaded = (): Promise<void> => (loading ?? Promise.resolve()).then(() => Promise.all(meshLoads)).then(() => undefined);
+
+/** Le modèle 3D propre à ce vélo est-il chargé ? */
+export function bikeModelReady(asset: string): boolean {
+  if (asset === 'rcr') return rcr !== null;
+  if (asset === 'y1rs') return y1rs !== null;
+  return meshBikes.has(asset);
+}
 
 /** Copie indépendante du vélo, avec son propre squelette. */
 export function cloneBikeAsset(): THREE.Object3D {

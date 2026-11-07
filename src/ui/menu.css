@@ -542,7 +542,8 @@
   font-size: 13px;
 }
 
-.m-bike-pic svg {
+.m-bike-pic svg,
+.m-bike-pic img {
   display: block;
   width: 100%;
 }
@@ -596,10 +597,15 @@
   outline-color: var(--m-accent);
 }
 
-.m-item svg {
+.m-item svg,
+.m-item img {
   width: 100%;
   height: 66px;
   margin-bottom: 4px;
+}
+
+.m-item img {
+  object-fit: contain;
 }
 
 .m-item b {

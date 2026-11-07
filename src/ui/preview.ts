@@ -3,7 +3,9 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { Bike } from '../sim/bikes';
-import { dressedRider } from '../world/riderSetup';
+import { buildBike } from '../world/bikeModel';
+import { lacquer, pbr } from '../world/materials';
+import { bikeShape, dressedRider } from '../world/riderSetup';
 
 const TURN_RAD_PER_S = 0.28;
 const DRAG_RAD_PER_PX = 0.008;
@@ -174,6 +176,51 @@ export function renderStill(bike: Bike, width: number, height: number): string {
   const url = canvas.toDataURL('image/png');
 
   rider.group.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    o.geometry.dispose();
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.dispose();
+  });
+  renderer.dispose();
+  renderer.forceContextLoss();
+  return url;
+}
+
+/** Le vélo seul, vu de profil, pour les miniatures du Garage (fond transparent, rendu une fois). */
+export function renderBikeStill(bike: Bike, width: number, height: number): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(width, height, false);
+  renderer.setClearColor(0x000000, 0);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  const scene = new THREE.Scene();
+  const environment = new THREE.PMREMGenerator(renderer);
+  scene.environment = environment.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = 0.9;
+  environment.dispose();
+  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+  sun.position.set(3.5, 5, 2.5);
+  scene.add(sun);
+
+  const built = buildBike({ ...bikeShape(bike), frame: lacquer({ color: bike.frame }), paint: lacquer({ color: bike.accent }), coat: bike.coat, brand: bike.brand ?? undefined }, pbr({ color: bike.frame }), false);
+  built.drive(CRANK_ANGLE);
+  // Les roues découpées tournent autour de leur moyeu : leur boîte englobante déborde, on cadre donc sur des cotes fixes.
+  built.group.position.set(0, 0, 0.0);
+  scene.add(built.group);
+
+  // De profil, le vélo regarde vers la droite de l'image ; la caméra est assez loin pour que la perspective reste discrète.
+  const camera = new THREE.PerspectiveCamera(9, width / height, 0.1, 50);
+  // Le vélo mesure environ 1,1 m de long sur 1 m de haut (du sol au sommet de la selle), centré à 7 cm devant le pédalier.
+  const half = Math.max(0.52, 0.58 / (width / height)) * 1.04;
+  const distance = half / Math.tan((camera.fov * Math.PI) / 360);
+  camera.position.set(distance, 0.5, -0.07);
+  camera.lookAt(0, 0.5, -0.07);
+  renderer.render(scene, camera);
+  const url = canvas.toDataURL('image/png');
+
+  built.group.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;
     o.geometry.dispose();
     for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.dispose();
