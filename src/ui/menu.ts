@@ -245,8 +245,10 @@ export class Menu {
       garage: `${this.bike.name} · ${findJersey(p.jerseyId)?.name ?? 'Tenue du vélo'}`,
       historique: runs ? `${runs} sortie${runs > 1 ? 's' : ''} enregistrée${runs > 1 ? 's' : ''}` : 'Tes sorties apparaîtront ici',
     };
+    // La sortie libre prend la photo aérienne du col choisi ; les autres ont leur dégradé, défini dans la feuille de style.
+    const photo = this.context.routes.some((r) => r.id === p.routeId) ? `linear-gradient(180deg, rgba(14, 22, 30, 0.25), rgba(14, 22, 30, 0.82)), url(data/${p.routeId}/ortho.jpg) center / cover` : '';
     page.innerHTML = `<div class="m-hub">${HUB.map(
-      (h) => `<button class="m-hub-card" data-hub="${h.id}">
+      (h) => `<button class="m-hub-card" data-hub="${h.id}"${h.id === 'sortie' && photo ? ` style="background:${photo}"` : ''}>
         <svg viewBox="0 0 24 24" aria-hidden="true">${h.icon}</svg>
         <b>${h.title}</b>
         <span>${esc(hint[h.id])}</span>

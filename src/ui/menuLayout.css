@@ -74,59 +74,93 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
   grid-auto-rows: minmax(150px, 1fr);
-  height: max(360px, calc(100dvh - 250px));
+  height: max(340px, calc(100dvh - 285px));
   padding: 6px 4px 4px;
 }
 
 .m-hub-card {
+  position: relative;
   display: grid;
   align-content: end;
   gap: 6px;
   min-height: 190px;
   padding: 28px 30px;
+  overflow: hidden;
   border-radius: 28px;
-  background: var(--m-card);
+  background: var(--art);
   box-shadow: var(--m-shadow);
-  color: var(--m-text) !important;
+  color: #fff !important;
   text-align: left;
   transition:
     transform 0.25s var(--m-ease),
     box-shadow 0.25s;
 }
 
+.m-hub-card[data-hub='sortie'] {
+  --art: linear-gradient(135deg, #1f5f8b, #0f2f4f);
+}
+
+.m-hub-card[data-hub='entrainement'] {
+  --art: linear-gradient(135deg, #f0762b, #b8321a);
+}
+
+.m-hub-card[data-hub='garage'] {
+  --art: linear-gradient(135deg, #5a6572, #1f2830);
+}
+
+.m-hub-card[data-hub='historique'] {
+  --art: linear-gradient(135deg, #2c9c60, #0f5a45);
+}
+
 .m-hub-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 14px 34px rgba(30, 42, 56, 0.18);
+  box-shadow: 0 14px 34px rgba(30, 42, 56, 0.28);
 }
 
 .m-hub-card:active {
   transform: scale(0.98);
 }
 
+/* Le dessin : très grand, en filigrane, qui déborde de la carte. */
 .m-hub-card svg {
-  width: 64px;
-  height: 64px;
-  margin-bottom: auto;
-  padding: 14px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, #ff8a2b, var(--m-accent-dark));
-  color: #fff;
+  position: absolute;
+  top: 50%;
+  right: -2%;
+  width: min(54%, 260px);
+  height: auto;
+  aspect-ratio: 1;
+  color: rgba(255, 255, 255, 0.24);
   fill: currentColor;
+  transform: translateY(-52%) rotate(-6deg);
+  transition:
+    transform 0.4s var(--m-ease),
+    color 0.3s;
+}
+
+.m-hub-card:hover svg {
+  color: rgba(255, 255, 255, 0.36);
+  transform: translateY(-52%) rotate(0deg) scale(1.06);
 }
 
 .m-hub-card svg .snow {
-  fill: #ffd9bf;
+  fill: rgba(255, 255, 255, 0.5);
+}
+
+.m-hub-card b,
+.m-hub-card span {
+  position: relative;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
 }
 
 .m-hub-card b {
-  font-size: 30px;
+  font-size: 34px;
   font-style: italic;
 }
 
 .m-hub-card span {
   overflow: hidden;
-  color: var(--m-dim);
-  font-size: 15px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -142,9 +176,7 @@
   }
 
   .m-hub-card svg {
-    width: 48px;
-    height: 48px;
-    padding: 10px;
+    width: 40%;
   }
 }
 
