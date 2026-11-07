@@ -679,3 +679,71 @@
 .m-root[data-theme='dark'] svg [fill='#2b3138'] {
   fill: #c3ccd6;
 }
+
+/* Fenêtre d'avertissement : pas de home trainer connecté. */
+.m-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 16, 22, 0.55);
+  backdrop-filter: blur(3px);
+  animation: m-in 0.2s var(--m-ease);
+}
+
+.m-modal-card {
+  display: grid;
+  gap: 12px;
+  width: min(480px, 100%);
+  padding: 26px 28px 22px;
+  border-radius: 24px;
+  background: var(--m-card);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  color: var(--m-text);
+}
+
+.m-modal-card h3 {
+  margin: 0;
+  font-size: 22px;
+  font-style: italic;
+}
+
+.m-modal-card p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.m-modal-card .m-modal-note {
+  color: var(--m-dim);
+  font-size: 13px;
+}
+
+.m-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.m-modal-actions button {
+  padding: 11px 18px;
+  border: 1px solid var(--m-line);
+  border-radius: 999px;
+  background: var(--m-card);
+  color: var(--m-text) !important;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.m-modal-actions button.primary {
+  border-color: transparent;
+  background: linear-gradient(100deg, #ff8a2b, var(--m-accent-dark));
+  color: #fff !important;
+}
+
+.m-modal-actions button:first-child {
+  flex: 1 1 100%;
+}

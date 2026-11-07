@@ -150,7 +150,7 @@ export class Menu {
       <main class="m-content" data-r="content"></main>
       <footer class="m-bar" data-r="bar">
         <div class="m-summary" data-r="summary"></div>
-        <p class="m-msg" data-r="msg">Sans home trainer connecté, la sortie démarre en mode démo au clavier.</p>
+        <p class="m-msg" data-r="msg">Connecte ton home trainer pour que la résistance suive la route.</p>
         <button class="m-go" data-a="start">Rouler</button>
       </footer>
     </div>`;
@@ -441,7 +441,57 @@ export class Menu {
     this.changed();
   }
 
+  /** Un home trainer est connecté, en Bluetooth ou avec la clé ANT+. */
+  private hasTrainer(): boolean {
+    return this.host.isConnected('ble') || this.host.isConnected('ant');
+  }
+
+  /**
+   * Sans home trainer, la sortie démarrerait en mode démo au clavier sans qu'on s'en aperçoive : on le signale, et on
+   * laisse choisir. Rend vrai si le joueur veut quand même rouler en démo.
+   */
+  private askNoTrainer(): Promise<boolean> {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'm-modal';
+      overlay.setAttribute('role', 'alertdialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.setAttribute('aria-labelledby', 'm-modal-title');
+      overlay.innerHTML = `<div class="m-modal-card">
+        <h3 id="m-modal-title">Aucun home trainer connecté</h3>
+        <p>Connecte ton KICKR (Bluetooth ou clé ANT+) avant de rouler, sinon la résistance ne suivra pas la route.</p>
+        <p class="m-modal-note">Tu peux aussi rouler en mode démo : tu pédales au clavier (flèches ou ZQSD), sans home trainer.</p>
+        <div class="m-modal-actions">
+          <button class="primary" data-m="connect">Connecter en Bluetooth</button>
+          <button data-m="demo">Rouler en démo</button>
+          <button data-m="cancel">Annuler</button>
+        </div>
+      </div>`;
+      const close = (demo: boolean) => {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+        resolve(demo);
+      };
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') close(false);
+      };
+      document.addEventListener('keydown', onKey);
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close(false);
+      });
+      overlay.querySelector('[data-m="demo"]')!.addEventListener('click', () => close(true));
+      overlay.querySelector('[data-m="cancel"]')!.addEventListener('click', () => close(false));
+      overlay.querySelector('[data-m="connect"]')!.addEventListener('click', () => {
+        close(false);
+        void this.connect('ble');
+      });
+      this.q('.m-root').appendChild(overlay);
+      overlay.querySelector<HTMLElement>('[data-m="connect"]')!.focus();
+    });
+  }
+
   private async start(): Promise<void> {
+    if (!this.hasTrainer() && !(await this.askNoTrainer())) return;
     const button = this.q<HTMLButtonElement>('[data-a="start"]');
     button.disabled = true;
     button.textContent = 'Chargement du relief…';
