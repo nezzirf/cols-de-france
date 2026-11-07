@@ -459,7 +459,7 @@ export class Menu {
       overlay.setAttribute('aria-labelledby', 'm-modal-title');
       overlay.innerHTML = `<div class="m-modal-card">
         <h3 id="m-modal-title">Aucun home trainer connecté</h3>
-        <p>Connecte ton KICKR (Bluetooth ou clé ANT+) avant de rouler, sinon la résistance ne suivra pas la route.</p>
+        <p>Connecte ton home trainer (Bluetooth ou clé ANT+) avant de rouler, sinon la résistance ne suivra pas la route.</p>
         <p class="m-modal-note">Tu peux aussi rouler en mode démo : tu pédales au clavier (flèches ou ZQSD), sans home trainer.</p>
         <div class="m-modal-actions">
           <button class="primary" data-m="connect">Connecter en Bluetooth</button>
