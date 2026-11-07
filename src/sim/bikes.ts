@@ -35,7 +35,7 @@ export const BIKE_KINDS: Record<BikeKind, BikeSpec> = {
 };
 
 /** Vélo modélisé à part, avec sa propre peinture. */
-export type BikeAssetId = 'rcr' | 'y1rs';
+export type BikeAssetId = 'rcr' | 'y1rs' | 'ef';
 
 /** Peinture du cadre : une seconde couleur qui gagne l'arrière, l'avant, le bas ou le haut, et une fourche à part. */
 export type BikeCoat = { second: number; fade: 'rear' | 'front' | 'low' | 'high'; fork?: number } | null;
@@ -78,7 +78,7 @@ export const TEAMS: Team[] = [
     id: 'ef', name: 'EF Education-EasyPost', brand: 'Cannondale', jersey: 0xe8348b, accent: 0x1e2a78, frame: 0xe8348b,
     livery: livery('plain', 0xe8348b, { shorts: 0x1e2a78, helmet: 0xe8348b, trim: 0x1e2a78 }),
     coat: { second: 0x7a2fc0, fade: 'low' },
-    models: [{ name: 'SuperSix Evo', kind: 'polyvalent' }, { name: 'SuperSlice', kind: 'clm' }],
+    models: [{ name: 'SuperSix Evo', kind: 'polyvalent', asset: 'ef' }, { name: 'SuperSlice', kind: 'clm' }],
   },
   {
     id: 'groupama', name: 'Groupama-FDJ United', brand: 'Wilier', jersey: 0x4f9fe6, accent: 0xe30613, frame: 0xc8102e,

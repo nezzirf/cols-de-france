@@ -57,9 +57,9 @@ describe('maillot choisi', () => {
 });
 
 describe('modèles 3D propres à un vélo', () => {
-  it('donne un modèle propre au seul RCR-R de Decathlon et au seul Y1Rs d’UAE', () => {
+  it('donne un modèle propre au RCR-R de Decathlon, au SuperSix Evo d’EF et au Y1Rs d’UAE', () => {
     const withAsset = ALL_BIKES.filter((b) => b.asset).map((b) => b.id);
-    expect(withAsset).toEqual(['decathlon:RCR-R', 'uae:Y1Rs']);
+    expect(withAsset).toEqual(['decathlon:RCR-R', 'ef:SuperSix Evo', 'uae:Y1Rs']);
     expect(findBike('decathlon:RCR-R').asset).toBe('rcr');
     expect(findBike('decathlon:RCR-F').asset).toBeUndefined();
   });

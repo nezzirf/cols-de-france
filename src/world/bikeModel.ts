@@ -3,10 +3,12 @@
 import * as THREE from 'three';
 import type { BikeAssetId, BikeShape } from '../sim/bikes';
 import type { FrameDesign } from '../sim/bikeDesigns';
-import { bikeAssetReady, rcrAssetReady } from './bikeAsset';
+import { bikeAssetReady, efAssetReady, rcrAssetReady, y1rsAssetReady } from './bikeAsset';
 import { type AssetCoat, buildAssetBike, type RiderFit } from './bikeFromAsset';
 import { buildRcrBike } from './bikeRcr';
+import { buildEfBike } from './bikeEfModel';
 import { buildY1rsBike } from './bikeY1rs';
+import { buildY1rsModelBike } from './bikeY1rsModel';
 import { buildChain, type Wheel } from './chain';
 import { pbr } from './materials';
 import { at, ball, link, place, type Point, profiled, turned } from './modelParts';
@@ -242,7 +244,16 @@ export function buildBike(look: BikeLook, base: THREE.Material, mono: boolean): 
     const bike = buildRcrBike(look.wheelRadiusM, mono ? base : null);
     return { group: bike.group, wheels: [], drive: (crank) => bike.drive(crank, crank * WHEEL_TURNS_PER_CRANK), fit: bike.fit };
   }
-  // Colnago Y1Rs : dessiné en code d'après ses photos, sans fichier à charger.
+  // Cannondale SuperSix Evo d'EF : le modèle 3D quand son fichier est chargé.
+  if (look.asset === 'ef' && look.shape === 'route' && efAssetReady()) {
+    const bike = buildEfBike(look.wheelRadiusM, mono ? base : null);
+    return { group: bike.group, wheels: [], drive: (crank) => bike.drive(crank, crank * WHEEL_TURNS_PER_CRANK), fit: bike.fit };
+  }
+  // Colnago Y1Rs : le modèle 3D quand son fichier est chargé, sinon le vélo dessiné en code d'après ses photos.
+  if (look.asset === 'y1rs' && look.shape === 'route' && y1rsAssetReady()) {
+    const bike = buildY1rsModelBike(look.wheelRadiusM, mono ? base : null);
+    return { group: bike.group, wheels: [], drive: (crank) => bike.drive(crank, crank * WHEEL_TURNS_PER_CRANK), fit: bike.fit };
+  }
   if (look.asset === 'y1rs' && look.shape === 'route') {
     const bike = buildY1rsBike(look.wheelRadiusM, look.tyreM, mono ? base : null);
     return { group: bike.group, wheels: [], drive: (crank) => bike.drive(crank, crank * WHEEL_TURNS_PER_CRANK), fit: bike.fit };
