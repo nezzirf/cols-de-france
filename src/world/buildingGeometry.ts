@@ -118,6 +118,58 @@ function orientedBox(ring: Point[]): { area: number; ridge: Ridge; width: number
   return best ?? { area: 0, width: 0, ridge: { a: ring[0], b: ring[0] } };
 }
 
+export interface Footprint {
+  cx: number;
+  cz: number;
+  /** Direction du grand côté (unitaire). */
+  ux: number;
+  uz: number;
+  length: number;
+  width: number;
+}
+
+/** Rectangle orienté le plus serré autour de l'emprise : centre, direction du grand côté, longueur et largeur. */
+export function footprintOf(ring: Point[]): Footprint {
+  let best: (Footprint & { area: number }) | null = null;
+  for (let i = 0; i < ring.length; i++) {
+    const [ax, az] = ring[i];
+    const [bx, bz] = ring[(i + 1) % ring.length];
+    const len = Math.hypot(bx - ax, bz - az);
+    if (len < 0.01) continue;
+    const ux = (bx - ax) / len;
+    const uz = (bz - az) / len;
+    let minU = Infinity;
+    let maxU = -Infinity;
+    let minV = Infinity;
+    let maxV = -Infinity;
+    for (const [x, z] of ring) {
+      const u = x * ux + z * uz;
+      const v = -x * uz + z * ux;
+      minU = Math.min(minU, u);
+      maxU = Math.max(maxU, u);
+      minV = Math.min(minV, v);
+      maxV = Math.max(maxV, v);
+    }
+    const lenU = maxU - minU;
+    const lenV = maxV - minV;
+    const area = lenU * lenV;
+    if (best && area >= best.area) continue;
+    const midU = (minU + maxU) / 2;
+    const midV = (minV + maxV) / 2;
+    const long = lenU >= lenV;
+    best = {
+      area,
+      cx: midU * ux - midV * uz,
+      cz: midU * uz + midV * ux,
+      ux: long ? ux : -uz,
+      uz: long ? uz : ux,
+      length: Math.max(lenU, lenV),
+      width: Math.min(lenU, lenV),
+    };
+  }
+  return best ?? { cx: ring[0][0], cz: ring[0][1], ux: 1, uz: 0, length: 0, width: 0 };
+}
+
 export function projectOnRidge(p: Point, r: Ridge): Point {
   const dx = r.b[0] - r.a[0];
   const dz = r.b[1] - r.a[1];

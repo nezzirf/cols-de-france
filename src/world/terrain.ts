@@ -22,6 +22,8 @@ const GROUND_FUNCTIONS = /* glsl */ `
   uniform sampler2D uOrtho;
   uniform vec4 uOrthoRect;
   uniform float uWorld;
+  uniform sampler2D uGrass;
+  uniform vec3 uGrassMean;
   varying vec3 vWorld;
   varying vec3 vGroundNormal;
   varying float vDistance;
@@ -103,6 +105,26 @@ const GROUND_FUNCTIONS = /* glsl */ `
     return ground * mix(1.0, 0.56, underGrass);
   }
 
+  /**
+   * Herbe réelle sous les pieds : l'image d'herbe du modèle fourni se répète sur les terrains verts (deux échelles pour ne pas laisser
+   * voir le motif), et ne fait que moduler la couleur du lieu, qui garde sa teinte. Elle s'efface avec la distance, où sa moyenne reste.
+   */
+  vec3 withGrass(vec3 c) {
+    vec3 n = normalize(vGroundNormal);
+    float wall = smoothstep(0.24, 0.42, 1.0 - n.y);
+    float green = smoothstep(0.1, 0.3, (c.g - max(c.r, c.b * 0.6)) / (dot(c, vec3(0.2126, 0.7152, 0.0722)) + 0.004));
+    float amount = green * (1.0 - wall) * (1.0 - smoothstep(150.0, 500.0, vDistance));
+    if (amount <= 0.0) return c;
+    vec3 w = vec3(0.2126, 0.7152, 0.0722);
+    vec3 near = texture2D(uGrass, vWorld.xz * 0.42).rgb;
+    vec3 far = texture2D(uGrass, mat2(0.8, 0.6, -0.6, 0.8) * vWorld.xz * 0.127).rgb;
+    float meanLuma = dot(uGrassMean, w);
+    float lumaNear = dot(near, w);
+    vec3 hue = (near / max(lumaNear, 1e-4)) / (uGrassMean / meanLuma);
+    vec3 detail = (lumaNear / meanLuma) * mix(vec3(1.0), hue, 0.25) * mix(1.0, dot(far, w) / meanLuma, 0.5);
+    return c * mix(vec3(1.0), detail, amount);
+  }
+
   /** Relief de surface : pierres et mottes que le maillage de 20 m ne peut pas porter. */
   float bumpAt(vec2 p) { return fbm(p * 0.55) + 0.45 * fbm(p * 2.3); }
 `;
@@ -116,6 +138,17 @@ interface Chunk {
   row: number;
 }
 
+/** Image d'herbe répétée sur le sol, cuite à partir du modèle fourni. Gris neutre hors navigateur (tests). */
+function grassImage(): THREE.Texture {
+  if (typeof document === 'undefined') return new THREE.DataTexture(new Uint8Array([40, 90, 25, 255]), 1, 1);
+  const tex = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}models/sol/grass-ground.jpg`);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
 /** Matière du sol, partagée avec les talus de la route pour qu'ils s'y fondent. */
 export function groundMaterial(biomes: Biomes, photo: THREE.Texture, terrain: TerrainMeta, world = false): THREE.MeshStandardMaterial {
   const uniforms = {
@@ -123,6 +156,8 @@ export function groundMaterial(biomes: Biomes, photo: THREE.Texture, terrain: Te
     uRock: { value: new THREE.Color(ROCK_COLORS[biomes.rock]) },
     uBands: { value: new THREE.Vector3(biomes.valley, biomes.forest, biomes.alpage) },
     uOrtho: { value: photo },
+    uGrass: { value: grassImage() },
+    uGrassMean: { value: new THREE.Vector3(0.0227, 0.0988, 0.0096) },
     uOrthoRect: {
       value: new THREE.Vector4(terrain.x0, terrain.z0, (terrain.cols - 1) * terrain.stepM, (terrain.rows - 1) * terrain.stepM),
     },
@@ -136,7 +171,7 @@ export function groundMaterial(biomes: Biomes, photo: THREE.Texture, terrain: Te
       .replace('#include <project_vertex>', '#include <project_vertex>\nvDistance = -mvPosition.z;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${GROUND_FUNCTIONS}`)
-      .replace('#include <color_fragment>', 'diffuseColor.rgb = groundColor();')
+      .replace('#include <color_fragment>', 'diffuseColor.rgb = withGrass(groundColor());')
       .replace(
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>

@@ -16,7 +16,6 @@ import {
   flowerTexture,
   foliageDepth,
   frondTexture,
-  grassTexture,
   leafClusterTexture,
   palmTexture,
 } from './foliage';
@@ -41,6 +40,14 @@ const MAX_TUFTS = 24000;
 type Species = 'conifer' | 'broadleaf' | 'palm' | 'cactus' | 'rock';
 type Tree = 'conifer' | 'broadleaf';
 type Plant = 'grass' | 'fern' | 'flower';
+
+/** Touffe d'herbe cuite à partir du modèle 3D fourni : une vue de côté, transparente entre les brins, éclaircie pour que la teinte de la zone la colore. */
+function tuftTexture(): THREE.Texture {
+  const tex = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}models/herbe/grass.png`);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
 
 function painted(geo: THREE.BufferGeometry, color: number): THREE.BufferGeometry {
   const g = geo.index ? geo.toNonIndexed() : geo;
@@ -201,7 +208,7 @@ export class Vegetation {
       return m;
     };
     this.plants = {
-      grass: plant(crossedPlanes(1.25, 0.72, 2), grassTexture(), 0.17, MAX_TUFTS),
+      grass: plant(crossedPlanes(0.7, 0.66, 3), tuftTexture(), 0.17, MAX_TUFTS),
       fern: plant(crossedPlanes(1.5, 0.82, 3), fernTexture(), 0.09, MAX_TUFTS),
       flower: plant(crossedPlanes(0.95, 0.62, 2), flowerTexture(), 0.2, MAX_TUFTS),
     };

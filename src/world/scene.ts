@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { ALL_BIKES, type Bike, findBike } from '../sim/bikes';
 import type { PelotonState } from '../sim/peloton';
 import type { BuildingData, Route } from '../sim/route';
-import { buildBuildings } from './buildings';
+import { buildBuildings, type Occupancy } from './buildings';
 import { buildCliffRocks } from './cliffs';
 import { ambienceOf, biomeAt, biomeLabel, type BiomeName } from './biomes';
 import { Herds } from './herds';
@@ -74,6 +74,7 @@ export class World {
   private skyTime: { value: number };
   private terrain: TerrainSystem;
   private vegetation: Vegetation;
+  private occupancy: Occupancy | null = null;
   private field: HeightField;
   private rider: RiderModel;
   private ghost: RiderModel;
@@ -154,6 +155,7 @@ export class World {
     this.scene.add(buildRoad(route, ground, roadStations));
     this.scene.add(buildCliffRocks(roadStations, route, this.field, route.data.biomes));
     const occupancy = buildBuildings(buildings, route.data.buildingStyle, this.field, this.scene);
+    this.occupancy = occupancy;
     // Les ruisseaux sous les ponts restent dégagés : ni herbe ni arbre dans l'eau.
     for (const ring of streamFootprints(route)) occupancy.add(ring);
     // Sur le monde d'entraînement, la végétation suit les biomes, pas la photo : le masque de forêt est inutile.
@@ -426,6 +428,7 @@ export class World {
     this.skyTime.value += dt;
 
     this.vegetation.update(focus.x, focus.z, dt);
+    this.occupancy?.update(focus.x, focus.z);
     if (now - this.lastTerrainUpdate > 300) {
       this.lastTerrainUpdate = now;
       this.terrain.update(focus.x, focus.z);

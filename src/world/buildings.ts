@@ -3,7 +3,8 @@
 
 import * as THREE from 'three';
 import type { BuildingData, BuildingStyle } from '../sim/route';
-import { buildShell, ringOf } from './buildingGeometry';
+import { buildShell, footprintOf, isBoxLike, ringOf, signedArea } from './buildingGeometry';
+import { type HouseModel, type HouseVariant, loadHouses } from './houseAsset';
 import type { HeightField } from './heightField';
 import { pbr } from './materials';
 
@@ -68,6 +69,12 @@ function facadeTexture(): THREE.CanvasTexture {
 /** Cases occupées par un bâtiment, pour qu'aucun arbre ne pousse dans une maison. */
 export class Occupancy {
   private cells = new Set<number>();
+  /** Montre les maisons modélisées autour du cycliste et les bâtiments dessinés plus loin. */
+  tick: ((x: number, z: number) => void) | null = null;
+
+  update(x: number, z: number): void {
+    this.tick?.(x, z);
+  }
 
   private key(ix: number, iz: number): number {
     return (ix + 50000) * 100000 + (iz + 50000);
@@ -100,9 +107,56 @@ function pushColor(target: number[], color: THREE.Color, vertexCount: number): v
   for (let i = 0; i < vertexCount; i++) target.push(color.r, color.g, color.b);
 }
 
+/** Taille des tuiles des bâtiments modélisés et distance du cycliste à leur centre en dessous de laquelle on les montre. */
+const HOUSE_TILE_M = 200;
+const HOUSE_NEAR_M = 330;
+/** Un habitat compte comme maison entre ces surfaces (m²) ; au-delà de 12 m de haut et de 150 m², c'est un immeuble. */
+const HOUSE_AREA_M2 = [30, 420];
+const BLOCK_HEIGHT_M = 12;
+const BLOCK_AREA_M2 = 150;
+/** Dénivelé maximal sous l'emprise (m) pour qu'un bâtiment soit remplacé : au-delà, le terrain est en pente. */
+const FLAT_M = 0.9;
+/** Le toit garde la hauteur mesurée, mais le modèle ne s'étire pas au-delà de ce rapport à sa largeur. */
+const MAX_STRETCH = 1.8;
+const TINTS = [0xffffff, 0xf4efe6, 0xece8f0, 0xf6f0dc, 0xe8eee6, 0xfaf3ec];
+
+interface HouseInstance {
+  variant: HouseVariant;
+  x: number;
+  y: number;
+  z: number;
+  rot: number;
+  sx: number;
+  sy: number;
+  sz: number;
+  /** Hauteur du soubassement entre le point le plus bas du terrain et le pied de la maison. */
+  found: number;
+  tint: number;
+}
+
+const rand = (b: BuildingData, salt: number): number => {
+  const v = Math.sin(b.p[0] * 12.9898 + b.p[1] * 78.233 + salt * 37.719) * 43758.5453;
+  return v - Math.floor(v);
+};
+
+/** Quel modèle pour cette emprise : un immeuble pour les grands bâtiments hauts, sinon l'une des deux maisons selon sa forme. */
+function variantOf(b: BuildingData, area: number, long: number, wide: number): HouseVariant | null {
+  if (b.k !== Kind.Habitation) return null;
+  if (b.h >= BLOCK_HEIGHT_M && area >= BLOCK_AREA_M2) return 'immeuble';
+  if (area < HOUSE_AREA_M2[0] || area > HOUSE_AREA_M2[1]) return null;
+  // Une emprise allongée prend la maison longue ; une emprise carrée la maison compacte. Une fois sur trois, l'autre, pour varier.
+  const elongated = long / Math.max(wide, 0.1) >= 1.35;
+  const first: HouseVariant = elongated ? 'maisonA' : 'maisonB';
+  const other: HouseVariant = elongated ? 'maisonB' : 'maisonA';
+  return rand(b, 3) < 0.7 ? first : other;
+}
+
 export function buildBuildings(list: BuildingData[], style: BuildingStyle, field: HeightField, scene: THREE.Scene): Occupancy {
   const occupancy = new Occupancy();
   const tiles = new Map<string, TileBuffers>();
+  // Les bâtiments qui ont un modèle gardent leur forme dessinée pour le lointain, par tuiles plus petites.
+  const farTiles = new Map<string, TileBuffers>();
+  const instances = new Map<string, HouseInstance[]>();
   const wall = new THREE.Color();
   const roof = new THREE.Color();
 
@@ -112,14 +166,41 @@ export function buildBuildings(list: BuildingData[], style: BuildingStyle, field
     const cx = ring.reduce((s, p) => s + p[0], 0) / ring.length;
     const cz = ring.reduce((s, p) => s + p[1], 0) / ring.length;
     const groundY = field.height(cx, cz);
-    const baseY = Math.min(groundY, ...ring.map(([x, z]) => field.height(x, z))) - 1;
+    const heights = ring.map(([x, z]) => field.height(x, z));
+    const baseY = Math.min(groundY, ...heights) - 1;
     const shell = buildShell(b, groundY, baseY, b.k === Kind.Habitation || b.k === Kind.Commerce);
 
-    const key = `${Math.floor(cx / TILE_M)}/${Math.floor(cz / TILE_M)}`;
-    let tile = tiles.get(key);
+    // Un modèle est posé sur l'emprise réelle : même centre, même sens, même longueur et même largeur.
+    let variant: HouseVariant | null = null;
+    let box = null as ReturnType<typeof footprintOf> | null;
+    if (b.k === Kind.Habitation && isBoxLike(ring)) {
+      box = footprintOf(ring);
+      variant = variantOf(b, Math.abs(signedArea(ring)), box.length, box.width);
+    }
+    // Les maisons modélisées ne se posent que sur le plat : sur une pente, le bâtiment dessiné, qui s'enfonce dans le versant, reste.
+    let high = groundY;
+    let low = groundY;
+    if (variant && box) {
+      const along = box.length / 2;
+      const across = box.width / 2;
+      const px = -box.uz;
+      const pz = box.ux;
+      const samples = [groundY, ...heights];
+      for (const [a, c] of [[-1, -1], [-1, 1], [1, -1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]]) {
+        samples.push(field.height(box.cx + box.ux * along * a + px * across * c, box.cz + box.uz * along * a + pz * across * c));
+      }
+      high = Math.max(...samples);
+      low = Math.min(...samples);
+      if (high - low > FLAT_M) variant = null;
+    }
+    const key = variant
+      ? `${Math.floor(cx / HOUSE_TILE_M)}/${Math.floor(cz / HOUSE_TILE_M)}`
+      : `${Math.floor(cx / TILE_M)}/${Math.floor(cz / TILE_M)}`;
+    const bucket = variant ? farTiles : tiles;
+    let tile = bucket.get(key);
     if (!tile) {
       tile = { wallPos: [], wallUv: [], wallColor: [], roofPos: [], roofColor: [] };
-      tiles.set(key, tile);
+      bucket.set(key, tile);
     }
     const colors = colorsOf(b, style);
     wall.set(colors.wall);
@@ -133,12 +214,31 @@ export function buildBuildings(list: BuildingData[], style: BuildingStyle, field
     for (const v of shell.gables) tile.wallPos.push(v);
     for (let i = 0; i < shell.gables.length / 3; i++) tile.wallUv.push(0.03, 0.03);
     pushColor(tile.wallColor, wall, shell.gables.length / 3);
+
+    if (variant && box) {
+      // Le pied de la maison est au niveau du terrain le plus haut de l'emprise ; un petit soubassement comble l'écart côté bas.
+      const floor = high - 0.12;
+      const list = instances.get(key) ?? [];
+      instances.set(key, list);
+      list.push({
+        variant,
+        x: box.cx,
+        y: floor,
+        z: box.cz,
+        rot: Math.atan2(box.ux, box.uz),
+        sx: box.width,
+        sy: b.h,
+        sz: box.length,
+        found: floor - (low - 0.3),
+        tint: TINTS[Math.floor(rand(b, 5) * TINTS.length)],
+      });
+    }
   }
 
   const wallMaterial = pbr({ map: facadeTexture(), vertexColors: true, side: THREE.DoubleSide, roughness: 0.9 });
   const roofMaterial = pbr({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.7 });
   const group = new THREE.Group();
-  const mesh = (pos: number[], color: number[], material: THREE.Material, uv?: number[]) => {
+  const mesh = (target: THREE.Group, pos: number[], color: number[], material: THREE.Material, uv?: number[]) => {
     if (pos.length === 0) return;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -148,12 +248,95 @@ export function buildBuildings(list: BuildingData[], style: BuildingStyle, field
     const m = new THREE.Mesh(geo, material);
     m.castShadow = true;
     m.receiveShadow = true;
-    group.add(m);
+    target.add(m);
   };
   for (const t of tiles.values()) {
-    mesh(t.wallPos, t.wallColor, wallMaterial, t.wallUv);
-    mesh(t.roofPos, t.roofColor, roofMaterial);
+    mesh(group, t.wallPos, t.wallColor, wallMaterial, t.wallUv);
+    mesh(group, t.roofPos, t.roofColor, roofMaterial);
   }
   scene.add(group);
+
+  // Tuiles de bâtiments modélisés : forme dessinée (loin) ou modèles (près), jamais les deux.
+  interface HouseTile {
+    cx: number;
+    cz: number;
+    far: THREE.Group;
+    near: THREE.Group;
+  }
+  const houseTiles: HouseTile[] = [];
+  for (const [key, buffers] of farTiles) {
+    const [ix, iz] = key.split('/').map(Number);
+    const far = new THREE.Group();
+    mesh(far, buffers.wallPos, buffers.wallColor, wallMaterial, buffers.wallUv);
+    mesh(far, buffers.roofPos, buffers.roofColor, roofMaterial);
+    const near = new THREE.Group();
+    near.visible = false;
+    scene.add(far, near);
+    houseTiles.push({ cx: (ix + 0.5) * HOUSE_TILE_M, cz: (iz + 0.5) * HOUSE_TILE_M, far, near });
+  }
+  const tileOf = new Map<string, HouseTile>();
+  for (const [key] of farTiles) {
+    const [ix, iz] = key.split('/').map(Number);
+    tileOf.set(key, houseTiles.find((t) => t.cx === (ix + 0.5) * HOUSE_TILE_M && t.cz === (iz + 0.5) * HOUSE_TILE_M)!);
+  }
+
+  let ready = false;
+  void loadHouses().then((models) => {
+    if (!models) return;
+    const materials = {} as Record<HouseVariant, THREE.Material>;
+    const foundation = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+    const foundationMaterial = pbr({ color: 0x8d887d, roughness: 0.95 });
+    for (const v of Object.keys(models) as HouseVariant[]) materials[v] = pbr({ map: models[v].map, roughness: 0.9, side: THREE.DoubleSide });
+    for (const [key, list] of instances) {
+      const tile = tileOf.get(key);
+      if (!tile) continue;
+      for (const v of Object.keys(models) as HouseVariant[]) {
+        const those = list.filter((i) => i.variant === v);
+        if (those.length === 0) continue;
+        const model: HouseModel = models[v];
+        const inst = new THREE.InstancedMesh(model.geometry, materials[v], those.length);
+        const m = new THREE.Object3D();
+        const tint = new THREE.Color();
+        those.forEach((h, i) => {
+          const horizontal = Math.sqrt((h.sx / model.width) * (h.sz / model.length));
+          m.position.set(h.x, h.y, h.z);
+          m.rotation.set(0, h.rot, 0);
+          m.scale.set(h.sx / model.width, Math.min(h.sy / model.height, horizontal * MAX_STRETCH), h.sz / model.length);
+          m.updateMatrix();
+          inst.setMatrixAt(i, m.matrix);
+          inst.setColorAt(i, tint.set(h.tint));
+        });
+        inst.instanceMatrix.needsUpdate = true;
+        inst.castShadow = false;
+        inst.receiveShadow = true;
+        inst.computeBoundingSphere();
+        tile.near.add(inst);
+      }
+      const footed = list.filter((i) => i.found > 0.2);
+      if (footed.length > 0) {
+        const feet = new THREE.InstancedMesh(foundation, foundationMaterial, footed.length);
+        const m = new THREE.Object3D();
+        footed.forEach((h, i) => {
+          m.position.set(h.x, h.y - h.found, h.z);
+          m.rotation.set(0, h.rot, 0);
+          m.scale.set(h.sx * 0.97, h.found + 0.05, h.sz * 0.97);
+          m.updateMatrix();
+          feet.setMatrixAt(i, m.matrix);
+        });
+        feet.receiveShadow = true;
+        feet.computeBoundingSphere();
+        tile.near.add(feet);
+      }
+    }
+    ready = true;
+  });
+
+  occupancy.tick = (x: number, z: number) => {
+    for (const t of houseTiles) {
+      const near = ready && Math.hypot(t.cx - x, t.cz - z) < HOUSE_NEAR_M;
+      t.near.visible = near;
+      t.far.visible = !near;
+    }
+  };
   return occupancy;
 }
