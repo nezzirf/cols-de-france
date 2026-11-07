@@ -109,11 +109,8 @@ export class Soundscape {
   private crowdLevel = 0;
   /** La traversée d'un village, de 0 à 1 : des chiens aboient au loin. */
   private villageLevel = 0;
-  /** Dans un tunnel, de 0 à 1 : tout résonne et les sons du dehors s'éteignent. */
-  private enclosure = 0;
   /** Sur un pont, de 0 à 1 : on entend le torrent en dessous. */
   private bridgeLevel = 0;
-  private reverbSend: GainNode;
   /** Le bêlement enregistré, dès qu'il est chargé ; jusque-là, la voix synthétique. */
   private bleat: Awaited<ReturnType<typeof loadBleatSample>> = null;
   private bleatUntil = 0;
@@ -128,12 +125,6 @@ export class Soundscape {
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 2048;
     this.master.connect(compressor).connect(this.analyser).connect(this.ctx.destination);
-    // L'écho des tunnels : le son passe aussi par une réverbération, dosée selon qu'on est dedans ou non.
-    this.reverbSend = this.ctx.createGain();
-    this.reverbSend.gain.value = 0;
-    const room = this.ctx.createConvolver();
-    room.buffer = this.makeRoom(2.4);
-    this.master.connect(this.reverbSend).connect(room).connect(compressor);
     for (const name of Object.keys(SILENCE) as LayerName[]) {
       const gain = this.ctx.createGain();
       gain.gain.value = 0;
@@ -163,17 +154,6 @@ export class Soundscape {
     this.scheduleVillage();
     void loadBleatSample(this.ctx).then((sample) => (this.bleat = sample));
     void this.ctx.resume().catch(() => {});
-  }
-
-  /** Réponse d'une salle : un bruit qui s'éteint en `seconds` secondes, un peu différent à gauche et à droite. */
-  private makeRoom(seconds: number): AudioBuffer {
-    const length = Math.floor(this.ctx.sampleRate * seconds);
-    const buffer = this.ctx.createBuffer(2, length, this.ctx.sampleRate);
-    for (let c = 0; c < 2; c++) {
-      const data = buffer.getChannelData(c);
-      for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2.6);
-    }
-    return buffer;
   }
 
   /** Torrent : un grondement d'eau qui court, avec des éclaboussures aiguës. */
@@ -571,9 +551,6 @@ export class Soundscape {
     // Au Tour, le public agite des cloches de vache.
     this.levels.bells = Math.max(this.levels.bells, this.crowdLevel * 0.9);
     this.levels.stream = this.bridgeLevel;
-    // Dans un tunnel, le vent, les oiseaux et la pluie ne passent plus.
-    const open = 1 - 0.88 * this.enclosure;
-    for (const name of ['wind', 'whistle', 'surf', 'gulls', 'birds', 'leaves', 'crickets', 'rain', 'stream', 'bells', 'village'] as const) this.levels[name] *= open;
     for (const name of Object.keys(this.layers) as LayerName[]) {
       this.layers[name].gain.setTargetAtTime(this.levels[name] * LAYER_GAIN[name], t, FADE_S);
     }
@@ -583,14 +560,6 @@ export class Soundscape {
   setCrowd(level: number): void {
     if (Math.abs(level - this.crowdLevel) < 0.03 && !(level === 0 && this.crowdLevel !== 0)) return;
     this.crowdLevel = level;
-    this.apply();
-  }
-
-  /** Tunnel, de 0 (dehors) à 1 (dedans) : l'écho monte, les bruits du dehors s'éteignent. */
-  setEnclosure(level: number): void {
-    if (Math.abs(level - this.enclosure) < 0.03 && !(level === 0 && this.enclosure !== 0)) return;
-    this.enclosure = level;
-    this.reverbSend.gain.setTargetAtTime(level * 1.5, this.ctx.currentTime, 0.25);
     this.apply();
   }
 

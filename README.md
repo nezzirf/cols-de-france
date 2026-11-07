@@ -100,9 +100,9 @@ La FTP, le poids et le nom se règlent en haut de l'écran. Sous le bouton « Ro
 - **Public des grands cols** : sur les quatre derniers kilomètres d'un vrai col, des spectateurs bordent la route, de plus en
   plus serrés vers le sommet, certains bras en l'air et qui sautent à ton passage ; banderoles, arches de la flamme rouge à
   1 km et 500 m, rumeur de foule, applaudissements et cloches de vache dans le son.
-- **Villages et tunnels** : aboiements au loin dans les villages, trois coups de cloche en passant devant une église. Les
-  tunnels et les ponts viennent d'OpenStreetMap (`scripts/build-structures.mjs`, résultat dans `structures.json` de
-  chaque col) : galeries en arche éclairées, parapets sur les ponts, écho dans les tunnels, torrent sous les ponts.
+- **Villages et ponts** : aboiements au loin dans les villages, trois coups de cloche en passant devant une église. Les
+  ponts viennent d'OpenStreetMap (`scripts/build-structures.mjs`, résultat dans `structures.json` de chaque col) :
+  parapets de pierre et torrent qu'on entend en dessous. Les tunnels du fichier ne sont pas représentés.
 - **Test FTP 20 min** : dans les séances proposées. Échauffement, trois accélérations, un effort de cinq minutes, puis vingt
   minutes d'**effort libre** pendant lesquelles le home trainer ne t'impose rien (pente fixe de 4 %) : à toi de tenir la
   puissance la plus haute possible. Le récap en déduit ta FTP (95 % de ta meilleure puissance sur 20 min) et propose de

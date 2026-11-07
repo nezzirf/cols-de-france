@@ -44,8 +44,7 @@ const PELOTON_BUILDS_PER_FRAME = 2;
 /** Distance (m) à laquelle les bruits d'un village commencent à s'entendre, et celle de la cloche d'une église. */
 const VILLAGE_EARSHOT_M = 260;
 const CHURCH_BELL_M = 60;
-/** Sur quelle distance (m) l'écho d'un tunnel et le torrent d'un pont montent et retombent. */
-const TUNNEL_FADE_M = 18;
+/** Sur quelle distance (m) le torrent d'un pont monte et retombe. */
 const BRIDGE_FADE_M = 45;
 
 export type CameraMode = 'poursuite' | 'embarquée';
@@ -191,7 +190,6 @@ export class World {
   private updatePlaceSounds(sound: Soundscape, distM: number): void {
     sound.setCrowd(this.crowd ? crowdDensityAt(distM, this.route.data.endM) : 0);
     const structures = this.route.data.structures;
-    sound.setEnclosure(structures ? structureLevel(structures.tunnels, distM, TUNNEL_FADE_M) : 0);
     sound.setBridge(structures ? structureLevel(structures.bridges, distM, BRIDGE_FADE_M) : 0);
     let village = 0;
     for (const poi of this.route.data.pois) {
