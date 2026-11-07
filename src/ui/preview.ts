@@ -124,3 +124,61 @@ export class BikePreview {
     this.renderer.forceContextLoss();
   }
 }
+
+/**
+ * Une image fixe du cycliste sur son vélo, vu de côté : pour le bouton Garage de l'accueil. La scène est rendue une
+ * fois, sur un canvas qui n'est pas dans la page, puis le contexte est rendu tout de suite au jeu.
+ */
+export function renderStill(bike: Bike, width: number, height: number): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(width, height, false);
+  renderer.setClearColor(0x000000, 0);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene = new THREE.Scene();
+  const environment = new THREE.PMREMGenerator(renderer);
+  scene.environment = environment.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = 0.85;
+  environment.dispose();
+  const sun = new THREE.DirectionalLight(0xffffff, 2.6);
+  sun.position.set(3.5, 5, 2.5);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.radius = 6;
+  sun.shadow.camera.left = sun.shadow.camera.bottom = -2.4;
+  sun.shadow.camera.right = sun.shadow.camera.top = 2.4;
+  scene.add(sun);
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(4, 48), new THREE.ShadowMaterial({ opacity: 0.28 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  const rider = dressedRider(bike);
+  rider.pose(CRANK_ANGLE);
+  rider.group.traverse((o) => (o.castShadow = true));
+  const center = new THREE.Box3().setFromObject(rider.group).getCenter(new THREE.Vector3());
+  rider.group.position.set(-center.x, 0, -center.z);
+  scene.add(rider.group);
+
+  // De profil : le cycliste regarde vers la droite de l'image.
+  const camera = new THREE.PerspectiveCamera(22, width / height, 0.1, 50);
+  camera.position.set(6.2, 0.95, 0.35);
+  camera.lookAt(0, 0.8, 0);
+  renderer.render(scene, camera);
+  const url = canvas.toDataURL('image/png');
+
+  rider.group.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    o.geometry.dispose();
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.dispose();
+  });
+  renderer.dispose();
+  renderer.forceContextLoss();
+  return url;
+}

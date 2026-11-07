@@ -95,3 +95,33 @@ export function drawWorkout(canvas: HTMLCanvasElement, steps: WorkoutStep[], opt
     g.fillRect(cursor - 1, 0, 2, h);
   }
 }
+
+/**
+ * Le déroulé d'une séance en décor : des barres bien séparées, aux couleurs des zones, qui montent du bas du dessin.
+ * Contrairement à drawWorkout, la hauteur ne dépasse pas les deux tiers : le texte devant reste lisible.
+ */
+export function drawWorkoutArt(canvas: HTMLCanvasElement, steps: WorkoutStep[]): void {
+  const area = fit(canvas);
+  if (!area) return;
+  const { g, w, h } = area;
+  g.clearRect(0, 0, w, h);
+  const total = totalDuration(steps);
+  if (total === 0) return;
+  const peak = Math.max(125, ...steps.flatMap((s) => [s.fromPct, s.toPct])) * 1.05;
+  const maxH = h * 0.66;
+  const gap = Math.max(3, w * 0.006);
+  for (const s of steps) {
+    const x0 = (s.startS / total) * w + gap / 2;
+    const width = Math.max(2, (s.durationS / total) * w - gap);
+    const slices = s.fromPct === s.toPct ? 1 : Math.max(1, Math.ceil(width / 6));
+    for (let i = 0; i < slices; i++) {
+      const pct = s.fromPct + ((s.toPct - s.fromPct) * (i + 0.5)) / slices;
+      const bar = (pct / peak) * maxH;
+      g.fillStyle = zoneColor(pct);
+      g.beginPath();
+      // Seule la première barre d'une étape arrondit son coin : une rampe reste d'un seul tenant.
+      g.roundRect(x0 + (width * i) / slices, h - bar, width / slices + (slices > 1 ? 0.6 : 0), bar, slices === 1 ? [10, 10, 0, 0] : 0);
+      g.fill();
+    }
+  }
+}

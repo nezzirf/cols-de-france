@@ -10,11 +10,12 @@ import type { GroupOptions } from '../sim/group';
 import { SALON_ROUTE_ID } from '../sim/salonRoute';
 import { WORLD_NAME, WORLD_ROUTE_ID } from '../sim/worldRoute';
 import { loadRouteIndex, type RouteSummary } from '../sim/route';
-import { loadWorkouts, saveWorkouts, WORKOUT_PRESETS, type Workout } from '../sim/workout';
+import { expandBlocks, loadWorkouts, saveWorkouts, WORKOUT_PRESETS, type Workout } from '../sim/workout';
 import { duration, esc, fr, hex } from './format';
 import './menu.css';
 import './menuLayout.css';
-import { BikePreview } from './preview';
+import { drawWorkoutArt } from './charts';
+import { BikePreview, renderStill } from './preview';
 import { renderGarage } from './tabGarage';
 import { renderHistory } from './tabHistory';
 import { renderOptions } from './tabOptions';
@@ -81,6 +82,9 @@ const DEVICES: { kind: DeviceKind; label: string; title: string }[] = [
   { kind: 'hr', label: 'Cardio', title: 'Connecter une ceinture cardio' },
   { kind: 'play', label: 'Zwift Play', title: 'Connecter les manettes Zwift Play pour changer de vitesse' },
 ];
+
+/** Les images du bouton Garage déjà dessinées, par vélo et maillot : une même tenue ne se redessine pas. */
+const stills = new Map<string, string>();
 
 export class Menu {
   private tab: TabId = 'accueil';
@@ -249,12 +253,40 @@ export class Menu {
     const photo = this.context.routes.some((r) => r.id === p.routeId) ? `linear-gradient(180deg, rgba(14, 22, 30, 0.25), rgba(14, 22, 30, 0.82)), url(data/${p.routeId}/ortho.jpg) center / cover` : '';
     page.innerHTML = `<div class="m-hub">${HUB.map(
       (h) => `<button class="m-hub-card" data-hub="${h.id}"${h.id === 'sortie' && photo ? ` style="background:${photo}"` : ''}>
-        <svg viewBox="0 0 24 24" aria-hidden="true">${h.icon}</svg>
+        ${h.id === 'entrainement' ? '<canvas class="m-hub-chart" aria-hidden="true"></canvas>' : h.id === 'garage' ? '<img class="m-hub-bike" alt="" hidden>' : `<svg viewBox="0 0 24 24" aria-hidden="true">${h.icon}</svg>`}
         <b>${h.title}</b>
         <span>${esc(hint[h.id])}</span>
       </button>`,
     ).join('')}</div>`;
     page.querySelectorAll<HTMLElement>('[data-hub]').forEach((b) => b.addEventListener('click', () => this.openTab(b.dataset.hub as TabId)));
+    // Les dessins des boutons se font une fois la page en place : ils ont besoin de leur taille affichée.
+    requestAnimationFrame(() => this.paintHub());
+  }
+
+  /** Le déroulé de la séance choisie en fond de « Entraînement », et le cycliste de profil sur son vélo dans « Garage ». */
+  private paintHub(): void {
+    if (this.tab !== 'accueil') return;
+    const chart = this.root.querySelector<HTMLCanvasElement>('.m-hub-chart');
+    if (chart) {
+      // Une séance toute plate ferait une simple dalle : pour le décor, elle cède la place à un modèle plus animé.
+      const own = expandBlocks((this.workout ?? WORKOUT_PRESETS[0]).blocks);
+      drawWorkoutArt(chart, own.length >= 5 ? own : expandBlocks(WORKOUT_PRESETS.find((w) => w.id === 'preset-sweetspot')!.blocks));
+    }
+    const img = this.root.querySelector<HTMLImageElement>('.m-hub-bike');
+    if (!img) return;
+    const bike = this.bike;
+    const key = `${bike.id}|${bike.jersey}|${JSON.stringify(bike.livery)}`;
+    let url = stills.get(key);
+    if (!url) {
+      try {
+        url = renderStill(bike, 1100, 640);
+        stills.set(key, url);
+      } catch {
+        return;
+      }
+    }
+    img.src = url;
+    img.hidden = false;
   }
 
   /** Le garage, avec l'aperçu du cycliste en haut : on y voit ce qu'on choisit. */
@@ -314,7 +346,10 @@ export class Menu {
   /** Redessine l'aperçu du cycliste, par exemple quand un modèle vient d'être chargé. */
   refreshPreview(): void {
     this.shownBike = '';
+    // Le vélo modélisé vient d'arriver : les images dessinées avec l'ancien modèle ne valent plus.
+    stills.clear();
     this.changed();
+    this.paintHub();
   }
 
   /** Séance retenue pour la prochaine sortie. */

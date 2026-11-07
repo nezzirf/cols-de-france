@@ -142,6 +142,56 @@
   transform: translateY(-52%) rotate(0deg) scale(1.06);
 }
 
+/* Entraînement : le déroulé de la séance choisie, penché comme les dessins. */
+.m-hub-chart {
+  position: absolute;
+  right: -9%;
+  bottom: 0;
+  width: 70%;
+  height: 84%;
+  opacity: 0.85;
+  pointer-events: none;
+  transform: rotate(-8deg);
+  transform-origin: 50% 100%;
+  transition:
+    transform 0.4s var(--m-ease),
+    opacity 0.3s;}
+
+.m-hub-card:hover .m-hub-chart {
+  opacity: 1;
+  transform: rotate(-5deg) scale(1.04);
+}
+
+.m-hub-card[data-hub='entrainement']::before {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgba(60, 14, 6, 0.55), transparent 62%);
+  content: '';
+}
+
+/* Garage : le cycliste de profil, avec le vélo et le maillot choisis. */
+.m-hub-bike {
+  position: absolute;
+  right: -5%;
+  bottom: -10%;
+  width: auto;
+  max-width: 96%;
+  height: 134%;
+  object-fit: contain;
+  object-position: right bottom;
+  pointer-events: none;
+  transform: rotate(-3deg);
+  transition: transform 0.4s var(--m-ease);
+}
+
+.m-hub-bike[hidden] {
+  display: none;
+}
+
+.m-hub-card:hover .m-hub-bike {
+  transform: rotate(-1deg) scale(1.04);
+}
+
 .m-hub-card svg .snow {
   fill: rgba(255, 255, 255, 0.5);
 }
