@@ -8,7 +8,10 @@ import { pbr } from './materials';
 
 export const ROAD_HALF_WIDTH_M = 3;
 const VERGE_M = 1.6;
-const TEXTURE_REPEAT_M = 12;
+/** Longueur de route que couvre une fois l'image de la route : cinq périodes de tirets de 3 m. */
+const TEXTURE_REPEAT_M = 15;
+/** Part de l'image occupée par chaque trottoir : le bord de la chaussée tombe là où finit l'accotement. */
+const CURB_SHARE = 0.14;
 const POST_SPACING_M = 50;
 const PARAPET_MAX = 4000;
 const PARAPET_SPACING_M = 2;
@@ -51,47 +54,12 @@ export function shoulderDrop(lateralM: number): number {
   return -Infinity;
 }
 
-function roadTexture(): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = 1024;
-  c.height = 1024;
-  const g = c.getContext('2d')!;
-  const vergeShare = VERGE_M / (2 * (ROAD_HALF_WIDTH_M + VERGE_M));
-  const left = c.width * vergeShare;
-  const right = c.width * (1 - vergeShare);
-  g.fillStyle = '#8b8671';
-  g.fillRect(0, 0, c.width, c.height);
-  g.fillStyle = '#4a4d52';
-  g.fillRect(left, 0, right - left, c.height);
-  // Bitume patiné : plus sombre dans les traces de roues, avec des reprises de goudron.
-  const wear = g.createLinearGradient(left, 0, right, 0);
-  wear.addColorStop(0, 'rgba(255,255,255,0.05)');
-  wear.addColorStop(0.28, 'rgba(0,0,0,0.13)');
-  wear.addColorStop(0.5, 'rgba(255,255,255,0.03)');
-  wear.addColorStop(0.72, 'rgba(0,0,0,0.13)');
-  wear.addColorStop(1, 'rgba(255,255,255,0.05)');
-  g.fillStyle = wear;
-  g.fillRect(left, 0, right - left, c.height);
-  for (let i = 0; i < 90000; i++) {
-    const v = 50 + Math.random() * 60;
-    g.fillStyle = `rgba(${v},${v},${v + 4},0.32)`;
-    g.fillRect(left + Math.random() * (right - left), Math.random() * c.height, 2, 2);
-  }
-  for (let i = 0; i < 5; i++) {
-    g.fillStyle = 'rgba(28,29,32,0.5)';
-    g.fillRect(left + Math.random() * (right - left - 90), Math.random() * c.height, 5, 240 + Math.random() * 300);
-  }
-  for (let i = 0; i < 16000; i++) {
-    const v = 90 + Math.random() * 70;
-    g.fillStyle = `rgba(${v},${v - 6},${v - 30},0.55)`;
-    const x = Math.random() < 0.5 ? Math.random() * left : right + Math.random() * left;
-    g.fillRect(x, Math.random() * c.height, 5, 5);
-  }
-  g.fillStyle = 'rgba(238,238,232,0.95)';
-  g.fillRect(left + 10, 0, 11, c.height);
-  g.fillRect(right - 21, 0, 11, c.height);
-  g.fillRect(c.width / 2 - 6, 0, 12, c.height * 0.42);
-  const tex = new THREE.CanvasTexture(c);
+/**
+ * Image de la route, cuite à partir du modèle 3D fourni (vue de dessus) : chaussée à deux voies avec ses lignes, trottoirs de chaque côté.
+ * Elle se répète le long de la route sans raccord visible.
+ */
+function roadTexture(): THREE.Texture {
+  const tex = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}models/route/road.jpg`);
   tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 16;
@@ -245,7 +213,7 @@ export function ribbon(list: Station[], across: Row[]): THREE.BufferGeometry {
 export function buildRoad(route: Route, ground: THREE.Material, list: Station[]): THREE.Object3D {
   const group = new THREE.Group();
   const outer = ROAD_HALF_WIDTH_M + VERGE_M;
-  const share = VERGE_M / (2 * outer);
+  const share = CURB_SHARE;
   const surface = new THREE.Mesh(
     ribbon(list, [
       { o: -outer, y: -0.4, u: 0 },
