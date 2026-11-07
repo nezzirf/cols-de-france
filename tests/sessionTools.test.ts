@@ -316,7 +316,7 @@ describe('ambiance', () => {
     expect(dusk.sunIntensity).toBeLessThan(noon.sunIntensity);
   });
   it('décrit chaque choix du menu', () => {
-    expect(WEATHERS.map((w) => w.id)).toEqual(['degage', 'nuageux', 'brouillard', 'pluie']);
-    expect(MOMENTS.map((m) => m.id)).toEqual(['matin', 'jour', 'soir']);
+    expect(WEATHERS.map((w) => w.id)).toEqual(['degage', 'nuageux', 'brouillard', 'pluie', 'variable']);
+    expect(MOMENTS.map((m) => m.id)).toEqual(['matin', 'jour', 'soir', 'nuit', 'reel']);
   });
 });

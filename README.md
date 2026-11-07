@@ -93,6 +93,20 @@ La FTP, le poids et le nom se règlent en haut de l'écran. Sous le bouton « Ro
   toujours aux mêmes endroits, à plus d'un kilomètre les uns des autres. En passant devant, on les entend meugler ou
   bêler, plus fort à mesure qu'on s'approche, du côté où ils se trouvent. Le bêlement est un enregistrement de mouton (les trois premières secondes
   de `public/sounds/mouton.mp3`, fourni par le joueur, dont la licence n'est pas connue) ; le meuglement est synthétisé.
+- **Météo variable et heure réelle** : dans le menu, « Météo : Variable » fait changer le temps pendant la sortie
+  (éclaircies, nuages, brouillard, pluie qui monte et retombe en douceur ; la même journée donne toujours le même ciel).
+  « Moment : Heure réelle » suit ta montre : matin, plein jour, coucher de soleil, puis nuit avec lune et étoiles. « Nuit »
+  se choisit aussi seule.
+- **Public des grands cols** : sur les quatre derniers kilomètres d'un vrai col, des spectateurs bordent la route, de plus en
+  plus serrés vers le sommet, certains bras en l'air et qui sautent à ton passage ; banderoles, arches de la flamme rouge à
+  1 km et 500 m, rumeur de foule, applaudissements et cloches de vache dans le son.
+- **Villages et tunnels** : aboiements au loin dans les villages, trois coups de cloche en passant devant une église. Les
+  tunnels et les ponts viennent d'OpenStreetMap (`scripts/build-structures.mjs`, résultat dans `structures.json` de
+  chaque col) : galeries en arche éclairées, parapets sur les ponts, écho dans les tunnels, torrent sous les ponts.
+- **Test FTP 20 min** : dans les séances proposées. Échauffement, trois accélérations, un effort de cinq minutes, puis vingt
+  minutes d'**effort libre** pendant lesquelles le home trainer ne t'impose rien (pente fixe de 4 %) : à toi de tenir la
+  puissance la plus haute possible. Le récap en déduit ta FTP (95 % de ta meilleure puissance sur 20 min) et propose de
+  l'appliquer.
 
 ## Pendant la sortie
 

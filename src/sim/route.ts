@@ -1,5 +1,6 @@
 // Accès aux données d'un parcours, indexées par la distance parcourue.
 
+import { sanitizeStructures, type Structures } from './structures';
 import type { WorldMeta } from './worldBiomes';
 
 export interface Poi {
@@ -94,6 +95,8 @@ export interface RouteData {
   world?: WorldMeta;
   /** Parcours en boucle : en arrivant à `toM`, le cycliste repart de `fromM`, indéfiniment. */
   loop?: { fromM: number; toM: number };
+  /** Tunnels et ponts réels du tracé, quand le fichier existe. */
+  structures?: Structures;
 }
 
 export interface RouteSummary {
@@ -226,7 +229,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 export async function loadRoute(
   id: string,
 ): Promise<{ route: Route; heights: Float32Array; buildings: BuildingData[]; ortho: HTMLImageElement }> {
-  const [json, bin, buildings, ortho] = await Promise.all([
+  const [json, bin, buildings, ortho, structures] = await Promise.all([
     fetch(`data/${id}/route.json`).then((r) => {
       if (!r.ok) throw new Error(`Parcours ${id} introuvable (HTTP ${r.status})`);
       return r.json() as Promise<RouteData>;
@@ -240,7 +243,12 @@ export async function loadRoute(
       return r.json() as Promise<BuildingData[]>;
     }),
     loadImage(`data/${id}/ortho.jpg`),
+    // Facultatif : un parcours sans ce fichier n'a simplement ni tunnel ni pont.
+    fetch(`data/${id}/structures.json`)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null),
   ]);
+  if (structures) json.structures = sanitizeStructures(structures);
   const raw = new Uint16Array(bin);
   const heights = new Float32Array(raw.length);
   for (let i = 0; i < raw.length; i++) heights[i] = raw[i] * json.terrain.scale;

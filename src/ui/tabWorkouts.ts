@@ -71,6 +71,8 @@ const POWER = { min: 20, max: 200, step: 1, unit: 'pct' } as const;
 
 function fieldsOf(kind: BlockKind): Field[] {
   switch (kind) {
+    case 'libre':
+      return [{ key: 'durationS', label: 'Durée', ...TIME }];
     case 'stable':
       return [
         { key: 'durationS', label: 'Durée', ...TIME },

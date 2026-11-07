@@ -99,7 +99,7 @@ export class MiniHud {
     const plan = s.workout;
     const timeEl = this.el.querySelector('[data-r="time"]') as HTMLElement;
     if (plan) {
-      this.set('target', String(plan.targetW));
+      this.set('target', plan.free ? 'Libre' : String(plan.targetW));
       this.set('left', formatTime(Math.ceil(plan.stepLeftS)));
       timeEl.textContent = `${formatTime(plan.elapsedS)} / ${formatTime(plan.totalS)}`;
       // La couleur dit d'un coup d'œil si l'on tient la consigne, sans lire de chiffre.

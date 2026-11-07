@@ -9,10 +9,10 @@ import { loadBleatSample, playBleatSample } from './sampleBleat';
 
 export type Habitat = 'plage' | 'prairie' | 'foret' | 'montagne' | 'canyon' | 'desert' | 'vallee' | 'alpage' | 'haute-montagne';
 
-export type LayerName = 'wind' | 'whistle' | 'surf' | 'gulls' | 'birds' | 'leaves' | 'crickets' | 'bells' | 'rain';
+export type LayerName = 'wind' | 'whistle' | 'surf' | 'gulls' | 'birds' | 'leaves' | 'crickets' | 'bells' | 'rain' | 'crowd' | 'village' | 'stream';
 export type Levels = Record<LayerName, number>;
 
-const SILENCE: Levels = { wind: 0, whistle: 0, surf: 0, gulls: 0, birds: 0, leaves: 0, crickets: 0, bells: 0, rain: 0 };
+const SILENCE: Levels = { wind: 0, whistle: 0, surf: 0, gulls: 0, birds: 0, leaves: 0, crickets: 0, bells: 0, rain: 0, crowd: 0, village: 0, stream: 0 };
 
 /** Dosage de chaque milieu, de 0 (absent) à 1 (plein). */
 const PROFILE: Record<Habitat, Partial<Levels>> = {
@@ -28,7 +28,7 @@ const PROFILE: Record<Habitat, Partial<Levels>> = {
 };
 
 /** Force de chaque couche à pleine intensité : de quoi que rien ne couvre le reste ni ne sature. */
-const LAYER_GAIN: Levels = { wind: 0.165, whistle: 0.09, surf: 0.34, gulls: 0.12, birds: 0.24, leaves: 0.14, crickets: 0.022, bells: 0.09, rain: 0.2 };
+const LAYER_GAIN: Levels = { wind: 0.165, whistle: 0.09, surf: 0.34, gulls: 0.12, birds: 0.24, leaves: 0.14, crickets: 0.022, bells: 0.09, rain: 0.2, crowd: 0.2, village: 0.22, stream: 0.17 };
 
 /** Nom d'un milieu du monde d'entraînement ou d'un col, pour l'oreille. */
 export function habitatOfBiome(name: string): Habitat {
@@ -57,6 +57,11 @@ export function habitatMix(habitats: { habitat: Habitat; weight: number }[], mom
   }
   // Au petit matin les oiseaux chantent plus fort ; le soir, ce sont les grillons.
   if (moment === 'matin') mix.birds *= 1.3;
+  if (moment === 'nuit') {
+    mix.birds *= 0.05;
+    mix.gulls *= 0.2;
+    mix.crickets *= 3;
+  }
   if (moment === 'soir') {
     mix.birds *= 0.5;
     mix.crickets *= 2;
@@ -100,6 +105,15 @@ export class Soundscape {
   private volume = 0.7;
   private disposed = false;
   private herd: NearHerd | null = null;
+  /** Le public d'un col, de 0 à 1 : il enfle à l'approche du sommet. */
+  private crowdLevel = 0;
+  /** La traversée d'un village, de 0 à 1 : des chiens aboient au loin. */
+  private villageLevel = 0;
+  /** Dans un tunnel, de 0 à 1 : tout résonne et les sons du dehors s'éteignent. */
+  private enclosure = 0;
+  /** Sur un pont, de 0 à 1 : on entend le torrent en dessous. */
+  private bridgeLevel = 0;
+  private reverbSend: GainNode;
   /** Le bêlement enregistré, dès qu'il est chargé ; jusque-là, la voix synthétique. */
   private bleat: Awaited<ReturnType<typeof loadBleatSample>> = null;
   private bleatUntil = 0;
@@ -114,6 +128,12 @@ export class Soundscape {
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 2048;
     this.master.connect(compressor).connect(this.analyser).connect(this.ctx.destination);
+    // L'écho des tunnels : le son passe aussi par une réverbération, dosée selon qu'on est dedans ou non.
+    this.reverbSend = this.ctx.createGain();
+    this.reverbSend.gain.value = 0;
+    const room = this.ctx.createConvolver();
+    room.buffer = this.makeRoom(2.4);
+    this.master.connect(this.reverbSend).connect(room).connect(compressor);
     for (const name of Object.keys(SILENCE) as LayerName[]) {
       const gain = this.ctx.createGain();
       gain.gain.value = 0;
@@ -138,8 +158,34 @@ export class Soundscape {
     this.scheduleGulls();
     this.scheduleBells();
     this.scheduleHerd();
+    this.buildCrowd();
+    this.buildStream();
+    this.scheduleVillage();
     void loadBleatSample(this.ctx).then((sample) => (this.bleat = sample));
     void this.ctx.resume().catch(() => {});
+  }
+
+  /** Réponse d'une salle : un bruit qui s'éteint en `seconds` secondes, un peu différent à gauche et à droite. */
+  private makeRoom(seconds: number): AudioBuffer {
+    const length = Math.floor(this.ctx.sampleRate * seconds);
+    const buffer = this.ctx.createBuffer(2, length, this.ctx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const data = buffer.getChannelData(c);
+      for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2.6);
+    }
+    return buffer;
+  }
+
+  /** Torrent : un grondement d'eau qui court, avec des éclaboussures aiguës. */
+  private buildStream(): void {
+    const flow = this.ctx.createGain();
+    flow.gain.value = 0.7;
+    this.noise().connect(this.filter('bandpass', 700, 0.5)).connect(flow);
+    const splash = this.ctx.createGain();
+    splash.gain.value = 0.3;
+    this.noise().connect(this.filter('highpass', 3500)).connect(splash).connect(flow);
+    flow.connect(this.layers.stream);
+    this.every(() => flow.gain.setTargetAtTime(rand(0.5, 0.95), this.ctx.currentTime, 0.4), () => rand(0.6, 1.6));
   }
 
   /** Bruit rose de quelques secondes, rejoué en boucle. */
@@ -402,6 +448,87 @@ export class Soundscape {
     );
   }
 
+  /** Public : une rumeur de voix qui enfle par vagues, des applaudissements, des « oh » et des cris qui montent. */
+  private buildCrowd(): void {
+    const swell = this.ctx.createGain();
+    swell.gain.value = 0.5;
+    swell.connect(this.layers.crowd);
+    this.noise().connect(this.filter('bandpass', 650, 0.5)).connect(swell);
+    const hiss = this.ctx.createGain();
+    hiss.gain.value = 0.35;
+    this.noise().connect(this.filter('bandpass', 1700, 0.8)).connect(hiss).connect(swell);
+    this.every(
+      () => {
+        if (this.levels.crowd < 0.05) return;
+        const t = this.ctx.currentTime;
+        swell.gain.cancelScheduledValues(t);
+        swell.gain.setValueAtTime(swell.gain.value, t);
+        swell.gain.linearRampToValueAtTime(rand(0.85, 1.35), t + rand(0.3, 0.8));
+        swell.gain.linearRampToValueAtTime(rand(0.35, 0.6), t + rand(2.5, 4.5));
+      },
+      () => rand(3, 7),
+    );
+    // Des applaudissements : une rafale de petits claquements.
+    this.every(
+      () => {
+        if (this.levels.crowd < 0.15) return;
+        const claps = 6 + Math.floor(rand(0, 9));
+        const base = this.ctx.currentTime + 0.02;
+        const pan = this.ctx.createStereoPanner();
+        pan.pan.value = rand(-0.8, 0.8);
+        pan.connect(this.layers.crowd);
+        for (let i = 0; i < claps; i++) {
+          const start = base + i * rand(0.07, 0.16);
+          const source = this.ctx.createBufferSource();
+          source.buffer = this.noiseBuffer;
+          const band = this.filter('bandpass', rand(1800, 3200), 0.9);
+          const gain = this.ctx.createGain();
+          gain.gain.setValueAtTime(0, start);
+          gain.gain.linearRampToValueAtTime(rand(0.4, 0.8), start + 0.003);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + 0.06);
+          source.connect(band).connect(gain).connect(pan);
+          source.start(start, rand(0, 3), 0.08);
+        }
+      },
+      () => rand(2, 5),
+    );
+  }
+
+  /** Village : de temps en temps, un chien aboie au loin, parfois deux fois de suite. */
+  private scheduleVillage(): void {
+    this.every(
+      () => {
+        if (this.levels.village < 0.05) return;
+        const barks = Math.random() < 0.45 ? 2 : 1;
+        for (let i = 0; i < barks; i++) this.bark(i * rand(0.3, 0.5));
+      },
+      () => rand(7, 18),
+    );
+  }
+
+  private bark(delayS: number): void {
+    const t = this.ctx.currentTime + 0.03 + delayS;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(rand(380, 520), t);
+    osc.frequency.exponentialRampToValueAtTime(rand(230, 310), t + 0.15);
+    const env = this.ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(0.9, t + 0.012);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.17);
+    const pan = this.ctx.createStereoPanner();
+    pan.pan.value = rand(-0.9, 0.9);
+    for (const [freq, q, level] of [[700, 4, 1], [1750, 5, 0.5]] as const) {
+      const band = this.filter('bandpass', freq, q);
+      const g = this.ctx.createGain();
+      g.gain.value = level;
+      osc.connect(band).connect(g).connect(env);
+    }
+    env.connect(this.filter('lowpass', 3200)).connect(pan).connect(this.layers.village);
+    osc.start(t);
+    osc.stop(t + 0.22);
+  }
+
   /** Rayon (m) dans lequel un troupeau s'entend. */
   static readonly HERD_RANGE_M = 110;
 
@@ -439,8 +566,70 @@ export class Soundscape {
   private apply(): void {
     const t = this.ctx.currentTime;
     this.levels = habitatMix(this.habitats, this.moment, this.weather);
+    this.levels.crowd = this.crowdLevel;
+    this.levels.village = this.villageLevel;
+    // Au Tour, le public agite des cloches de vache.
+    this.levels.bells = Math.max(this.levels.bells, this.crowdLevel * 0.9);
+    this.levels.stream = this.bridgeLevel;
+    // Dans un tunnel, le vent, les oiseaux et la pluie ne passent plus.
+    const open = 1 - 0.88 * this.enclosure;
+    for (const name of ['wind', 'whistle', 'surf', 'gulls', 'birds', 'leaves', 'crickets', 'rain', 'stream', 'bells', 'village'] as const) this.levels[name] *= open;
     for (const name of Object.keys(this.layers) as LayerName[]) {
       this.layers[name].gain.setTargetAtTime(this.levels[name] * LAYER_GAIN[name], t, FADE_S);
+    }
+  }
+
+  /** Public au bord de la route, de 0 (personne) à 1 (la foule du sommet). */
+  setCrowd(level: number): void {
+    if (Math.abs(level - this.crowdLevel) < 0.03 && !(level === 0 && this.crowdLevel !== 0)) return;
+    this.crowdLevel = level;
+    this.apply();
+  }
+
+  /** Tunnel, de 0 (dehors) à 1 (dedans) : l'écho monte, les bruits du dehors s'éteignent. */
+  setEnclosure(level: number): void {
+    if (Math.abs(level - this.enclosure) < 0.03 && !(level === 0 && this.enclosure !== 0)) return;
+    this.enclosure = level;
+    this.reverbSend.gain.setTargetAtTime(level * 1.5, this.ctx.currentTime, 0.25);
+    this.apply();
+  }
+
+  /** Pont, de 0 à 1 : le torrent en dessous. */
+  setBridge(level: number): void {
+    if (Math.abs(level - this.bridgeLevel) < 0.03 && !(level === 0 && this.bridgeLevel !== 0)) return;
+    this.bridgeLevel = level;
+    this.apply();
+  }
+
+  /** Traversée d'un village, de 0 à 1. */
+  setVillage(level: number): void {
+    if (Math.abs(level - this.villageLevel) < 0.03 && !(level === 0 && this.villageLevel !== 0)) return;
+    this.villageLevel = level;
+    this.apply();
+  }
+
+  /** Les trois coups d'une cloche d'église, entendus quand on passe devant. */
+  ringChurch(pan = 0): void {
+    if (this.disposed || this.muted) return;
+    const out = this.ctx.createGain();
+    out.gain.value = 0.22;
+    const stereo = this.ctx.createStereoPanner();
+    stereo.pan.value = pan;
+    out.connect(stereo).connect(this.master);
+    const partials: [number, number, number][] = [[0.5, 0.5, 4], [1, 1, 3.2], [1.2, 0.6, 2.4], [1.5, 0.4, 1.8], [2, 0.35, 1.2], [2.6, 0.2, 0.8]];
+    for (let strike = 0; strike < 3; strike++) {
+      const start = this.ctx.currentTime + 0.05 + strike * 1.6;
+      for (const [ratio, level, decay] of partials) {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.frequency.value = 330 * ratio;
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(level * 0.5, start + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.0008, start + decay);
+        osc.connect(gain).connect(out);
+        osc.start(start);
+        osc.stop(start + decay + 0.1);
+      }
     }
   }
 

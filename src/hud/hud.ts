@@ -213,7 +213,7 @@ export class Hud {
     this.renderPeloton(s);
     this.showLock(s.lockedW);
     if (this.workout && s.workout) {
-      this.workout.target.textContent = String(s.workout.targetW);
+      this.workout.target.textContent = s.workout.free ? 'Libre' : String(s.workout.targetW);
       this.workout.left.textContent = formatTime(Math.ceil(s.workout.stepLeftS));
       drawWorkout(this.workout.chart, this.workout.steps, { elapsedS: s.workout.elapsedS, line: 'rgba(255,255,255,0.5)' });
     }

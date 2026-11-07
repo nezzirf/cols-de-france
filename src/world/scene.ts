@@ -8,6 +8,8 @@ import { buildBuildings } from './buildings';
 import { buildCliffRocks } from './cliffs';
 import { ambienceOf, biomeAt, biomeLabel, type BiomeName } from './biomes';
 import { Herds } from './herds';
+import { crowdDensityAt, hasCrowd, planCrowd } from '../sim/crowd';
+import { structureLevel } from '../sim/structures';
 import { planHerds } from '../sim/herds';
 import { type Habitat, habitatOfBiome, type Soundscape } from './soundscape';
 import { HeightField } from './heightField';
@@ -15,13 +17,15 @@ import { LandCover } from './landCover';
 import { Water } from './water';
 import { WORLD_STYLE, worldAmbience } from './worldStyle';
 import { biomeWeights, dominant, type WorldMeta } from '../sim/worldBiomes';
+import { Crowd } from './crowd';
+import { Structures } from './structures';
 import { Landmarks, type RouteEvent } from './landmarks';
 import { Pipeline } from './pipeline';
 import { FreeCamera } from './freeCamera';
 import { createRiderModel, type RiderModel } from './rider';
 import { bikeShape, dressedRider } from './riderSetup';
 import { buildRoad, stations } from './road';
-import { type Ambiance, ambianceLook, DEFAULT_AMBIANCE, FOG_GREY } from './ambiance';
+import { type Ambiance, type AmbianceLook, ambianceNow, DEFAULT_AMBIANCE, FOG_GREY, isDynamic } from './ambiance';
 import { Rain } from './rain';
 import { createSky, type SkyTuning } from './sky';
 import { groundMaterial, SUN_DIRECTION, TerrainSystem } from './terrain';
@@ -37,6 +41,12 @@ const PELOTON_CADENCE_RPM = 86;
 /** Au-delà, un coureur du peloton n'est plus dessiné. */
 const PELOTON_DRAW_DISTANCE_M = 180;
 const PELOTON_BUILDS_PER_FRAME = 2;
+/** Distance (m) à laquelle les bruits d'un village commencent à s'entendre, et celle de la cloche d'une église. */
+const VILLAGE_EARSHOT_M = 260;
+const CHURCH_BELL_M = 60;
+/** Sur quelle distance (m) l'écho d'un tunnel et le torrent d'un pont montent et retombent. */
+const TUNNEL_FADE_M = 18;
+const BRIDGE_FADE_M = 45;
 
 export type CameraMode = 'poursuite' | 'embarquée';
 
@@ -50,7 +60,12 @@ export class World {
   private sunDir = SUN_DIRECTION.clone();
   private hemisphere = new THREE.HemisphereLight(0xeef1f2, 0x9a8a6a, 1.05);
   private skyTuning: SkyTuning;
-  private look = ambianceLook(DEFAULT_AMBIANCE);
+  private look = ambianceNow(DEFAULT_AMBIANCE, { hour: 12, elapsedS: 0, seed: 0 }).look;
+  private ambiance: Ambiance = DEFAULT_AMBIANCE;
+  private lastAmbianceTick = -1e9;
+  private soundKey = '';
+  /** Graine du ciel du jour : la même journée donne la même suite de temps. */
+  private skySeed = Math.floor(Date.now() / 86400000);
   private fogTint = new THREE.Color(1, 1, 1);
   private fogGrey = new THREE.Color(FOG_GREY);
   private fogGoal = new THREE.Color();
@@ -77,6 +92,10 @@ export class World {
   /** Ambiance sonore, quand le joueur l'a choisie : elle suit le milieu traversé. */
   sound: Soundscape | null = null;
   private herds: Herds | null = null;
+  private crowd: Crowd | null = null;
+  private structures: Structures | null = null;
+  /** La dernière église dont la cloche a sonné : elle ne sonne qu'une fois par passage. */
+  private lastChurch = -1;
   private lastSound = 0;
   cameraMode: CameraMode = 'poursuite';
   free: FreeCamera | null = null;
@@ -149,6 +168,9 @@ export class World {
       this.herds = new Herds(route, this.field, this.scene, herds);
     }
     this.events = new Landmarks(route, this.field, this.scene).events;
+    // Le public se presse dans les derniers kilomètres d'un grand col.
+    if (route.data.structures) this.structures = new Structures(route, this.scene);
+    if (hasCrowd(route.data)) this.crowd = new Crowd(route, this.field, this.scene, planCrowd(route.data.endM));
 
     this.rider = dressedRider(bike);
     this.rider.group.traverse((o) => (o.castShadow = true));
@@ -165,9 +187,46 @@ export class World {
     this.terrain.update(p.x, p.z, 1000);
   }
 
+  /** Public du sommet, aboiements des villages et cloches des églises, selon l'endroit où l'on est sur la route. */
+  private updatePlaceSounds(sound: Soundscape, distM: number): void {
+    sound.setCrowd(this.crowd ? crowdDensityAt(distM, this.route.data.endM) : 0);
+    const structures = this.route.data.structures;
+    sound.setEnclosure(structures ? structureLevel(structures.tunnels, distM, TUNNEL_FADE_M) : 0);
+    sound.setBridge(structures ? structureLevel(structures.bridges, distM, BRIDGE_FADE_M) : 0);
+    let village = 0;
+    for (const poi of this.route.data.pois) {
+      if (poi.type !== 'village' && poi.type !== 'chalet') continue;
+      village = Math.max(village, 1 - Math.abs(distM - poi.distM) / VILLAGE_EARSHOT_M);
+    }
+    sound.setVillage(Math.max(0, village));
+    this.route.data.pois.forEach((poi, i) => {
+      if (poi.type !== 'eglise' || this.lastChurch === i) return;
+      if (Math.abs(distM - poi.distM) < CHURCH_BELL_M) {
+        this.lastChurch = i;
+        sound.ringChurch(poi.offsetM > 0 ? 0.5 : -0.5);
+      }
+    });
+  }
+
   /** Applique le moment de la journée et la météo : lumière, ciel, brume et pluie. */
   setAmbiance(ambiance: Ambiance): void {
-    const look = ambianceLook(ambiance);
+    this.ambiance = ambiance;
+    this.refreshAmbiance();
+  }
+
+  /** Recalcule le ciel : l'heure réelle ou la météo variable le font évoluer pendant la sortie. */
+  private refreshAmbiance(): void {
+    const date = new Date();
+    const now = ambianceNow(this.ambiance, { hour: date.getHours() + date.getMinutes() / 60, elapsedS: this.skyTime.value, seed: this.skySeed });
+    this.applyLook(now.look);
+    const key = `${now.moment}/${now.weather}`;
+    if (this.sound && key !== this.soundKey) {
+      this.soundKey = key;
+      this.sound.setAmbiance(now.moment, now.weather);
+    }
+  }
+
+  private applyLook(look: AmbianceLook): void {
     this.look = look;
     this.sunDir.set(...look.sunDirection).normalize();
     this.sun.color.set(look.sunColor);
@@ -176,8 +235,10 @@ export class World {
     this.skyTuning.zenith.value.setRGB(...look.zenith);
     this.skyTuning.cover.value = look.cover;
     this.skyTuning.cloudDark.value = look.cloudDark;
+    this.skyTuning.night.value = look.night;
     this.fogTint.setRGB(...look.horizonTint);
-    this.rain.mesh.visible = look.rain > 0;
+    this.rain.mesh.visible = look.rain > 0.03;
+    this.rain.setIntensity(look.rain);
   }
 
   /**
@@ -347,14 +408,20 @@ export class World {
       this.sound.setHabitats(this.habitats());
       // Un troupeau qui s'approche meugle ou bêle, plus fort à mesure qu'on passe devant.
       this.sound.setHerd(this.herds?.nearest(p.x, p.z, Math.cos(p.heading), Math.sin(p.heading)) ?? null);
+      this.updatePlaceSounds(this.sound, distM);
     }
+    this.crowd?.update(this.skyTime.value, distM);
     this.water?.update(dt);
     this.updateSun(focus.x, focus.ele, focus.z);
     // La brume du lieu, teintée par le moment et grisée par la météo.
     this.fogGoal.copy(this.targetFog).multiply(this.fogTint).lerp(this.fogGrey, this.look.fogGrey);
     this.fog.color.lerp(this.fogGoal, Math.min(1, dt * 0.6));
     this.fog.density += (this.targetDensity * this.look.fogMultiplier - this.fog.density) * Math.min(1, dt * 0.6);
-    if (this.look.rain > 0) this.rain.update(dt, this.camera.position);
+    if (isDynamic(this.ambiance) && now - this.lastAmbianceTick > 1000) {
+      this.lastAmbianceTick = now;
+      this.refreshAmbiance();
+    }
+    if (this.look.rain > 0.03) this.rain.update(dt, this.camera.position);
     this.skyTime.value += dt;
 
     this.vegetation.update(focus.x, focus.z, dt);
@@ -370,6 +437,8 @@ export class World {
     this.pipeline.dispose();
     this.water?.dispose();
     this.rain.dispose();
+    this.crowd?.dispose();
+    this.structures?.dispose();
     this.renderer.dispose();
   }
 

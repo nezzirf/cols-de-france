@@ -9,17 +9,19 @@ export interface SkyTuning {
   cover: { value: number };
   /** Assombrissement des nuages, de 0 (blancs) à 1 (sombres). */
   cloudDark: { value: number };
+  /** 0 le jour, 1 la nuit : les étoiles apparaissent. */
+  night: { value: number };
 }
 
 export function createSky(fog: THREE.FogExp2, sun: THREE.Vector3): { mesh: THREE.Mesh; time: { value: number }; tuning: SkyTuning } {
   const time = { value: 0 };
-  const tuning: SkyTuning = { zenith: { value: new THREE.Color(0.07, 0.24, 0.62) }, cover: { value: 0.46 }, cloudDark: { value: 0 } };
+  const tuning: SkyTuning = { zenith: { value: new THREE.Color(0.07, 0.24, 0.62) }, cover: { value: 0.46 }, cloudDark: { value: 0 }, night: { value: 0 } };
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
     depthTest: false,
     fog: false,
-    uniforms: { uHorizon: { value: fog.color }, uSun: { value: sun }, uTime: time, uZenith: tuning.zenith, uCover: tuning.cover, uCloudDark: tuning.cloudDark },
+    uniforms: { uHorizon: { value: fog.color }, uSun: { value: sun }, uTime: time, uZenith: tuning.zenith, uCover: tuning.cover, uCloudDark: tuning.cloudDark, uNight: tuning.night },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
       void main() {
@@ -34,6 +36,7 @@ export function createSky(fog: THREE.FogExp2, sun: THREE.Vector3): { mesh: THREE
       uniform vec3 uZenith;
       uniform float uCover;
       uniform float uCloudDark;
+      uniform float uNight;
       varying vec3 vDir;
 
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -55,14 +58,23 @@ export function createSky(fog: THREE.FogExp2, sun: THREE.Vector3): { mesh: THREE
         float s = max(dot(d, uSun), 0.0);
         c += vec3(1.0, 0.84, 0.6) * pow(s, 14.0) * 0.22;
 
+        float cloudAmount = 0.0;
         // Nuages projetés sur un plafond : ils s'étirent vers l'horizon comme de vrais cumulus.
         if (d.y > 0.015) {
           vec2 uv = d.xz / (d.y + 0.16) * 1.5 + vec2(uTime * 0.006, uTime * 0.002);
           float n = fbm(uv);
           float cover = smoothstep(uCover, uCover + 0.24, n);
           float shade = smoothstep(0.42, 0.72, fbm(uv + uSun.xz * 0.12));
-          vec3 cloud = mix(vec3(1.3, 1.27, 1.22), vec3(0.72, 0.77, 0.86), shade) * (1.0 - uCloudDark * 0.75);
-          c = mix(c, cloud, cover * smoothstep(0.015, 0.14, d.y) * 0.95);
+          vec3 cloud = mix(vec3(1.3, 1.27, 1.22), vec3(0.72, 0.77, 0.86), shade) * (1.0 - uCloudDark * 0.75) * (1.0 - uNight * 0.85);
+          cloudAmount = cover * smoothstep(0.015, 0.14, d.y) * 0.95;
+          c = mix(c, cloud, cloudAmount);
+        }
+        // Étoiles : de petits points fixes, cachés par les nuages.
+        if (uNight > 0.01 && d.y > 0.0) {
+          vec3 q = floor(d * 230.0);
+          float h = hash(q.xy + q.z * 17.0);
+          float star = step(0.9975, h) * smoothstep(0.0, 0.25, d.y);
+          c += vec3(0.9, 0.95, 1.0) * star * uNight * (1.0 - cloudAmount) * 1.6;
         }
         c += vec3(1.0, 0.93, 0.8) * smoothstep(0.9993, 0.9996, s) * 4.0;
         gl_FragColor = vec4(c, 1.0);

@@ -33,6 +33,7 @@ import { paintWorldGround } from './world/worldGround';
 import { type FreeCamera, MOVE_KEYS } from './world/freeCamera';
 import { NoWorld } from './world/noWorld';
 import { World } from './world/scene';
+import { momentAtHour } from './world/ambiance';
 import { Soundscape } from './world/soundscape';
 
 const DEMO_HINT = '↑ ↓ puissance · Maj : ±50 W · L verrouiller les watts · M son · + − vitesses · F caméra libre · Pg↑ Pg↓ ±1 km · P pause · V caméra · Échap quitter';
@@ -249,7 +250,10 @@ class App {
     this.sound = null;
     if (this.profile.sound && typeof AudioContext !== 'undefined') {
       try {
-        this.sound = new Soundscape({ moment: this.profile.moment, weather: this.profile.weather });
+        this.sound = new Soundscape({
+          moment: this.profile.moment === 'reel' ? momentAtHour(new Date().getHours()) : this.profile.moment,
+          weather: this.profile.weather === 'variable' ? 'degage' : this.profile.weather,
+        });
         this.world.sound = this.sound;
       } catch {
         this.sound = null;

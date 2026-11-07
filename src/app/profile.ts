@@ -3,7 +3,7 @@
 import { BIKE_JERSEY, DEFAULT_BIKE_ID } from '../sim/bikes';
 import { sanitizeBots } from '../sim/bots';
 import type { GroupSize } from '../sim/group';
-import type { Moment, Weather } from '../world/ambiance';
+import type { MomentChoice, WeatherChoice } from '../world/ambiance';
 
 export interface Profile {
   name: string;
@@ -21,8 +21,8 @@ export interface Profile {
   workoutWhere: WorkoutWhere;
   appMode: AppMode;
   appBars: AppBars;
-  weather: Weather;
-  moment: Moment;
+  weather: WeatherChoice;
+  moment: MomentChoice;
   /** Faire rouler quatre coéquipiers de niveaux différents. */
   peloton: boolean;
   /** Courir contre sa meilleure sortie sur le même parcours. */

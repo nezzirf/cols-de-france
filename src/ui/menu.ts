@@ -4,7 +4,7 @@
 import { type AppOptions, CUSTOM_ROUTE_ID, type Profile, type WorkoutWhere } from '../app/profile';
 import type { SavedRide } from '../app/rideAutosave';
 import type { HistoryEntry } from '../app/rideHistory';
-import { type Moment, MOMENTS, type Weather, WEATHERS } from '../world/ambiance';
+import { type MomentChoice, MOMENTS, type WeatherChoice, WEATHERS } from '../world/ambiance';
 import { findBike, findJersey, wearing, type Bike } from '../sim/bikes';
 import { BOT_TINTS, BOT_WKG_MAX, BOT_WKG_MIN, BOT_WKG_STEP, DEFAULT_BOT_WKG, MAX_BOTS } from '../sim/bots';
 import type { GroupOptions } from '../sim/group';
@@ -176,8 +176,8 @@ export class Menu {
       const key = select.dataset.o as 'weather' | 'moment';
       select.value = this.profile[key];
       select.addEventListener('change', () => {
-        if (key === 'weather') this.profile.weather = select.value as Weather;
-        else this.profile.moment = select.value as Moment;
+        if (key === 'weather') this.profile.weather = select.value as WeatherChoice;
+        else this.profile.moment = select.value as MomentChoice;
         this.changed();
       });
     });

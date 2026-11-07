@@ -25,6 +25,8 @@ const TRAINER_PERIOD_MS = 1000;
 const FORCE_RESEND_MS = 10000;
 /** Le cycliste sent la pente sous la roue avant : on anticipe d'un demi-empattement. */
 const GRADE_LOOKAHEAD_M = 0.5;
+/** Pente simulée pendant un effort libre : assez raide pour qu'il faille vraiment appuyer. */
+const FREE_EFFORT_GRADE_PCT = 4;
 /** Intervalle entre deux points de reprise de la sortie. */
 const CHECKPOINT_EVERY_S = 30;
 /** Plafond de la puissance verrouillée. */
@@ -76,6 +78,8 @@ export interface RideSnapshot {
 }
 
 export interface WorkoutSnapshot {
+  /** Effort libre en cours : pas de consigne de puissance. */
+  free: boolean;
   targetW: number;
   stepLeftS: number;
   elapsedS: number;
@@ -113,6 +117,7 @@ export class Game {
   private lastSentAt = 0;
   private released = false;
   private lastTargetW: number | null = null;
+  private freeAnnounced = false;
   private laps = 0;
   private gear = DEFAULT_GEAR;
   private gearsOn = false;
@@ -479,7 +484,19 @@ export class Game {
 
   private async sendToTrainer(dist: number, now: number): Promise<void> {
     if (this.workout) {
-      await this.sendWorkoutTarget();
+      const state = workoutStateAt(this.workout, this.elapsedS);
+      if (!state?.step.free) {
+        this.freeAnnounced = false;
+        await this.sendWorkoutTarget();
+        return;
+      }
+      // Effort libre : le home trainer suit une pente fixe, c'est la cadence qui règle l'effort.
+      if (!this.freeAnnounced) {
+        this.freeAnnounced = true;
+        this.lastTargetW = null;
+        this.onToast('Effort libre : tiens la puissance la plus haute possible jusqu’au bout');
+      }
+      await this.sendFreeGrade(now);
       return;
     }
     if (this.lockedW !== null) {
@@ -493,6 +510,18 @@ export class Game {
       this.difficulty,
     );
     const cmd = this.gearsOn ? { ...road, gradePct: this.gearedGrade(road) } : road;
+    if (!commandChanged(this.lastSent, cmd) && now - this.lastSentAt < FORCE_RESEND_MS) return;
+    this.lastSent = cmd;
+    this.lastSentAt = now;
+    try {
+      await this.trainer.setSimulation(cmd);
+    } catch (err) {
+      this.onTrainerError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  private async sendFreeGrade(now: number): Promise<void> {
+    const cmd = trainerCommand(FREE_EFFORT_GRADE_PCT, this.route.eleAt(this.distanceM), this.physics.setup, this.difficulty);
     if (!commandChanged(this.lastSent, cmd) && now - this.lastSentAt < FORCE_RESEND_MS) return;
     this.lastSent = cmd;
     this.lastSentAt = now;
@@ -542,8 +571,10 @@ export class Game {
   private workoutSnapshot(): WorkoutSnapshot | null {
     if (!this.workout) return null;
     const state = workoutStateAt(this.workout, this.elapsedS);
+    const free = state?.step.free === true;
     return {
-      targetW: state ? Math.round((state.targetPct / 100) * this.ftp) : 0,
+      free,
+      targetW: state && !free ? Math.round((state.targetPct / 100) * this.ftp) : 0,
       stepLeftS: state ? state.stepLeftS : 0,
       elapsedS: this.elapsedS,
       totalS: totalDuration(this.workout),

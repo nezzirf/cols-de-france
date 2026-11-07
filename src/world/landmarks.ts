@@ -34,7 +34,7 @@ function post(width: number, top: number, mat: THREE.Material, x = 0, depth = wi
   return box(width, top + ANCHOR_M, depth, mat, x, (top - ANCHOR_M) / 2);
 }
 
-interface PlateOptions {
+export interface PlateOptions {
   width: number;
   height: number;
   bg: string;
@@ -48,7 +48,7 @@ interface PlateOptions {
 }
 
 /** Plaque de texte réelle dans la scène : le texte est dessiné dans une texture. */
-function plate(o: PlateOptions): THREE.Mesh {
+export function plate(o: PlateOptions): THREE.Mesh {
   const px = 200;
   const c = document.createElement('canvas');
   c.width = Math.round(o.width * px);

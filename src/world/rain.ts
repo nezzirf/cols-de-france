@@ -30,6 +30,11 @@ export class Rain {
     this.mesh.visible = false;
   }
 
+  /** Force de la pluie, de 0 à 1 : les gouttes deviennent plus visibles. */
+  setIntensity(v: number): void {
+    (this.mesh.material as THREE.LineBasicMaterial).opacity = 0.38 * Math.max(0, Math.min(1, v));
+  }
+
   /** Fait tomber la pluie autour de `center` ; chaque trait revient en haut quand il touche le sol. */
   update(dt: number, center: THREE.Vector3): void {
     const { tops, positions } = this;

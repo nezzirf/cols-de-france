@@ -1,7 +1,7 @@
 // Séances par blocs : ce que le joueur assemble, et ce qu'en tire le home trainer seconde après
 // seconde. Les puissances sont en % de FTP, pour rester valables si la FTP change.
 
-export type BlockKind = 'echauffement' | 'stable' | 'rampe' | 'intervalles' | 'recuperation';
+export type BlockKind = 'echauffement' | 'stable' | 'rampe' | 'intervalles' | 'recuperation' | 'libre';
 
 export interface WorkoutBlock {
   kind: BlockKind;
@@ -22,6 +22,8 @@ export interface Workout {
 }
 
 export interface WorkoutStep {
+  /** Effort libre : le home trainer n'impose pas de watts, la résistance suit une pente fixe. */
+  free?: boolean;
   block: number;
   startS: number;
   durationS: number;
@@ -35,6 +37,7 @@ export const BLOCK_LABELS: Record<BlockKind, string> = {
   rampe: 'Rampe',
   intervalles: 'Intervalles',
   recuperation: 'Récupération',
+  libre: 'Effort libre',
 };
 
 export function newBlock(kind: BlockKind): WorkoutBlock {
@@ -44,6 +47,8 @@ export function newBlock(kind: BlockKind): WorkoutBlock {
       return { ...block, durationS: 600, fromPct: 45, toPct: 75 };
     case 'recuperation':
       return { ...block, durationS: 300, fromPct: 60, toPct: 40 };
+    case 'libre':
+      return { ...block, durationS: 1200, fromPct: 100, toPct: 100 };
     case 'rampe':
       return { ...block, durationS: 300, fromPct: 70, toPct: 100 };
     case 'intervalles':
@@ -57,9 +62,9 @@ export function newBlock(kind: BlockKind): WorkoutBlock {
 export function expandBlocks(blocks: WorkoutBlock[]): WorkoutStep[] {
   const steps: WorkoutStep[] = [];
   let t = 0;
-  const push = (block: number, durationS: number, fromPct: number, toPct: number) => {
+  const push = (block: number, durationS: number, fromPct: number, toPct: number, free = false) => {
     if (durationS <= 0) return;
-    steps.push({ block, startS: t, durationS, fromPct, toPct });
+    steps.push(free ? { block, startS: t, durationS, fromPct, toPct, free } : { block, startS: t, durationS, fromPct, toPct });
     t += durationS;
   };
   blocks.forEach((b, i) => {
@@ -68,6 +73,8 @@ export function expandBlocks(blocks: WorkoutBlock[]): WorkoutStep[] {
         push(i, b.durationS, b.fromPct, b.fromPct);
         push(i, b.restS, b.toPct, b.toPct);
       }
+    } else if (b.kind === 'libre') {
+      push(i, b.durationS, b.fromPct, b.fromPct, true);
     } else if (b.kind === 'stable') {
       push(i, b.durationS, b.fromPct, b.fromPct);
     } else {
@@ -152,6 +159,20 @@ export const WORKOUT_PRESETS: Workout[] = [
       newBlock('echauffement'),
       { ...newBlock('intervalles'), durationS: 180, fromPct: 118, toPct: 50, repeat: 5, restS: 180 },
       newBlock('recuperation'),
+    ],
+  },
+  {
+    // Protocole classique des vingt minutes : la FTP vaut 95 % de la puissance tenue sur l'effort libre.
+    id: 'preset-ftp',
+    name: 'Test FTP 20 min',
+    blocks: [
+      { ...newBlock('echauffement'), durationS: 600, fromPct: 45, toPct: 75 },
+      { ...newBlock('intervalles'), durationS: 60, fromPct: 110, toPct: 55, repeat: 3, restS: 60 },
+      { ...newBlock('recuperation'), durationS: 300, fromPct: 60, toPct: 50 },
+      { ...newBlock('stable'), durationS: 300, fromPct: 120, toPct: 120 },
+      { ...newBlock('recuperation'), durationS: 600, fromPct: 55, toPct: 40 },
+      newBlock('libre'),
+      { ...newBlock('recuperation'), durationS: 300, fromPct: 50, toPct: 35 },
     ],
   },
   {

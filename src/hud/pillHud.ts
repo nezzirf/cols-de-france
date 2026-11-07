@@ -119,7 +119,7 @@ export class PillHud {
     text(s ? String(power) : '--', 24, 168, 132, STATE_COLOR[powerState(power, plan?.targetW ?? null)], { italic: true });
     text('W', 250, 168, 32, DIM);
     const side: [string, string, string][] = [
-      plan ? ['CIBLE', String(plan.targetW), ACCENT] : ['VITESSE', s ? s.speedKmh.toFixed(1).replace('.', ',') : '--', INK],
+      plan ? ['CIBLE', plan.free ? 'LIBRE' : String(plan.targetW), ACCENT] : ['VITESSE', s ? s.speedKmh.toFixed(1).replace('.', ',') : '--', INK],
       ['CADENCE', s ? String(Math.round(s.cadenceRpm)) : '--', INK],
       ['CARDIO', s?.heartRateBpm == null ? '--' : String(Math.round(s.heartRateBpm)), INK],
     ];
