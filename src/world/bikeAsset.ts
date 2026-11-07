@@ -6,18 +6,18 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { splitEfWheels } from './efSplit';
+import { splitMeshBike } from './meshBike';
+import { MESH_BIKES } from './meshBikeSpecs';
 import { splitY1rsCrankset } from './y1rsSplit';
 
 export const BIKE_ASSET_URL = `${import.meta.env.BASE_URL}models/scene.gltf`;
 export const RCR_ASSET_URL = `${import.meta.env.BASE_URL}models/rcr/van-rysel-rcr-pro.glb`;
-export const EF_ASSET_URL = `${import.meta.env.BASE_URL}models/ef/cannondale-supersix.glb`;
 export const Y1RS_ASSET_URL = `${import.meta.env.BASE_URL}models/y1rs/colnago-y1rs.glb`;
 
 let asset: THREE.Object3D | null = null;
 let rcr: THREE.Object3D | null = null;
 let y1rs: THREE.Object3D | null = null;
-let ef: THREE.Object3D | null = null;
+const meshBikes = new Map<string, THREE.Object3D>();
 let loading: Promise<void> | null = null;
 
 const load = (url: string, prepare?: (scene: THREE.Object3D) => void): Promise<THREE.Object3D | null> =>
@@ -36,10 +36,12 @@ export function preloadBikeAsset(): Promise<void> {
     asset = bike;
     rcr = vanRysel;
     y1rs = colnago;
-    // Le Cannondale pèse 13 Mo : on le charge en arrière-plan, sans retarder le départ.
-    void load(EF_ASSET_URL, splitEfWheels).then((model) => {
-      ef = model;
-    });
+    // Les vélos d'un seul maillage pèsent de 13 à 18 Mo : on les charge en arrière-plan, sans retarder le départ.
+    for (const spec of Object.values(MESH_BIKES)) {
+      void load(spec.url, splitMeshBike(spec)).then((model) => {
+        if (model) meshBikes.set(spec.id, model);
+      });
+    }
   });
   return loading;
 }
@@ -47,7 +49,7 @@ export function preloadBikeAsset(): Promise<void> {
 export const bikeAssetReady = (): boolean => asset !== null;
 export const rcrAssetReady = (): boolean => rcr !== null;
 export const y1rsAssetReady = (): boolean => y1rs !== null;
-export const efAssetReady = (): boolean => ef !== null;
+export const meshBikeReady = (id: string): boolean => meshBikes.has(id);
 
 /** Copie indépendante du vélo, avec son propre squelette. */
 export function cloneBikeAsset(): THREE.Object3D {
@@ -65,7 +67,8 @@ export function cloneY1rsAsset(): THREE.Object3D {
   return clone(y1rs);
 }
 
-export function cloneEfAsset(): THREE.Object3D {
-  if (!ef) throw new Error('Le Cannondale modélisé n’est pas chargé.');
-  return clone(ef);
+export function cloneMeshBike(id: string): THREE.Object3D {
+  const model = meshBikes.get(id);
+  if (!model) throw new Error(`Le vélo ${id} n’est pas chargé.`);
+  return clone(model);
 }

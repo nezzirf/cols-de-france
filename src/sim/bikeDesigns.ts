@@ -54,7 +54,7 @@ const BY_MODEL: Record<string, Partial<FrameDesign>> = {
   Orca: { topTubeRearY: 0.79, stayDrop: 0.35 },
   'Foil RC': { tubeDepth: 0.086, tubeWidth: 0.034, topTubeRearY: 0.8 },
   'Addict RC': { topTubeRearY: 0.77, stayDrop: 0.4 },
-  'S-Works Tarmac SL8': { stayDrop: 0.55, tubeDepth: 0.066, twoTone: 'avant' },
+  'S-Works Tarmac SL9': { stayDrop: 0.55, tubeDepth: 0.066, twoTone: 'avant' },
   'Propel Advanced SL': { topTubeRearY: 0.74, tubeDepth: 0.074 },
   'TCR Advanced SL': { topTubeRearY: 0.71, stayDrop: 0.3 },
   'Xelius DRS': { stayDrop: 0.6, topTubeRearY: 0.75, twoTone: 'arriere' },

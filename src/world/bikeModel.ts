@@ -3,10 +3,11 @@
 import * as THREE from 'three';
 import type { BikeAssetId, BikeShape } from '../sim/bikes';
 import type { FrameDesign } from '../sim/bikeDesigns';
-import { bikeAssetReady, efAssetReady, rcrAssetReady, y1rsAssetReady } from './bikeAsset';
+import { bikeAssetReady, cloneMeshBike, meshBikeReady, rcrAssetReady, y1rsAssetReady } from './bikeAsset';
 import { type AssetCoat, buildAssetBike, type RiderFit } from './bikeFromAsset';
 import { buildRcrBike } from './bikeRcr';
-import { buildEfBike } from './bikeEfModel';
+import { buildMeshBike } from './meshBike';
+import { MESH_BIKES } from './meshBikeSpecs';
 import { buildY1rsBike } from './bikeY1rs';
 import { buildY1rsModelBike } from './bikeY1rsModel';
 import { buildChain, type Wheel } from './chain';
@@ -244,9 +245,10 @@ export function buildBike(look: BikeLook, base: THREE.Material, mono: boolean): 
     const bike = buildRcrBike(look.wheelRadiusM, mono ? base : null);
     return { group: bike.group, wheels: [], drive: (crank) => bike.drive(crank, crank * WHEEL_TURNS_PER_CRANK), fit: bike.fit };
   }
-  // Cannondale SuperSix Evo d'EF : le modèle 3D quand son fichier est chargé.
-  if (look.asset === 'ef' && look.shape === 'route' && efAssetReady()) {
-    const bike = buildEfBike(look.wheelRadiusM, mono ? base : null);
+  // Vélos modélisés d'un seul maillage (Cannondale d'EF, Specialized SL9) quand leur fichier est chargé.
+  if ((look.asset === 'ef' || look.asset === 'sl9') && look.shape === 'route' && meshBikeReady(look.asset)) {
+    const id = look.asset;
+    const bike = buildMeshBike(MESH_BIKES[id], () => cloneMeshBike(id), look.wheelRadiusM, mono ? base : null);
     return { group: bike.group, wheels: [], drive: (crank) => bike.drive(crank, crank * WHEEL_TURNS_PER_CRANK), fit: bike.fit };
   }
   // Colnago Y1Rs : le modèle 3D quand son fichier est chargé, sinon le vélo dessiné en code d'après ses photos.

@@ -35,7 +35,7 @@ export const BIKE_KINDS: Record<BikeKind, BikeSpec> = {
 };
 
 /** Vélo modélisé à part, avec sa propre peinture. */
-export type BikeAssetId = 'rcr' | 'y1rs' | 'ef';
+export type BikeAssetId = 'rcr' | 'y1rs' | 'ef' | 'sl9';
 
 /** Peinture du cadre : une seconde couleur qui gagne l'arrière, l'avant, le bas ou le haut, et une fourche à part. */
 export type BikeCoat = { second: number; fade: 'rear' | 'front' | 'low' | 'high'; fork?: number } | null;
@@ -120,13 +120,13 @@ export const TEAMS: Team[] = [
     id: 'redbull', name: 'Red Bull-Bora-hansgrohe', brand: 'Specialized', jersey: 0xf5f6f8, accent: 0xe1062c, frame: 0xf4f5f7,
     livery: livery('band', 0xe1062c, { sleeveL: 0x14295a, sleeveR: 0x14295a, shorts: 0x0d1b3d, helmet: 0xf5f6f8, trim: 0xe1062c }),
     coat: { second: 0x14295a, fade: 'low' },
-    models: [{ name: 'S-Works Tarmac SL8', kind: 'polyvalent' }, { name: 'S-Works Shiv', kind: 'clm' }],
+    models: [{ name: 'S-Works Tarmac SL9', kind: 'polyvalent', asset: 'sl9' }, { name: 'S-Works Shiv', kind: 'clm' }],
   },
   {
     id: 'soudal', name: 'Soudal Quick-Step', brand: 'Specialized', jersey: 0x0a3f9e, accent: 0xffffff, frame: 0x0b2f6b,
     livery: livery('diag', 0xc8ec00, { shorts: 0x0b2f6b, helmet: 0x0a3f9e, trim: 0xffffff }),
     coat: { second: 0xc8ec00, fade: 'low' },
-    models: [{ name: 'S-Works Tarmac SL8', kind: 'polyvalent' }, { name: 'S-Works Shiv', kind: 'clm' }],
+    models: [{ name: 'S-Works Tarmac SL9', kind: 'polyvalent', asset: 'sl9' }, { name: 'S-Works Shiv', kind: 'clm' }],
   },
   {
     id: 'jayco', name: 'Team Jayco AlUla', brand: 'Giant', jersey: 0x6a2c91, accent: 0xf28c28, frame: 0x3d1b57,
