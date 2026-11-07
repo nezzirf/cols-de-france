@@ -250,7 +250,9 @@ export class Menu {
       historique: runs ? `${runs} sortie${runs > 1 ? 's' : ''} enregistrée${runs > 1 ? 's' : ''}` : 'Tes sorties apparaîtront ici',
     };
     // La sortie libre prend la photo aérienne du col choisi ; les autres ont leur dégradé, défini dans la feuille de style.
-    const photo = this.context.routes.some((r) => r.id === p.routeId) ? `linear-gradient(180deg, rgba(14, 22, 30, 0.25), rgba(14, 22, 30, 0.82)), url(data/${p.routeId}/ortho.jpg) center / cover` : '';
+    // Le monde d'entraînement et le parcours personnalisé n'ont pas de photo : ils prennent celle du premier col.
+    const photoId = this.context.routes.some((r) => r.id === p.routeId) ? p.routeId : this.context.routes[0]?.id;
+    const photo = photoId ? `linear-gradient(180deg, rgba(14, 22, 30, 0.25), rgba(14, 22, 30, 0.82)), url(data/${photoId}/ortho.jpg) center / cover` : '';
     page.innerHTML = `<div class="m-hub">${HUB.map(
       (h) => `<button class="m-hub-card" data-hub="${h.id}"${h.id === 'sortie' && photo ? ` style="background:${photo}"` : ''}>
         ${h.id === 'entrainement' ? '<canvas class="m-hub-chart" aria-hidden="true"></canvas>' : h.id === 'garage' ? '<img class="m-hub-bike" alt="" hidden>' : `<svg viewBox="0 0 24 24" aria-hidden="true">${h.icon}</svg>`}
