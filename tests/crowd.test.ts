@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CROWD_ZONE_M, crowdDensityAt, hasCrowd, planCrowd } from '../src/sim/crowd';
+import { CROWD_ZONE_M, assignLooks, crowdDensityAt, hasCrowd, planCrowd } from '../src/sim/crowd';
 
 describe('public des grands cols', () => {
   const end = 15000;
@@ -45,5 +45,25 @@ describe('public des grands cols', () => {
     expect(hasCrowd({ climb: { lengthKm: 20 }, world: {} })).toBe(false);
     expect(hasCrowd({ climb: { lengthKm: 20 }, loop: {} })).toBe(false);
     expect(hasCrowd({ climb: { lengthKm: 1 } })).toBe(false);
+  });
+});
+
+describe('modèles de spectateurs', () => {
+  const plan = planCrowd(21000);
+
+  it("n'utilise jamais le même modèle parmi les voisins proches d'un même côté", () => {
+    const looks = assignLooks(plan.spectators);
+    for (const side of [-1, 1]) {
+      const list = plan.spectators.map((s, i) => ({ s, look: looks[i] })).filter((p) => p.s.side === side).sort((a, b) => a.s.distM - b.s.distM);
+      for (let i = 4; i < list.length; i++) {
+        for (let k = 1; k <= 4; k++) expect(list[i].look).not.toBe(list[i - k].look);
+      }
+    }
+  });
+
+  it('varie les six modèles et reste identique à chaque appel', () => {
+    const looks = assignLooks(plan.spectators);
+    expect(new Set(looks).size).toBe(5);
+    expect(assignLooks(plan.spectators)).toEqual(looks);
   });
 });

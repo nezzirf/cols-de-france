@@ -121,3 +121,44 @@ export function planCrowd(endM: number, seed = 21): CrowdPlan {
 export function hasCrowd(route: { world?: unknown; loop?: unknown; climb: { lengthKm: number } }): boolean {
   return !route.world && !route.loop && route.climb.lengthKm >= 3;
 }
+
+/** Poids de chaque modèle de spectateur : l'accroupi est écarté (pose figée impossible à redresser), celui aux bras écartés apparaît moins souvent. */
+export const LOOK_WEIGHTS = [1, 0, 1, 1, 0.6, 1];
+
+/**
+ * Quel modèle pour chaque spectateur : le même ne revient jamais parmi les `gap` voisins précédents du même côté,
+ * ni juste en face de l'autre côté de la route. Tirage reproductible, selon la place de chacun.
+ */
+export function assignLooks(list: Spectator[], weights: number[] = LOOK_WEIGHTS, gap = 4): number[] {
+  const order = list.map((_, i) => i).sort((a, b) => list[a].distM - list[b].distM);
+  const looks = new Array<number>(list.length).fill(0);
+  const recent: Record<string, { look: number; distM: number }[]> = { '-1': [], '1': [] };
+  for (const i of order) {
+    const s = list[i];
+    const mine = recent[String(s.side)];
+    const opposite = recent[String(-s.side)];
+    // On écarte d'abord les modèles récents des deux côtés ; si rien ne reste, seulement ceux du même côté.
+    const sameSide = mine.slice(-gap).map((r) => r.look);
+    const facing = opposite.filter((r) => Math.abs(r.distM - s.distM) < 9).map((r) => r.look);
+    const every = weights.map((_, k) => k).filter((k) => weights[k] > 0);
+    const allowed = [[...sameSide, ...facing], sameSide, sameSide.slice(-2), sameSide.slice(-1)]
+      .map((banned) => every.filter((k) => !banned.includes(k)))
+      .find((list) => list.length > 0)!;
+    const total = allowed.reduce((sum, k) => sum + weights[k], 0);
+    // Un tirage qui ne dépend que du spectateur : la même foule à chaque passage.
+    const roll = (Math.abs(Math.sin(s.distM * 12.9898 + s.offsetM * 78.233 + s.phase * 37.719) * 43758.5453) % 1) * total;
+    let acc = 0;
+    let pick = allowed[allowed.length - 1];
+    for (const k of allowed) {
+      acc += weights[k];
+      if (roll < acc) {
+        pick = k;
+        break;
+      }
+    }
+    looks[i] = pick;
+    mine.push({ look: pick, distM: s.distM });
+    if (mine.length > 12) mine.shift();
+  }
+  return looks;
+}
