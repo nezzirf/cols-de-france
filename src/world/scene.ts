@@ -18,7 +18,7 @@ import { Water } from './water';
 import { WORLD_STYLE, worldAmbience } from './worldStyle';
 import { biomeWeights, dominant, type WorldMeta } from '../sim/worldBiomes';
 import { Crowd } from './crowd';
-import { Structures } from './structures';
+import { Structures, streamFootprints } from './structures';
 import { Landmarks, type RouteEvent } from './landmarks';
 import { Pipeline } from './pipeline';
 import { FreeCamera } from './freeCamera';
@@ -154,6 +154,8 @@ export class World {
     this.scene.add(buildRoad(route, ground, roadStations));
     this.scene.add(buildCliffRocks(roadStations, route, this.field, route.data.biomes));
     const occupancy = buildBuildings(buildings, route.data.buildingStyle, this.field, this.scene);
+    // Les ruisseaux sous les ponts restent dégagés : ni herbe ni arbre dans l'eau.
+    for (const ring of streamFootprints(route)) occupancy.add(ring);
     // Sur le monde d'entraînement, la végétation suit les biomes, pas la photo : le masque de forêt est inutile.
     const cover = this.world ? { isForest: () => false } : new LandCover(ortho, route.data.terrain);
     this.vegetation = new Vegetation(this.field, route.data.biomes, occupancy, cover, this.scene, this.world);
@@ -168,7 +170,7 @@ export class World {
     }
     this.events = new Landmarks(route, this.field, this.scene).events;
     // Le public se presse dans les derniers kilomètres d'un grand col.
-    if (route.data.structures) this.structures = new Structures(route, this.scene);
+    if (route.data.structures) this.structures = new Structures(route, this.field, this.scene);
     if (hasCrowd(route.data)) this.crowd = new Crowd(route, this.field, this.scene, planCrowd(route.data.endM));
 
     this.rider = dressedRider(bike);
@@ -409,6 +411,7 @@ export class World {
       this.updatePlaceSounds(this.sound, distM);
     }
     this.crowd?.update(this.skyTime.value, distM);
+    this.structures?.update(dt);
     this.water?.update(dt);
     this.updateSun(focus.x, focus.ele, focus.z);
     // La brume du lieu, teintée par le moment et grisée par la météo.
