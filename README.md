@@ -48,7 +48,7 @@ La position exacte (kilomètre, altitude, coordonnées GPS) s'affiche sous la ba
 
 ## Le menu
 
-L'écran d'accueil a quatre onglets : **Sortie libre**, **Entraînement**, **Garage** et **Historique**. Un petit
+L'écran d'accueil montre quatre gros boutons : **Sortie libre**, **Entraînement**, **Garage** et **Historique**, chacun avec ce qui est choisi en ce moment. Un bouton « ← Accueil » ramène à cet écran depuis chaque section, où ces quatre entrées restent des onglets. Un petit
 engrenage, en haut à droite, ouvre les **Options** (sons et volume, thème clair ou sombre, alertes d'effort, pause
 automatique, écran toujours allumé, effacement des données, crédits). En bas, une barre résume ce qui va être lancé
 (parcours, séance, vélo) et porte le bouton **Rouler**, toujours en vue. Ce qui ne change pas à chaque sortie (météo,

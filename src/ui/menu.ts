@@ -4,7 +4,7 @@
 
 import { type AppOptions, CUSTOM_ROUTE_ID, type Profile, type WorkoutWhere } from '../app/profile';
 import type { SavedRide } from '../app/rideAutosave';
-import type { HistoryEntry } from '../app/rideHistory';
+import { type HistoryEntry, loadHistory } from '../app/rideHistory';
 import { findBike, findJersey, wearing, type Bike } from '../sim/bikes';
 import type { GroupOptions } from '../sim/group';
 import { SALON_ROUTE_ID } from '../sim/salonRoute';
@@ -52,7 +52,7 @@ export interface MenuContext {
   openRide(entry: HistoryEntry): void;
 }
 
-type TabId = 'sortie' | 'entrainement' | 'garage' | 'historique' | 'options';
+type TabId = 'accueil' | 'sortie' | 'entrainement' | 'garage' | 'historique' | 'options';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'sortie', label: 'Sortie libre' },
@@ -65,7 +65,15 @@ const TABS: { id: TabId; label: string }[] = [
 type Mode = 'sortie' | 'entrainement';
 
 /** Les onglets où l'on prépare une sortie : le bouton Rouler s'y affiche. */
-const RIDE_TABS: TabId[] = ['sortie', 'entrainement', 'garage'];
+const RIDE_TABS: TabId[] = ['accueil', 'sortie', 'entrainement', 'garage'];
+
+/** Les quatre gros boutons de l'accueil, avec leur dessin. */
+const HUB: { id: Exclude<TabId, 'accueil' | 'options'>; title: string; icon: string }[] = [
+  { id: 'sortie', title: 'Sortie libre', icon: '<path d="M2 19 9 6l4.5 8 3-4.5L22 19Z"/><path d="M9 6l2.2 3.6-2.2-1-2 1Z" class="snow"/>' },
+  { id: 'entrainement', title: 'Entraînement', icon: '<path d="M13.5 2 5 13.5h6L10 22l9-12h-6.2Z"/>' },
+  { id: 'garage', title: 'Garage', icon: '<circle cx="6" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 16 10 8h6l2 8M10 8 12 16M9 6h3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' },
+  { id: 'historique', title: 'Historique', icon: '<path d="M4 20V12h4v8Zm6 0V5h4v15Zm6 0v-6h4v6Z"/>' },
+];
 
 const DEVICES: { kind: DeviceKind; label: string; title: string }[] = [
   { kind: 'ble', label: 'Bluetooth', title: 'Connecter le KICKR Core en Bluetooth' },
@@ -75,7 +83,7 @@ const DEVICES: { kind: DeviceKind; label: string; title: string }[] = [
 ];
 
 export class Menu {
-  private tab: TabId = 'sortie';
+  private tab: TabId = 'accueil';
   private mode: Mode = 'sortie';
   private preview: BikePreview | null = null;
   private shownBike = '';
@@ -132,6 +140,7 @@ export class Menu {
         </div>
       </header>
       <nav class="m-tabs" role="tablist">
+        <button class="m-tab m-home" data-t="accueil" aria-label="Retour à l'accueil">← Accueil</button>
         ${TABS.map((t) => `<button class="m-tab" role="tab" data-t="${t.id}">${t.label}</button>`).join('')}
       </nav>
       <main class="m-content" data-r="content"></main>
@@ -202,6 +211,11 @@ export class Menu {
     const page = document.createElement('div');
     page.className = 'm-page';
     content.appendChild(page);
+    if (tab === 'accueil') {
+      this.renderHub(page);
+      this.changed();
+      return;
+    }
     const settings = document.createElement('div');
     settings.dataset.r = 'settings';
     if (tab === 'sortie') {
@@ -219,6 +233,26 @@ export class Menu {
     else this.renderGaragePage(page);
     // Le résumé dépend de l'onglet : le lieu choisi dans Entraînement ne vaut que là.
     this.changed();
+  }
+
+  /** L'accueil : quatre gros boutons, chacun avec ce qui est choisi en ce moment. */
+  private renderHub(page: HTMLElement): void {
+    const p = this.profile;
+    const runs = loadHistory().length;
+    const hint: Record<(typeof HUB)[number]['id'], string> = {
+      sortie: `${this.labelOf(p.routeId)}${p.group ? ' · en peloton' : ''}`,
+      entrainement: this.workout?.name ?? 'Une séance guidée, aux watts imposés',
+      garage: `${this.bike.name} · ${findJersey(p.jerseyId)?.name ?? 'Tenue du vélo'}`,
+      historique: runs ? `${runs} sortie${runs > 1 ? 's' : ''} enregistrée${runs > 1 ? 's' : ''}` : 'Tes sorties apparaîtront ici',
+    };
+    page.innerHTML = `<div class="m-hub">${HUB.map(
+      (h) => `<button class="m-hub-card" data-hub="${h.id}">
+        <svg viewBox="0 0 24 24" aria-hidden="true">${h.icon}</svg>
+        <b>${h.title}</b>
+        <span>${esc(hint[h.id])}</span>
+      </button>`,
+    ).join('')}</div>`;
+    page.querySelectorAll<HTMLElement>('[data-hub]').forEach((b) => b.addEventListener('click', () => this.openTab(b.dataset.hub as TabId)));
   }
 
   /** Le garage, avec l'aperçu du cycliste en haut : on y voit ce qu'on choisit. */
@@ -300,6 +334,14 @@ export class Menu {
     return { where, routeId, app: where === 'app' ? { mode: p.appMode, bars: p.appBars } : null, group, workout: training ? this.workout : null };
   }
 
+  /** Le nom d'un parcours pour l'affichage. */
+  private labelOf(routeId: string): string {
+    const p = this.profile;
+    if (routeId === WORLD_ROUTE_ID) return `${WORLD_NAME} · boucle de 6 biomes`;
+    if (routeId === CUSTOM_ROUTE_ID) return `Personnalisé · ${fr(p.customKm)} km à ${fr(p.customGrade)} %`;
+    return this.context.routes.find((r) => r.id === routeId)?.name ?? '--';
+  }
+
   private routeLabel(): string {
     const p = this.profile;
     const { where, routeId } = this.launch;
@@ -307,9 +349,7 @@ export class Menu {
       const how = p.appMode === 'flottante' ? 'barre flottante' : p.appMode === 'pastille' ? 'pastille flottante' : p.appMode === 'partage' ? 'écran partagé' : { haut: 'barre en haut', bas: 'barre en bas', 'les-deux': 'barres en haut et en bas' }[p.appBars];
       return `Média · ${how}`;
     }
-    if (where === 'monde' || routeId === WORLD_ROUTE_ID) return `${WORLD_NAME} · boucle de 6 biomes`;
-    if (routeId === CUSTOM_ROUTE_ID) return `Personnalisé · ${fr(p.customKm)} km à ${fr(p.customGrade)} %`;
-    return this.context.routes.find((r) => r.id === routeId)?.name ?? '--';
+    return this.labelOf(where === 'monde' ? WORLD_ROUTE_ID : routeId);
   }
 
   private changed(): void {
@@ -328,6 +368,7 @@ export class Menu {
     // Devant une application, il n'y a pas de décor : ni météo ni compagnons.
     const settings = this.root.querySelector<HTMLElement>('[data-r="settings"]');
     if (settings) settings.hidden = where === 'app';
+    this.q<HTMLElement>('.m-tabs').hidden = this.tab === 'accueil';
     this.q('[data-r="bar"]').hidden = !RIDE_TABS.includes(this.tab);
     this.root.querySelectorAll<HTMLElement>('[data-t]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.t === this.tab)));
     this.q('[data-r="summary"]').innerHTML = `

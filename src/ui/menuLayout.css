@@ -4,7 +4,20 @@
   grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 
+.m-root > .m-top {
+  grid-row: 1;
+}
+
+.m-root > .m-tabs {
+  grid-row: 2;
+}
+
+.m-root > .m-bar {
+  grid-row: 4;
+}
+
 .m-root > .m-content {
+  grid-row: 3;
   min-height: 0;
   overflow-y: auto;
   padding: 2px 8px 18px 2px;
@@ -42,6 +55,97 @@
 .m-gear[aria-selected='true'] {
   background: var(--m-text);
   color: var(--m-card) !important;
+}
+
+.m-tabs[hidden] {
+  display: none;
+}
+
+.m-tab.m-home {
+  margin-right: 6px;
+  padding-right: 18px;
+  border-right: 1px solid var(--m-line);
+  border-radius: 20px 0 0 20px;
+}
+
+/* L'accueil : quatre gros boutons. */
+.m-hub {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  grid-auto-rows: minmax(150px, 1fr);
+  height: max(360px, calc(100dvh - 250px));
+  padding: 6px 4px 4px;
+}
+
+.m-hub-card {
+  display: grid;
+  align-content: end;
+  gap: 6px;
+  min-height: 190px;
+  padding: 28px 30px;
+  border-radius: 28px;
+  background: var(--m-card);
+  box-shadow: var(--m-shadow);
+  color: var(--m-text) !important;
+  text-align: left;
+  transition:
+    transform 0.25s var(--m-ease),
+    box-shadow 0.25s;
+}
+
+.m-hub-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 34px rgba(30, 42, 56, 0.18);
+}
+
+.m-hub-card:active {
+  transform: scale(0.98);
+}
+
+.m-hub-card svg {
+  width: 64px;
+  height: 64px;
+  margin-bottom: auto;
+  padding: 14px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #ff8a2b, var(--m-accent-dark));
+  color: #fff;
+  fill: currentColor;
+}
+
+.m-hub-card svg .snow {
+  fill: #ffd9bf;
+}
+
+.m-hub-card b {
+  font-size: 30px;
+  font-style: italic;
+}
+
+.m-hub-card span {
+  overflow: hidden;
+  color: var(--m-dim);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .m-hub {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .m-hub-card {
+    min-height: 120px;
+    padding: 20px 22px;
+  }
+
+  .m-hub-card svg {
+    width: 48px;
+    height: 48px;
+    padding: 10px;
+  }
 }
 
 /* Barre du bas : ce qui va être lancé, et le bouton pour y aller. */
