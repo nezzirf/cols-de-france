@@ -11,11 +11,10 @@ describe('catalogue', () => {
     expect(TEAMS).toHaveLength(18);
     expect(new Set(TEAMS.map((t) => t.id)).size).toBe(18);
   });
-  it('donne à chaque équipe un vélo de route et un vélo de contre-la-montre', () => {
-    for (const t of TEAMS) {
-      expect(t.models.some((m) => m.kind === 'clm')).toBe(true);
-      expect(t.models.some((m) => m.kind !== 'clm')).toBe(true);
-    }
+  it('donne à chaque équipe un vélo de route, et un seul vélo de contre-la-montre au total : le Trinity', () => {
+    for (const t of TEAMS) expect(t.models.some((m) => m.kind !== 'clm')).toBe(true);
+    const timeTrial = ALL_BIKES.filter((b) => b.shape === 'clm');
+    expect(timeTrial.map((b) => b.id)).toEqual(['jayco:Trinity SL']);
   });
   it('a des identifiants uniques', () => {
     expect(new Set(ALL_BIKES.map((b) => b.id)).size).toBe(ALL_BIKES.length);
@@ -37,7 +36,7 @@ describe('silhouettes', () => {
   });
   it('donne des tubes plus profonds aux vélos aéro qu’aux grimpeurs', () => {
     expect(design('visma:S5').tubeDepth).toBeGreaterThan(design('visma:R5').tubeDepth * 1.5);
-    expect(design('visma:P5').tubeDepth).toBeGreaterThan(design('visma:S5').tubeDepth);
+    expect(design('jayco:Trinity SL').tubeDepth).toBeGreaterThan(design('visma:S5').tubeDepth);
   });
   it('garde les traits reconnaissables des modèles', () => {
     expect(design('visma:S5').stem).toBe('v');
@@ -61,7 +60,7 @@ describe('silhouettes', () => {
 describe('influence sur la vitesse', () => {
   const aero = 'visma:S5';
   const climber = 'visma:R5';
-  const tt = 'visma:P5';
+  const tt = 'jayco:Trinity SL';
   const mtb = 'generique:vtt-xc';
   const heavy = 'generique:vtt-enduro';
 

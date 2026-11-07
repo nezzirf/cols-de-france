@@ -57,9 +57,9 @@ describe('maillot choisi', () => {
 });
 
 describe('modèles 3D propres à un vélo', () => {
-  it('donne un modèle propre au RCR-R de Decathlon, au SuperSix Evo d’EF, au Tarmac SL9 de Specialized et au Y1Rs d’UAE', () => {
+  it('donne un modèle propre au RCR-R de Decathlon, au SuperSix Evo d’EF, au Dogma F d’INEOS, au Tarmac SL9 de Specialized, au Trinity SL de Jayco et au Y1Rs d’UAE', () => {
     const withAsset = ALL_BIKES.filter((b) => b.asset).map((b) => b.id);
-    expect(withAsset).toEqual(['decathlon:RCR-R', 'ef:SuperSix Evo', 'redbull:S-Works Tarmac SL9', 'soudal:S-Works Tarmac SL9', 'uae:Y1Rs']);
+    expect(withAsset).toEqual(['decathlon:RCR-R', 'ef:SuperSix Evo', 'ineos:Dogma F', 'redbull:S-Works Tarmac SL9', 'soudal:S-Works Tarmac SL9', 'jayco:Trinity SL', 'uae:Y1Rs']);
     expect(findBike('decathlon:RCR-R').asset).toBe('rcr');
     expect(findBike('decathlon:RCR-F').asset).toBeUndefined();
   });

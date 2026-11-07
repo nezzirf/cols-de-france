@@ -2,7 +2,7 @@
 
 import type { MeshBikeSpec } from './meshBike';
 
-export const MESH_BIKES: Record<'ef' | 'sl9', MeshBikeSpec> = {
+export const MESH_BIKES: Record<'ef' | 'sl9' | 'pinarello' | 'trinity', MeshBikeSpec> = {
   ef: {
     id: 'ef',
     url: `${import.meta.env.BASE_URL}models/ef/cannondale-supersix.glb`,
@@ -29,5 +29,35 @@ export const MESH_BIKES: Record<'ef' | 'sl9', MeshBikeSpec> = {
     saddle: { z: 0.18, top: 0.2978 },
     hood: { z: -0.29, y: 0.243, side: 0.05 },
     dropShadows: true,
+  },
+  pinarello: {
+    id: 'pinarello',
+    url: `${import.meta.env.BASE_URL}models/pinarello/pinarello-dogma.glb`,
+    tyreR: 0.2015,
+    hubY: -0.089,
+    frontHubZ: -0.2875,
+    rearHubZ: 0.2875,
+    groundY: -0.2907,
+    bbZ: 0.043,
+    bbY: -0.1342,
+    saddle: { z: 0.162, top: 0.2913 },
+    hood: { z: -0.28, y: 0.245, side: 0.065 },
+  },
+  trinity: {
+    id: 'trinity',
+    url: `${import.meta.env.BASE_URL}models/trinity/giant-trinity.glb`,
+    tyreR: 0.19,
+    hubY: -0.1,
+    frontHubZ: -0.299,
+    rearHubZ: 0.299,
+    groundY: -0.2905,
+    bbZ: 0.05,
+    bbY: -0.154,
+    saddle: { z: 0.177, top: 0.2823 },
+    // Les mains sont au bout des prolongateurs, à peu près à la hauteur des épaules.
+    hood: { z: -0.37, y: 0.288, side: 0.055 },
+    dropShadows: true,
+    rearStatic: true,
+    tt: { hip: [0.03, -0.035], shoulder: [0.5, 0.07], neck: [0.58, 0.1], head: [0.67, 0.04], roll: 0, slope: 0, headPitch: -0.75 },
   },
 };

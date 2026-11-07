@@ -245,9 +245,9 @@ export function buildBike(look: BikeLook, base: THREE.Material, mono: boolean): 
     const bike = buildRcrBike(look.wheelRadiusM, mono ? base : null);
     return { group: bike.group, wheels: [], drive: (crank) => bike.drive(crank, crank * WHEEL_TURNS_PER_CRANK), fit: bike.fit };
   }
-  // Vélos modélisés d'un seul maillage (Cannondale d'EF, Specialized SL9) quand leur fichier est chargé.
-  if ((look.asset === 'ef' || look.asset === 'sl9') && look.shape === 'route' && meshBikeReady(look.asset)) {
-    const id = look.asset;
+  // Vélos modélisés d'un seul maillage (Cannondale d'EF, Specialized SL9, Pinarello Dogma) quand leur fichier est chargé.
+  if (look.asset && look.asset in MESH_BIKES && (look.shape === 'route' || look.shape === 'clm') && meshBikeReady(look.asset)) {
+    const id = look.asset as keyof typeof MESH_BIKES;
     const bike = buildMeshBike(MESH_BIKES[id], () => cloneMeshBike(id), look.wheelRadiusM, mono ? base : null);
     return { group: bike.group, wheels: [], drive: (crank) => bike.drive(crank, crank * WHEEL_TURNS_PER_CRANK), fit: bike.fit };
   }

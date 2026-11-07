@@ -65,11 +65,6 @@ const BY_MODEL: Record<string, Partial<FrameDesign>> = {
   'Noah Fast 3.0': { tubeDepth: 0.08, stem: 'integree' },
   'Falcn RS': { topTubeRearY: 0.78, stayDrop: 0.5 },
   AD9: { tubeDepth: 0.07, stayDrop: 0.5 },
-  'Speedmax CFR': { tubeDepth: 0.11 },
-  'S-Works Shiv': { tubeDepth: 0.1, topTubeRearY: 0.8 },
-  P5: { tubeDepth: 0.112, stem: 'integree' },
-  TT1: { tubeDepth: 0.108, twoTone: 'avant' },
-  'Speed Concept SLR': { tubeDepth: 0.115, topTubeRearY: 0.8 },
 };
 
 export function designFor(modelName: string, kind: BikeKind): FrameDesign {

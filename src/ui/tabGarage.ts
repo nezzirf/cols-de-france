@@ -13,9 +13,6 @@ type GarageView = 'velo' | 'maillot';
 const CATEGORIES: { id: string; label: string; shapes: BikeShape[]; teams?: boolean }[] = [
   { id: 'equipes', label: 'Équipes WorldTour', shapes: ['route'], teams: true },
   { id: 'clm', label: 'Contre-la-montre', shapes: ['clm'] },
-  { id: 'route', label: 'Route', shapes: ['route'], teams: false },
-  { id: 'tout-terrain', label: 'Gravel et VTT', shapes: ['gravel', 'vtt'] },
-  { id: 'ville', label: 'Ville', shapes: ['ville'] },
 ];
 
 const thumbs = new Map<string, string>();
@@ -81,11 +78,22 @@ function jerseyIcon(color: number, accent: number, livery: Livery | null = null)
 
 export function renderGarage(page: HTMLElement, ctx: MenuContext): void {
   const p = ctx.profile;
+  // Le Garage ne propose que les vélos des équipes et le Trinity : un profil qui gardait un autre vélo reprend l'un d'eux.
+  const current = findBike(p.bikeId);
+  if (!CATEGORIES.some((c) => matches(c, current))) {
+    const fallback = ALL_BIKES.find((b) => b.shape === (current.shape === 'clm' ? 'clm' : 'route') && CATEGORIES.some((c) => matches(c, b)));
+    if (fallback) {
+      p.bikeId = fallback.id;
+      ctx.changed();
+    }
+  }
   let view: GarageView = 'velo';
   let category = CATEGORIES.find((c) => matches(c, findBike(p.bikeId)))?.id ?? CATEGORIES[0].id;
 
   function matches(c: (typeof CATEGORIES)[number], b: Bike): boolean {
     if (!c.shapes.includes(b.shape)) return false;
+    // Contre-la-montre : un seul vélo, le Giant Trinity modélisé.
+    if (b.shape === 'clm' && !b.asset) return false;
     return c.teams === undefined || c.teams === (b.team !== null);
   }
 

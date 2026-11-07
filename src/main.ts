@@ -6,7 +6,7 @@ import { keepAwake, openFloatingBar, startCapture } from './app/castSource';
 import { clearInProgress, loadInProgress, type SavedRide, saveInProgress } from './app/rideAutosave';
 import { addRide, type HistoryEntry, loadHistory, loadSamples, personalBests, referenceRide } from './app/rideHistory';
 import { summaryFromSamples } from './app/rideSummary';
-import { preloadBikeAsset } from './world/bikeAsset';
+import { bikeModelsLoaded, preloadBikeAsset } from './world/bikeAsset';
 import { preloadRiderAsset } from './world/riderAsset';
 import { DemoTrainer } from './hardware/demoTrainer';
 import { BluetoothHeartRate } from './hardware/heartRate';
@@ -91,6 +91,8 @@ class App {
     await this.menu.show();
     // Le vélo modélisé arrive après le menu : l'aperçu se refait dès qu'il est là.
     void bikeLoading.then(() => this.menu?.refreshPreview());
+    // Les vélos d'un seul maillage (Cannondale, SL9, Pinarello, Trinity) arrivent encore après : l'aperçu se refait aussi quand ils sont là.
+    void bikeModelsLoaded().then(() => this.menu?.refreshPreview());
   }
 
   private get bike(): Bike {

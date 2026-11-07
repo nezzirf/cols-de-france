@@ -28,6 +28,8 @@ export interface RiderFit {
   handSlope?: number;
   thigh: number;
   shin: number;
+  /** Inclinaison de la tête (rad) : plus négative, elle regarde plus bas (contre-la-montre) ; absente, elle regarde la route. */
+  headPitch?: number;
 }
 
 export interface AssetBike {

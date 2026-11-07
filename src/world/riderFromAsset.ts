@@ -413,7 +413,7 @@ export function buildAssetRider(fit: RiderFit, outfit: Outfit): AssetRider {
   }
   // La tête regarde la route : on la redresse par rapport à l'horizontale.
   const head = bone('Head');
-  const headLook = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), HEAD_PITCH);
+  const headLook = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), fit.headPitch ?? HEAD_PITCH);
 
   // Pose du torse figée : le reste de l'animation repart d'elle.
   const base = new Map<THREE.Object3D, THREE.Quaternion>();

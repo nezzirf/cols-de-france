@@ -25,6 +25,10 @@ export interface MeshBikeSpec {
   hood: { z: number; y: number; side: number };
   /** Le fichier a posé une ombre à plat sous chaque roue : on retire ce qui est collé au sol. */
   dropShadows?: boolean;
+  /** La roue arrière est lenticulaire : ses logos tourneraient en bloc, on la laisse fixe. */
+  rearStatic?: boolean;
+  /** Contre-la-montre : le buste est couché sur les prolongateurs, les mains jointes devant (écarts bassin → épaule, cou, tête). */
+  tt?: { hip: Point; shoulder: Point; neck: Point; head: Point; roll: number; slope: number; headPitch: number };
 }
 
 const CRANK = 0.172;
@@ -55,7 +59,7 @@ export function splitMeshBike(spec: MeshBikeSpec): (scene: THREE.Object3D) => vo
   const isCrank = (x: number, y: number, z: number): boolean => {
     const r = Math.hypot(y - spec.bbY, z - spec.bbZ);
     if (Math.abs(x) > CRANK_MIN_X && r < CRANK_RADIUS) return true;
-    return x > 0.03 && r > 0.058 && r < CRANK_RADIUS && z < spec.bbZ - 0.025;
+    return (x > 0.025 || x < -0.035) && r > 0.05 && r < CRANK_RADIUS && z < spec.bbZ - 0.015;
   };
   return (scene) => {
     scene.updateMatrixWorld(true);
@@ -76,6 +80,22 @@ export function splitMeshBike(spec: MeshBikeSpec): (scene: THREE.Object3D) => vo
     const front: number[] = [];
     const rear: number[] = [];
     const rest: number[] = [];
+    // Ombre posée au sol par le fichier : sous le niveau des pneus, ou un ruban à ras du sol entre et autour des roues.
+    const awayFromWheels = (z: number): boolean => Math.abs(z - spec.frontHubZ) > 0.07 && Math.abs(z - spec.rearHubZ) > 0.07;
+    const isShadow = (p: THREE.Vector3, q: THREE.Vector3, w: THREE.Vector3): boolean => {
+      const y = (p.y + q.y + w.y) / 3;
+      const x = Math.abs(p.x + q.x + w.x) / 3;
+      const z = (p.z + q.z + w.z) / 3;
+      if (y < spec.groundY - 0.001) return true;
+      // Barres posées au sol de part et d'autre du vélo (3,5 cm et plus de l'axe) : ni pneu (1,9 cm), ni cadre.
+      if (y < spec.groundY + 0.03 && x > 0.024) return true;
+      // Éclat flottant à 12 cm de l'axe, près du sol, devant la roue avant.
+      if (x > 0.09 && y < spec.groundY + 0.1) return true;
+      // Débris au sol devant la roue avant ou derrière la roue arrière.
+      if (y < spec.groundY + 0.05 && (z < spec.frontHubZ - 0.18 || z > spec.rearHubZ + 0.18)) return true;
+      if (Math.max(p.y, q.y, w.y) < spec.groundY + 0.006 && x > 0.022) return true;
+      return y < spec.groundY + 0.01 && awayFromWheels(z);
+    };
     const all3 = (hubZ: number): boolean => inWheel(a.x, a.y, a.z, hubZ) && inWheel(b.x, b.y, b.z, hubZ) && inWheel(c.x, c.y, c.z, hubZ);
     for (let t = 0; t < index.count; t += 3) {
       const i = index.getX(t);
@@ -84,9 +104,9 @@ export function splitMeshBike(spec: MeshBikeSpec): (scene: THREE.Object3D) => vo
       a.fromBufferAttribute(position, i).applyMatrix4(world);
       b.fromBufferAttribute(position, j).applyMatrix4(world);
       c.fromBufferAttribute(position, k).applyMatrix4(world);
-      if (spec.dropShadows && (Math.max(a.y, b.y, c.y) < spec.groundY - 0.0007 || (Math.max(a.y, b.y, c.y) < spec.groundY + 0.006 && Math.abs(a.x + b.x + c.x) / 3 > 0.022))) continue;
+      if (spec.dropShadows && isShadow(a, b, c)) continue;
       if (all3(spec.frontHubZ)) front.push(i, j, k);
-      else if (all3(spec.rearHubZ)) rear.push(i, j, k);
+      else if (!spec.rearStatic && all3(spec.rearHubZ)) rear.push(i, j, k);
       else if (isCrank((a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3, (a.z + b.z + c.z) / 3)) continue;
       else rest.push(i, j, k);
     }
@@ -167,20 +187,21 @@ export function buildMeshBike(spec: MeshBikeSpec, cloneAsset: () => THREE.Object
   const saddle = onBike(spec.saddle.z, spec.saddle.top);
   // Le bassin est calé comme sur le Van Rysel (23,5 cm derrière le pédalier, 78 cm au-dessus) : la jambe ne doit pas être
   // plus courte que la distance à la pédale basse, sinon le pied décolle.
-  const hip: Point = [Math.max(saddle[0] - 0.035, bb[0] - 0.235), Math.min(saddle[1] + 0.075, bb[1] + 0.78)];
+  const hip: Point = [Math.max(saddle[0] - 0.035, bb[0] - 0.235) + (spec.tt?.hip[0] ?? 0), Math.min(saddle[1] + 0.075, bb[1] + 0.78) + (spec.tt?.hip[1] ?? 0)];
   const fit: RiderFit = {
     bb,
     crank: CRANK,
     hip,
-    shoulder: [hip[0] + 0.5, hip[1] + 0.3],
-    neck: [hip[0] + 0.58, hip[1] + 0.36],
-    head: [hip[0] + 0.67, hip[1] + 0.44],
+    shoulder: spec.tt ? [hip[0] + spec.tt.shoulder[0], hip[1] + spec.tt.shoulder[1]] : [hip[0] + 0.5, hip[1] + 0.3],
+    neck: spec.tt ? [hip[0] + spec.tt.neck[0], hip[1] + spec.tt.neck[1]] : [hip[0] + 0.58, hip[1] + 0.36],
+    head: spec.tt ? [hip[0] + spec.tt.head[0], hip[1] + spec.tt.head[1]] : [hip[0] + 0.67, hip[1] + 0.44],
     hand: onBike(spec.hood.z, spec.hood.y),
     handSide: spec.hood.side * scale,
-    handRoll: 0.8,
-    handSlope: 0.4,
+    handRoll: spec.tt?.roll ?? 0.8,
+    handSlope: spec.tt?.slope ?? 0.4,
     thigh: 0.45,
     shin: 0.44,
+    headPitch: spec.tt?.headPitch,
   };
 
   return {
