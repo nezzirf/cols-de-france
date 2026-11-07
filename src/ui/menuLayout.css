@@ -172,24 +172,23 @@
 /* Garage : le cycliste de profil, avec le vélo et le maillot choisis. */
 .m-hub-bike {
   position: absolute;
-  right: -5%;
-  bottom: -10%;
+  top: 3%;
+  right: 3%;
   width: auto;
-  max-width: 96%;
-  height: 134%;
+  max-width: 70%;
+  height: 94%;
   object-fit: contain;
-  object-position: right bottom;
+  object-position: right center;
   pointer-events: none;
   transform: rotate(-3deg);
-  transition: transform 0.4s var(--m-ease);
-}
+  transition: transform 0.4s var(--m-ease);}
 
 .m-hub-bike[hidden] {
   display: none;
 }
 
 .m-hub-card:hover .m-hub-bike {
-  transform: rotate(-1deg) scale(1.04);
+  transform: rotate(-1deg) scale(1.03);
 }
 
 .m-hub-card svg .snow {
