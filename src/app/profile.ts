@@ -29,13 +29,26 @@ export interface Profile {
   ghost: boolean;
   /** Sons d'ambiance : vagues à la plage, oiseaux en forêt, vent en montagne. */
   sound: boolean;
-  /** Sortie en peloton : nombre de coureurs, watts par kilo du groupe et parcours. */
+  /** Rouler en peloton sur le parcours choisi : un groupe de coureurs qui tient son niveau en watts par kilo. */
+  group: boolean;
   groupRiders: GroupSize;
   groupWkg: number;
   groupRouteId: string;
+  /** Volume des sons d'ambiance, de 0 à 100. */
+  volume: number;
+  /** Apparence des menus : celle de l'appareil, claire ou sombre. */
+  theme: Theme;
+  /** Messages d'alerte d'effort (trop de watts trop tôt, cadence basse). */
+  alerts: boolean;
+  /** Le chrono s'arrête quand on ne pédale plus. */
+  autoPause: boolean;
+  /** L'écran reste allumé pendant la sortie. */
+  screenOn: boolean;
   /** Fantômes : le niveau en W/kg de chacun, cinq au plus. */
   bots: number[];
 }
+
+export type Theme = 'auto' | 'clair' | 'sombre';
 
 export const CUSTOM_ROUTE_ID = 'perso';
 
@@ -70,6 +83,12 @@ const DEFAULT_PROFILE: Profile = {
   peloton: false,
   ghost: true,
   sound: true,
+  group: false,
+  volume: 70,
+  theme: 'auto',
+  alerts: true,
+  autoPause: true,
+  screenOn: true,
   groupRiders: 10,
   groupWkg: 3,
   groupRouteId: '',

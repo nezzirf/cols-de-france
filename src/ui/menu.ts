@@ -1,12 +1,11 @@
-// Écran d'accueil : profil en haut, trois onglets, et à droite le cycliste avec le récapitulatif
-// de la sortie. Tout ce que le joueur choisit reste dans son profil.
+// Écran d'accueil : le profil en haut, quatre onglets (sortie libre, entraînement, garage, historique), un engrenage pour
+// les options, et en bas le résumé de ce qui va être lancé avec le bouton « Rouler ». Tout ce que le joueur choisit
+// reste dans son profil.
 
 import { type AppOptions, CUSTOM_ROUTE_ID, type Profile, type WorkoutWhere } from '../app/profile';
 import type { SavedRide } from '../app/rideAutosave';
 import type { HistoryEntry } from '../app/rideHistory';
-import { type MomentChoice, MOMENTS, type WeatherChoice, WEATHERS } from '../world/ambiance';
 import { findBike, findJersey, wearing, type Bike } from '../sim/bikes';
-import { BOT_TINTS, BOT_WKG_MAX, BOT_WKG_MIN, BOT_WKG_STEP, DEFAULT_BOT_WKG, MAX_BOTS } from '../sim/bots';
 import type { GroupOptions } from '../sim/group';
 import { SALON_ROUTE_ID } from '../sim/salonRoute';
 import { WORLD_NAME, WORLD_ROUTE_ID } from '../sim/worldRoute';
@@ -14,10 +13,12 @@ import { loadRouteIndex, type RouteSummary } from '../sim/route';
 import { loadWorkouts, saveWorkouts, WORKOUT_PRESETS, type Workout } from '../sim/workout';
 import { duration, esc, fr, hex } from './format';
 import './menu.css';
+import './menuLayout.css';
 import { BikePreview } from './preview';
 import { renderGarage } from './tabGarage';
 import { renderHistory } from './tabHistory';
-import { renderPeloton } from './tabPeloton';
+import { renderOptions } from './tabOptions';
+import { renderRideSettings } from './rideSettings';
 import { renderRoutes } from './tabRoutes';
 import { renderWorkouts } from './tabWorkouts';
 
@@ -51,18 +52,20 @@ export interface MenuContext {
   openRide(entry: HistoryEntry): void;
 }
 
-type TabId = 'parcours' | 'entrainement' | 'peloton' | 'garage' | 'historique';
+type TabId = 'sortie' | 'entrainement' | 'garage' | 'historique' | 'options';
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: 'parcours', label: 'Parcours' },
+  { id: 'sortie', label: 'Sortie libre' },
   { id: 'entrainement', label: 'Entraînement' },
-  { id: 'peloton', label: 'Peloton' },
   { id: 'garage', label: 'Garage' },
   { id: 'historique', label: 'Historique' },
 ];
 
-const CREDITS =
-  'Tracés © contributeurs OpenStreetMap (ODbL) · Altitudes IGN RGE ALTI · Relief Mapzen Terrain Tiles · Bâtiments IGN BD TOPO · Photos IGN BD ORTHO · Vélo de route « Canyon Aeroad » par hipoojan (Sketchfab) · Cycliste : mannequin Mixamo (Adobe), casque « Capacete Ciclista » par LAFF3D et lunettes « Action Sunglass » par Nazmul (Sketchfab, CC BY 4.0)';
+/** Les deux façons de rouler : sans séance (sortie libre) ou avec (entraînement). Le bouton Rouler suit la dernière ouverte. */
+type Mode = 'sortie' | 'entrainement';
+
+/** Les onglets où l'on prépare une sortie : le bouton Rouler s'y affiche. */
+const RIDE_TABS: TabId[] = ['sortie', 'entrainement', 'garage'];
 
 const DEVICES: { kind: DeviceKind; label: string; title: string }[] = [
   { kind: 'ble', label: 'Bluetooth', title: 'Connecter le KICKR Core en Bluetooth' },
@@ -72,10 +75,13 @@ const DEVICES: { kind: DeviceKind; label: string; title: string }[] = [
 ];
 
 export class Menu {
-  private tab: TabId = 'parcours';
+  private tab: TabId = 'sortie';
+  private mode: Mode = 'sortie';
   private preview: BikePreview | null = null;
   private shownBike = '';
   private context: MenuContext;
+  private themeQuery: MediaQueryList | null = null;
+  private onSystemTheme = (): void => this.applyTheme();
 
   constructor(
     private root: HTMLElement,
@@ -120,39 +126,26 @@ export class Menu {
         </div>
         <div class="m-devices">
           ${DEVICES.map((d) => `<button class="m-device" data-d="${d.kind}" title="${d.title}">${d.label}</button>`).join('')}
+          <button class="m-gear" data-t="options" aria-label="Options" title="Options">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.4 4.1c.05-.2.1-.4.1-.6s-.05-.4-.1-.6l1.9-1.5a.5.5 0 0 0 .1-.6l-1.8-3.1a.5.5 0 0 0-.6-.2l-2.2.9a8 8 0 0 0-1.6-.9l-.3-2.4a.5.5 0 0 0-.5-.4h-3.6a.5.5 0 0 0-.5.4l-.3 2.4c-.6.2-1.1.5-1.6.9l-2.2-.9a.5.5 0 0 0-.6.2L2.8 9.3a.5.5 0 0 0 .1.6l1.9 1.5c-.05.2-.1.4-.1.6s.05.4.1.6l-1.9 1.5a.5.5 0 0 0-.1.6l1.8 3.1c.1.2.4.3.6.2l2.2-.9c.5.4 1 .7 1.6.9l.3 2.4c0 .2.3.4.5.4h3.6c.3 0 .5-.2.5-.4l.3-2.4c.6-.2 1.1-.5 1.6-.9l2.2.9c.2.1.5 0 .6-.2l1.8-3.1a.5.5 0 0 0-.1-.6l-1.9-1.5Z" fill="currentColor"/></svg>
+          </button>
         </div>
       </header>
       <nav class="m-tabs" role="tablist">
         ${TABS.map((t) => `<button class="m-tab" role="tab" data-t="${t.id}">${t.label}</button>`).join('')}
       </nav>
-      <div class="m-body">
-        <main class="m-content" data-r="content"></main>
-        <aside class="m-side">
-          <canvas class="m-preview" data-r="preview" aria-label="Aperçu du cycliste et du vélo, à faire tourner à la souris"></canvas>
-          <div class="m-summary" data-r="summary"></div>
-          <label class="m-slope" data-r="slope">
-            <span>Pente ressentie <b data-r="difficulty"></b></span>
-            <input type="range" min="25" max="100" step="5" data-p="difficulty" value="${this.profile.difficulty}">
-          </label>
-          <div class="m-ambiance" data-r="ambiance">
-            <div class="m-ambiance-row">
-              <label>Météo<select data-o="weather">${WEATHERS.map((w) => `<option value="${w.id}">${w.label}</option>`).join('')}</select></label>
-              <label>Moment<select data-o="moment">${MOMENTS.map((m) => `<option value="${m.id}">${m.label}</option>`).join('')}</select></label>
-            </div>
-            <label class="m-check" data-r="pelotonRow"><input type="checkbox" data-o="peloton"> Rouler avec un peloton</label>
-            <label class="m-check"><input type="checkbox" data-o="ghost"> Fantôme de ma meilleure sortie</label>
-            <label class="m-check"><input type="checkbox" data-o="sound"> Sons d'ambiance (forêt, plage, vent)</label>
-            <div class="m-bots" data-r="bots">
-              <div class="m-bots-head"><span>Fantômes</span><button class="m-bots-add" data-a="addBot">+ Ajouter</button></div>
-              <div data-r="botList"></div>
-            </div>
-          </div>
-          <button class="m-go" data-a="start">Rouler</button>
-          <p class="m-msg" data-r="msg">Sans home trainer connecté, la sortie démarre en mode démo au clavier.</p>
-        </aside>
-      </div>
-      <footer class="m-credits">${CREDITS}</footer>
+      <main class="m-content" data-r="content"></main>
+      <footer class="m-bar" data-r="bar">
+        <div class="m-summary" data-r="summary"></div>
+        <p class="m-msg" data-r="msg">Sans home trainer connecté, la sortie démarre en mode démo au clavier.</p>
+        <button class="m-go" data-a="start">Rouler</button>
+      </footer>
     </div>`;
+
+    this.applyTheme();
+    this.themeQuery?.removeEventListener('change', this.onSystemTheme);
+    this.themeQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
+    this.themeQuery?.addEventListener('change', this.onSystemTheme);
 
     this.q<HTMLInputElement>('[data-r="name"]').addEventListener('input', (e) => {
       this.profile.name = (e.target as HTMLInputElement).value;
@@ -161,7 +154,7 @@ export class Menu {
     this.root.querySelectorAll<HTMLInputElement>('[data-p]').forEach((input) => {
       input.addEventListener('input', () => {
         const value = Number(input.value);
-        const key = input.dataset.p as 'ftp' | 'riderKg' | 'difficulty';
+        const key = input.dataset.p as 'ftp' | 'riderKg';
         if (value >= Number(input.min) && value <= Number(input.max)) this.profile[key] = value;
         this.changed();
       });
@@ -172,35 +165,8 @@ export class Menu {
     this.root.querySelectorAll<HTMLElement>('[data-d]').forEach((b) => {
       b.addEventListener('click', () => void this.connect(b.dataset.d as DeviceKind));
     });
-    this.root.querySelectorAll<HTMLSelectElement>('select[data-o]').forEach((select) => {
-      const key = select.dataset.o as 'weather' | 'moment';
-      select.value = this.profile[key];
-      select.addEventListener('change', () => {
-        if (key === 'weather') this.profile.weather = select.value as WeatherChoice;
-        else this.profile.moment = select.value as MomentChoice;
-        this.changed();
-      });
-    });
-    this.root.querySelectorAll<HTMLInputElement>('input[data-o]').forEach((box) => {
-      const key = box.dataset.o as 'peloton' | 'ghost' | 'sound';
-      box.checked = this.profile[key];
-      box.addEventListener('change', () => {
-        this.profile[key] = box.checked;
-        this.changed();
-      });
-    });
-    this.q('[data-a="addBot"]').addEventListener('click', () => {
-      if (this.profile.bots.length >= MAX_BOTS) return;
-      // Le nouveau fantôme part du niveau du précédent : on règle ensuite chacun à son goût.
-      const last = this.profile.bots[this.profile.bots.length - 1];
-      this.profile.bots.push(last ?? DEFAULT_BOT_WKG);
-      this.renderBots();
-      this.changed();
-    });
-    this.renderBots();
     this.q('[data-a="start"]').addEventListener('click', () => void this.start());
 
-    this.preview = new BikePreview(this.q('[data-r="preview"]'));
     try {
       this.context.routes = await loadRouteIndex();
     } catch (err) {
@@ -212,66 +178,60 @@ export class Menu {
     this.changed();
   }
 
-  /** Les fantômes choisis : un curseur de W/kg chacun, jusqu'à cinq ; leur vélo et leur poids sont les tiens. */
-  private renderBots(): void {
-    const p = this.profile;
-    const list = this.q('[data-r="botList"]');
-    list.innerHTML = p.bots.length
-      ? p.bots
-          .map(
-            (w, i) => `<div class="m-bot">
-              <i style="background:${hex(BOT_TINTS[i])}"></i>
-              <label><span>Fantôme ${i + 1} <b data-r="bot${i}"></b></span>
-                <input type="range" min="${BOT_WKG_MIN}" max="${BOT_WKG_MAX}" step="${BOT_WKG_STEP}" data-bot="${i}" value="${w}"></label>
-              <button data-rm="${i}" aria-label="Retirer le fantôme ${i + 1}">×</button>
-            </div>`,
-          )
-          .join('')
-      : '<p class="m-bots-empty">Aucun fantôme. Jusqu’à 5 coureurs virtuels, à la puissance par kilo de ton choix, avec ton vélo et ton poids.</p>';
-    list.querySelectorAll<HTMLInputElement>('[data-bot]').forEach((input) =>
-      input.addEventListener('input', () => {
-        p.bots[Number(input.dataset.bot)] = Math.round(Number(input.value) * 10) / 10;
-        this.showBotWatts();
-        this.changed();
-      }),
-    );
-    list.querySelectorAll<HTMLElement>('[data-rm]').forEach((b) =>
-      b.addEventListener('click', () => {
-        p.bots.splice(Number(b.dataset.rm), 1);
-        this.renderBots();
-        this.changed();
-      }),
-    );
-    this.q<HTMLButtonElement>('[data-a="addBot"]').hidden = p.bots.length >= MAX_BOTS;
-    this.showBotWatts();
-  }
-
-  private showBotWatts(): void {
-    const p = this.profile;
-    p.bots.forEach((w, i) => {
-      const out = this.root.querySelector<HTMLElement>(`[data-r="bot${i}"]`);
-      if (out) out.textContent = `${fr(w)} W/kg · ${Math.round(w * p.riderKg)} W`;
-    });
+  /** Thème des menus : celui de l'appareil, ou clair, ou sombre selon le choix. */
+  private applyTheme(): void {
+    const root = this.root.querySelector<HTMLElement>('.m-root');
+    if (!root) return;
+    const choice = this.profile.theme;
+    const dark = choice === 'sombre' || (choice === 'auto' && typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches);
+    root.dataset.theme = dark ? 'dark' : 'light';
   }
 
   private openTab(tab: TabId): void {
     this.tab = tab;
+    if (tab === 'sortie' || tab === 'entrainement') this.mode = tab;
+    this.preview?.dispose();
+    this.preview = null;
     this.root.querySelectorAll<HTMLElement>('[data-t]').forEach((b) => {
       b.setAttribute('aria-selected', String(b.dataset.t === tab));
     });
     const content = this.q('[data-r="content"]');
     content.innerHTML = '';
+    content.scrollTop = 0;
     this.renderResume(content);
     const page = document.createElement('div');
     page.className = 'm-page';
     content.appendChild(page);
-    if (tab === 'parcours') renderRoutes(page, this.context);
-    else if (tab === 'entrainement') renderWorkouts(page, this.context);
-    else if (tab === 'peloton') renderPeloton(page, this.context);
-    else if (tab === 'historique') renderHistory(page, this.context);
-    else renderGarage(page, this.context);
-    // Le résumé dépend de l'onglet : le lieu choisi dans Entraînement ne vaut que là, ou avec une séance.
+    const settings = document.createElement('div');
+    settings.dataset.r = 'settings';
+    if (tab === 'sortie') {
+      renderRideSettings(settings, this.context, { training: false, media: false });
+      page.appendChild(settings);
+      const routes = document.createElement('div');
+      page.appendChild(routes);
+      renderRoutes(routes, this.context);
+    } else if (tab === 'entrainement') {
+      renderWorkouts(page, this.context);
+      renderRideSettings(settings, this.context, { training: true, media: false });
+      page.appendChild(settings);
+    } else if (tab === 'historique') renderHistory(page, this.context);
+    else if (tab === 'options') renderOptions(page, this.context, () => this.applyTheme());
+    else this.renderGaragePage(page);
+    // Le résumé dépend de l'onglet : le lieu choisi dans Entraînement ne vaut que là.
     this.changed();
+  }
+
+  /** Le garage, avec l'aperçu du cycliste en haut : on y voit ce qu'on choisit. */
+  private renderGaragePage(page: HTMLElement): void {
+    const stage = document.createElement('div');
+    stage.className = 'm-stage';
+    stage.innerHTML = '<canvas class="m-preview" aria-label="Aperçu du cycliste et du vélo, à faire tourner à la souris"></canvas>';
+    page.appendChild(stage);
+    const body = document.createElement('div');
+    page.appendChild(body);
+    renderGarage(body, this.context);
+    this.shownBike = '';
+    this.preview = new BikePreview(stage.querySelector('canvas') as HTMLCanvasElement);
   }
 
   /** Propose de reprendre la sortie interrompue, quand il y en a une. */
@@ -312,6 +272,7 @@ export class Menu {
   close(): void {
     this.preview?.dispose();
     this.preview = null;
+    this.themeQuery?.removeEventListener('change', this.onSystemTheme);
   }
 
   /** Redessine l'aperçu du cycliste, par exemple quand un modèle vient d'être chargé. */
@@ -327,17 +288,16 @@ export class Menu {
   }
 
   /**
-   * Ce que lancera « Rouler ». Dans l'onglet Entraînement, ou dès qu'une séance est choisie, le lieu
-   * choisi là s'applique, séance ou non ; sinon, c'est le parcours choisi dans l'onglet Parcours.
+   * Ce que lancera « Rouler ». En entraînement, c'est la séance choisie et le lieu choisi là (le monde, un col, ou
+   * devant une application) ; en sortie libre, c'est le parcours choisi dans l'onglet, seul ou en peloton.
    */
-  private get launch(): { where: WorkoutWhere; routeId: string; app: AppOptions | null; group: GroupOptions | null } {
+  private get launch(): { where: WorkoutWhere; routeId: string; app: AppOptions | null; group: GroupOptions | null; workout: Workout | null } {
     const p = this.profile;
-    // Dans l'onglet Peloton, c'est le groupe et son parcours : pas de séance guidée.
-    const group: GroupOptions | null = this.tab === 'peloton' ? { riders: p.groupRiders, wkg: p.groupWkg } : null;
-    const training = group === null && (this.workout !== null || this.tab === 'entrainement');
+    const training = this.mode === 'entrainement';
+    const group: GroupOptions | null = !training && p.group ? { riders: p.groupRiders, wkg: p.groupWkg } : null;
     const where: WorkoutWhere = training ? p.workoutWhere : 'parcours';
-    const routeId = group ? p.groupRouteId : where === 'monde' ? WORLD_ROUTE_ID : where === 'app' ? SALON_ROUTE_ID : p.routeId;
-    return { where, routeId, app: where === 'app' ? { mode: p.appMode, bars: p.appBars } : null, group };
+    const routeId = where === 'monde' ? WORLD_ROUTE_ID : where === 'app' ? SALON_ROUTE_ID : p.routeId;
+    return { where, routeId, app: where === 'app' ? { mode: p.appMode, bars: p.appBars } : null, group, workout: training ? this.workout : null };
   }
 
   private routeLabel(): string {
@@ -363,24 +323,16 @@ export class Menu {
     avatar.style.background = `linear-gradient(135deg, ${hex(bike.jersey)}, ${hex(bike.accent)})`;
     avatar.style.color = (bike.jersey & 0xff) + ((bike.jersey >> 8) & 0xff) + (bike.jersey >> 16) > 560 ? '#1d2329' : '#fff';
     this.q('[data-r="wkg"]').textContent = fr(p.ftp / p.riderKg, 2);
-    this.q('[data-r="difficulty"]').textContent = `${p.difficulty} %`;
-    this.showBotWatts();
 
-    const { group } = this.launch;
-    const workout = group ? null : this.workout;
-    // En ERG, le home trainer suit la puissance : la pente ressentie ne joue plus.
-    this.q('[data-r="slope"]').hidden = workout !== null;
-    // L'ambiance et le peloton n'ont de sens que dans le monde 3D, et le peloton hors séance guidée.
-    this.q('[data-r="ambiance"]').hidden = this.launch.where === 'app';
-    this.q('[data-r="pelotonRow"]').hidden = workout !== null || group !== null;
+    const { group, workout, where } = this.launch;
+    // Devant une application, il n'y a pas de décor : ni météo ni compagnons.
+    const settings = this.root.querySelector<HTMLElement>('[data-r="settings"]');
+    if (settings) settings.hidden = where === 'app';
+    this.q('[data-r="bar"]').hidden = !RIDE_TABS.includes(this.tab);
+    this.root.querySelectorAll<HTMLElement>('[data-t]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.t === this.tab)));
     this.q('[data-r="summary"]').innerHTML = `
-      <div class="m-sum-title">${esc(bike.name)}</div>
-      <div class="m-sum-sub">${esc(bike.team?.name ?? bike.label)}</div>
-      <dl>
-        <div><dt>Maillot</dt><dd>${esc(jersey?.name ?? 'Tenue du vélo')}</dd></div>
-        <div><dt>Parcours</dt><dd>${esc(this.routeLabel())}</dd></div>
-        <div><dt>${group ? 'Peloton' : 'Séance'}</dt><dd>${group ? `${group.riders} coureurs · ${fr(group.wkg)} W/kg` : workout ? esc(workout.name) : 'Sortie libre'}</dd></div>
-      </dl>`;
+      <div class="m-sum-main"><b>${esc(this.routeLabel())}</b><span>${group ? `Peloton · ${group.riders} coureurs · ${fr(group.wkg)} W/kg` : workout ? esc(workout.name) : 'Sortie libre'}</span></div>
+      <div class="m-sum-bike">${esc(bike.name)} · ${esc(jersey?.name ?? bike.team?.name ?? 'Tenue du vélo')}</div>`;
 
     const go = this.q<HTMLButtonElement>('[data-a="start"]');
     if (!go.disabled) go.textContent = group ? 'Rouler en peloton' : 'Rouler';
@@ -419,8 +371,8 @@ export class Menu {
     this.preview?.dispose();
     this.preview = null;
     try {
-      const { routeId, app, group } = this.launch;
-      await this.host.start(routeId, group ? null : this.workout, app, group);
+      const { routeId, app, group, workout } = this.launch;
+      await this.host.start(routeId, group ? null : workout, app, group);
     } catch (err) {
       await this.show();
       this.say(err instanceof Error ? err.message : String(err), true);

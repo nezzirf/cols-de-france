@@ -48,7 +48,13 @@ La position exacte (kilomètre, altitude, coordonnées GPS) s'affiche sous la ba
 
 ## Le menu
 
-- **Parcours** : les cols réels, et un parcours personnalisé dont on choisit la distance (jusqu'à 100 km) et la pente. C'est une boucle : au sommet, on repart du départ, la sortie ne se termine pas toute seule.
+L'écran d'accueil a quatre onglets : **Sortie libre**, **Entraînement**, **Garage** et **Historique**. Un petit
+engrenage, en haut à droite, ouvre les **Options** (sons et volume, thème clair ou sombre, alertes d'effort, pause
+automatique, écran toujours allumé, effacement des données, crédits). En bas, une barre résume ce qui va être lancé
+(parcours, séance, vélo) et porte le bouton **Rouler**, toujours en vue. Ce qui ne change pas à chaque sortie (météo,
+moment, pente ressentie, peloton, fantômes) reste replié dans « Réglages de la sortie ».
+
+- **Sortie libre** : les grands cols, le Tour des six biomes, et un parcours personnalisé dont on choisit la distance (jusqu'à 100 km) et la pente. C'est une boucle : au sommet, on repart du départ, la sortie ne se termine pas toute seule.
   Il commence toujours par 5 km de plat pour s'échauffer ; sa route et son paysage sont générés, ils
   ne représentent aucun lieu réel.
 - **Entraînement** : un créateur de séances par blocs (échauffement, stable, rampe, intervalles,
@@ -71,8 +77,8 @@ La FTP, le poids et le nom se règlent en haut de l'écran. Sous le bouton « Ro
   changent la lumière, le ciel et la brume, jamais l'effort.
 - **Peloton** : quatre coéquipiers de niveaux différents (72, 88, 100 et 112 % de ta FTP) roulent avec
   la même physique que toi, avec l'écart du plus proche devant et derrière. Hors séance guidée.
-- **Onglet Peloton** : un groupe de 10 ou 15 coureurs, aux watts par kilo choisis avant le départ, sur le
-  parcours de ton choix. Chacun a sa masse (58 à 85 kg) et son niveau à ± 2 % ; ils roulent avec la même
+- **Rouler en peloton** (réglages de la sortie libre) : un groupe de 10 ou 15 coureurs, aux watts par kilo choisis avant le départ, sur le
+  parcours que tu as choisi. Chacun a sa masse (58 à 85 kg) et son niveau à ± 2 % ; ils roulent avec la même
   physique que toi. Pendant les 15 minutes d'échauffement, le groupe reste avec toi, à ta vitesse, quel que
   soit ton rythme ; il se cale ensuite sur le niveau choisi et le tient jusqu'à la fin : si tu vas moins
   vite, il part devant ; si tu vas plus vite, tu le doubles. L'écran indique le niveau, l'échauffement restant et combien de
@@ -133,7 +139,7 @@ La FTP, le poids et le nom se règlent en haut de l'écran. Sous le bouton « Ro
 
 Une boucle imaginaire de 46 km, de la plage au désert, qui traverse six biomes : plage et mer,
 prairies fleuries, forêt, montagne enneigée, canyon rouge et désert de dunes. Elle sert aux séances
-(onglet Entraînement) et peut aussi se rouler librement depuis l'onglet Parcours.
+(onglet Entraînement) et peut aussi se rouler librement depuis l'onglet Sortie libre.
 
 **Une boucle sans fin.** Le décor est périodique : la fin du tour et son début sont identiques (route,
 altitude, relief, biomes, végétation), si bien qu'on enchaîne les tours sans voir le raccord. Le

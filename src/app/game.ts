@@ -135,6 +135,9 @@ export class Game {
   private startedAt = 0;
   private autoPause = new AutoPause();
   private alerts = new EffortAlerts();
+  /** Réglages du joueur : les alertes d'effort et la pause automatique se coupent dans les options. */
+  alertsOn = true;
+  autoPauseOn = true;
   private peloton: Peloton | null = null;
   private groupOptions: GroupOptions | null = null;
   /** Les fantômes choisis avant la sortie, qui tiennent chacun leur niveau. */
@@ -396,7 +399,7 @@ export class Game {
     // Le chrono part au premier coup de pédale, et s'arrête quand on s'arrête vraiment.
     if (this.elapsedS > 0 || power > 0 || this.physics.speedMps > 0) {
       const pedalling = power > 0 || this.data.cadenceRpm > 0;
-      const change = this.autoPause.update(dt, pedalling, this.physics.speedMps > STOPPED_SPEED_MPS);
+      const change = this.autoPauseOn ? this.autoPause.update(dt, pedalling, this.physics.speedMps > STOPPED_SPEED_MPS) : null;
       if (change === 'pause') this.onToast('Pause automatique : le chrono repart quand tu pédales');
       else if (change === 'resume') this.onToast('C’est reparti');
       if (!this.autoPause.paused) {
@@ -445,7 +448,7 @@ export class Game {
         altitudeM: this.route.eleAt(dist),
         speedKmh: this.physics.speedMps * 3.6,
       });
-      const alert = this.alerts.update({ powerW: this.data.powerW, cadenceRpm: this.data.cadenceRpm }, this.ftp, this.workout !== null);
+      const alert = this.alertsOn ? this.alerts.update({ powerW: this.data.powerW, cadenceRpm: this.data.cadenceRpm }, this.ftp, this.workout !== null) : null;
       if (alert) this.onToast(alert);
       if (this.nextSampleS % CHECKPOINT_EVERY_S === 0) this.onCheckpoint(this.state(), this.samples);
       this.nextSampleS++;

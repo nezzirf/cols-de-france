@@ -113,10 +113,49 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
 
   let draft = clone(known().find((w) => w.id === p.workoutId) ?? WORKOUT_PRESETS[0]);
   let selected = 0;
+  // En entraînement, une séance est toujours choisie : sans séance, c'est la sortie libre, qui a son onglet.
+  if (p.workoutId === null) p.workoutId = draft.id;
 
   page.innerHTML = `
+    <input type="file" data-r="file" accept=".zwo,.mrc,.erg,.xml,.txt" multiple hidden>
+    <div class="m-wk">
+      <div class="m-wk-side">
+        <div class="m-wk-list" data-r="list"></div>
+        <p class="m-note" data-r="importNote" role="status"></p>
+      </div>
+      <section class="m-card m-wk-editor">
+        <div class="m-wk-head">
+          <label class="m-field">
+            <span class="m-caption">Étape 1 · Nom de la séance</span>
+            <input class="m-wk-name" data-r="wkName" maxlength="40" aria-label="Nom de la séance">
+          </label>
+          <div class="m-wk-stats" data-r="wkStats"></div>
+        </div>
+        <div class="m-wk-section">
+          <canvas class="m-wk-chart" data-r="chart" aria-label="Déroulé de la séance : clique sur un bloc pour le modifier"></canvas>
+          <p class="m-note">Clique sur le graphique pour choisir un bloc.</p>
+        </div>
+        <div class="m-wk-section">
+          <h4 class="m-caption">Ajouter un bloc</h4>
+          <div class="m-wk-palette">
+            ${KINDS.map((k) => `<button class="m-add" data-k="${k}">+ ${BLOCK_LABELS[k]}</button>`).join('')}
+          </div>
+        </div>
+        <div class="m-wk-section">
+          <h4 class="m-caption">Blocs de la séance</h4>
+          <div class="m-wk-blocks" data-r="blocks"></div>
+        </div>
+        <div class="m-wk-section m-wk-form" data-r="form"></div>
+        <div class="m-wk-actions">
+          <button class="m-ghost" data-a="delete">Supprimer</button>
+          <button class="m-ghost" data-a="save">Enregistrer</button>
+          <button class="m-primary" data-a="use"></button>
+        </div>
+        <p class="m-note">Pendant la séance, le home trainer impose la puissance (mode ERG). La sortie s'arrête à la fin de la séance.</p>
+      </section>
+    </div>
     <section class="m-panel" data-tone="blue" aria-label="Lieu de la sortie">
-      <h3 class="m-caption">Où rouler la séance ?</h3>
+      <h3 class="m-caption">Étape 2 · Où rouler la séance ?</h3>
       <div class="m-options">
         ${WHERE.map((w) => `<button class="m-option" data-where="${w.id}"><b>${w.title}</b><span>${w.hint}</span></button>`).join('')}
       </div>
@@ -150,44 +189,7 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
         </div>
         <p class="m-note" data-r="appNote"></p>
       </div>
-    </section>
-    <input type="file" data-r="file" accept=".zwo,.mrc,.erg,.xml,.txt" multiple hidden>
-    <div class="m-wk">
-      <div class="m-wk-side">
-        <div class="m-wk-list" data-r="list"></div>
-        <p class="m-note" data-r="importNote" role="status"></p>
-      </div>
-      <section class="m-card m-wk-editor">
-        <div class="m-wk-head">
-          <label class="m-field">
-            <span class="m-caption">Nom de la séance</span>
-            <input class="m-wk-name" data-r="wkName" maxlength="40" aria-label="Nom de la séance">
-          </label>
-          <div class="m-wk-stats" data-r="wkStats"></div>
-        </div>
-        <div class="m-wk-section">
-          <canvas class="m-wk-chart" data-r="chart" aria-label="Déroulé de la séance : clique sur un bloc pour le modifier"></canvas>
-          <p class="m-note">Clique sur le graphique pour choisir un bloc.</p>
-        </div>
-        <div class="m-wk-section">
-          <h4 class="m-caption">Ajouter un bloc</h4>
-          <div class="m-wk-palette">
-            ${KINDS.map((k) => `<button class="m-add" data-k="${k}">+ ${BLOCK_LABELS[k]}</button>`).join('')}
-          </div>
-        </div>
-        <div class="m-wk-section">
-          <h4 class="m-caption">Blocs de la séance</h4>
-          <div class="m-wk-blocks" data-r="blocks"></div>
-        </div>
-        <div class="m-wk-section m-wk-form" data-r="form"></div>
-        <div class="m-wk-actions">
-          <button class="m-ghost" data-a="delete">Supprimer</button>
-          <button class="m-ghost" data-a="save">Enregistrer</button>
-          <button class="m-primary" data-a="use"></button>
-        </div>
-        <p class="m-note">Pendant la séance, le home trainer impose la puissance (mode ERG). La sortie s'arrête à la fin de la séance.</p>
-      </section>
-    </div>`;
+    </section>`;
 
   // Une tablette ne capture pas d'application et n'a pas de barre flottante : on lui propose l'écran partagé.
   const support = castSupport();
@@ -376,7 +378,6 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
     q('list').innerHTML = `
       <button class="m-add m-wide" data-a="new">+ Nouvelle séance</button>
       <button class="m-add m-wide" data-a="import">Importer un fichier…</button>
-      <button class="m-wk-item" data-w="" aria-pressed="false"><b>Sortie libre</b><span>Sans séance imposée</span>${p.workoutId === null ? '<em class="m-wk-chosen">✓ Pour la sortie</em>' : ''}</button>
       ${ctx.workouts.length ? `<h4 class="m-caption">Mes séances</h4>${ctx.workouts.map(item).join('')}` : ''}
       <h4 class="m-caption">Modèles</h4>
       ${WORKOUT_PRESETS.map(item).join('')}`;
@@ -396,12 +397,6 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
       .forEach((b) =>
         b.addEventListener('click', () => {
           const id = b.dataset.w!;
-          if (id === '') {
-            p.workoutId = null;
-            ctx.changed();
-            showAll();
-            return;
-          }
           draft = clone(known().find((w) => w.id === id)!);
           selected = 0;
           showAll();
@@ -451,15 +446,15 @@ export function renderWorkouts(page: HTMLElement, ctx: MenuContext): void {
   page.querySelector('[data-a="delete"]')!.addEventListener('click', () => {
     ctx.workouts = ctx.workouts.filter((w) => w.id !== draft.id);
     ctx.saveWorkouts();
-    if (p.workoutId === draft.id) p.workoutId = null;
     draft = clone(WORKOUT_PRESETS[0]);
+    if (p.workoutId === null || !known().some((w) => w.id === p.workoutId)) p.workoutId = draft.id;
     selected = 0;
     showAll();
     ctx.changed();
   });
   page.querySelector('[data-a="use"]')!.addEventListener('click', () => {
     save();
-    p.workoutId = p.workoutId === draft.id ? null : draft.id;
+    p.workoutId = draft.id;
     showAll();
     ctx.changed();
   });

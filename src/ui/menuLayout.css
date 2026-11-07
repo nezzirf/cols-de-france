@@ -1,0 +1,495 @@
+/* ───── Mise en page à quatre onglets ─────
+   Une seule colonne : le choix prend toute la largeur, et le résumé avec « Rouler » reste en bas. */
+.m-root {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.m-root > .m-content {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 8px 18px 2px;
+}
+
+.m-devices {
+  align-items: center;
+}
+
+.m-gear {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--m-card);
+  box-shadow: var(--m-shadow);
+  color: var(--m-dim) !important;
+  transition:
+    color 0.2s,
+    transform 0.4s var(--m-ease);
+}
+
+.m-gear svg {
+  width: 22px;
+  height: 22px;
+}
+
+.m-gear:hover {
+  color: var(--m-text) !important;
+  transform: rotate(40deg);
+}
+
+.m-gear[aria-selected='true'] {
+  background: var(--m-text);
+  color: var(--m-card) !important;
+}
+
+/* Barre du bas : ce qui va être lancé, et le bouton pour y aller. */
+.m-bar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 12px 10px 20px;
+  border-radius: 28px;
+  background: var(--m-card);
+  box-shadow: 0 -2px 24px rgba(30, 42, 56, 0.12);
+}
+
+.m-bar[hidden] {
+  display: none;
+}
+
+.m-bar .m-summary {
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.m-sum-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.m-sum-main b {
+  font-size: 17px;
+  font-style: italic;
+}
+
+.m-sum-main span {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.m-sum-bike {
+  color: var(--m-dim);
+  font-size: 12px;
+}
+
+.m-bar .m-msg {
+  flex: 0 1 260px;
+  text-align: right;
+}
+
+.m-bar .m-go {
+  position: static;
+  width: 200px;
+  height: 52px;
+}
+
+/* Réglages de la sortie : repliés, résumés sur une ligne. */
+.m-more {
+  margin-bottom: 18px;
+  border-radius: 16px;
+  background: var(--m-card);
+  box-shadow: var(--m-shadow);
+}
+
+[data-r='settings'][hidden] {
+  display: none;
+}
+
+.m-more > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px 18px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 15px;
+}
+
+.m-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.m-more > summary::after {
+  margin-left: auto;
+  content: '▾';
+  color: var(--m-dim);
+  transition: transform 0.2s;
+}
+
+.m-more[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.m-more > summary small {
+  overflow: hidden;
+  color: var(--m-dim);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-more-body {
+  display: grid;
+  gap: 12px;
+  padding: 4px 18px 16px;
+  font-size: 14px;
+}
+
+.m-more-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.m-more label {
+  display: grid;
+  gap: 4px;
+  color: var(--m-dim);
+  font-size: 13px;
+}
+
+.m-more select {
+  padding: 8px 10px;
+  border: 1px solid var(--m-line);
+  border-radius: 10px;
+  background: var(--m-card);
+  color: var(--m-text);
+  font: inherit;
+}
+
+.m-more .m-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--m-text);
+  font-size: 14px;
+}
+
+.m-more .m-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--m-accent);
+}
+
+.m-peloton {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--m-bg);
+}
+
+.m-peloton[hidden] {
+  display: none;
+}
+
+.m-peloton .m-group-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.m-more .m-bots {
+  padding-top: 12px;
+  border-top: 1px solid var(--m-line);
+}
+
+.m-more .m-bots-add {
+  background: var(--m-card);
+  color: var(--m-text);
+}
+
+/* Garage : l'aperçu du cycliste, en haut. */
+.m-stage {
+  height: 230px;
+  margin-bottom: 14px;
+  border-radius: 20px;
+  background: radial-gradient(500px 220px at 50% 70%, var(--m-card), transparent 70%);
+}
+
+.m-stage .m-preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Options */
+.m-opt {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 14px 20px 8px;
+}
+
+.m-opt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 10px 0;
+  border-top: 1px solid var(--m-line);
+  color: var(--m-text);
+}
+
+.m-opt .m-caption + .m-opt-row {
+  border-top: 0;
+}
+
+.m-opt-row span {
+  display: grid;
+  gap: 2px;
+}
+
+.m-opt-row b {
+  font-size: 15px;
+}
+
+.m-opt-row small {
+  color: var(--m-dim);
+  font-size: 13px;
+}
+
+.m-opt-row input[type='range'] {
+  width: min(280px, 45%);
+}
+
+.m-opt-row input[type='checkbox'] {
+  flex: none;
+  appearance: none;
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 13px;
+  background: #b9c2cc;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.m-opt-row input[type='checkbox']::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  content: '';
+  transition: transform 0.2s var(--m-ease);
+}
+
+.m-opt-row input[type='checkbox']:checked {
+  background: var(--m-accent);
+}
+
+.m-opt-row input[type='checkbox']:checked::after {
+  transform: translateX(20px);
+}
+
+.m-opt-row [data-confirm='true'] {
+  background: #c92f22;
+  color: #fff !important;
+}
+
+.m-credits-text {
+  margin: 4px 0 10px;
+  color: var(--m-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 1000px) {
+  .m-root {
+    display: grid;
+    overflow: hidden;
+    padding: 12px 14px 8px;
+  }
+
+  .m-root > .m-content {
+    overflow-y: auto;
+  }
+
+  .m-bar {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 10px 12px;
+  }
+
+  .m-bar .m-msg {
+    display: none;
+  }
+
+  .m-bar .m-go {
+    flex: 1 1 140px;
+    width: auto;
+  }
+
+  .m-stage {
+    height: 220px;
+  }
+
+  .m-opt-row {
+    flex-wrap: wrap;
+  }
+}
+
+/* ───── Thème sombre ───── */
+.m-root[data-theme='dark'] {
+  --m-bg: #12171d;
+  --m-card: #1d252e;
+  --m-text: #e9eef3;
+  --m-dim: #98a4b0;
+  --m-line: #2e3843;
+  --m-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+  --m-edge: #3a4653;
+  background: radial-gradient(1200px 700px at 86% 42%, #1a222b 0%, var(--m-bg) 70%);
+  color-scheme: dark;
+}
+
+.m-root[data-theme='dark'] .m-tabs {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.m-root[data-theme='dark'] .m-tab[aria-selected='true'],
+.m-root[data-theme='dark'] .m-gear[aria-selected='true'] {
+  background: #e9eef3;
+  color: #12171d !important;
+}
+
+.m-root[data-theme='dark'] .m-avatar {
+  border-color: var(--m-card);
+}
+
+.m-root[data-theme='dark'] .m-bar {
+  box-shadow: 0 -2px 24px rgba(0, 0, 0, 0.4);
+}
+
+.m-root[data-theme='dark'] .m-opt-row input[type='checkbox'] {
+  background: #4a5662;
+}
+
+.m-root[data-theme='dark'] .m-opt-row input[type='checkbox']:checked {
+  background: var(--m-accent);
+}
+
+.m-root[data-theme='dark'] .m-panel[data-tone],
+.m-root[data-theme='dark'] .m-wk-editor,
+.m-root[data-theme='dark'] .m-card,
+.m-root[data-theme='dark'] .m-custom,
+.m-root[data-theme='dark'] .m-group,
+.m-root[data-theme='dark'] .m-resume {
+  background: var(--m-card);
+  color: var(--m-text);
+}
+
+.m-root[data-theme='dark'] .m-panel-sub[data-tone],
+.m-root[data-theme='dark'] .m-peloton {
+  background: var(--m-bg);
+}
+
+.m-root[data-theme='dark'] [data-tone] {
+  --tone-bg: #1d252e;
+  --tone-ink: #b9c8d8;
+}
+
+.m-root[data-theme='dark'] .m-chip,
+.m-root[data-theme='dark'] .m-add,
+.m-root[data-theme='dark'] .m-ghost,
+.m-root[data-theme='dark'] .m-block,
+.m-root[data-theme='dark'] .m-option,
+.m-root[data-theme='dark'] .m-segment,
+.m-root[data-theme='dark'] .m-wk-item,
+.m-root[data-theme='dark'] .m-hist-btn,
+.m-root[data-theme='dark'] .m-bots-add,
+.m-root[data-theme='dark'] .m-bot button,
+.m-root[data-theme='dark'] select,
+.m-root[data-theme='dark'] .m-pill,
+.m-root[data-theme='dark'] .m-device,
+.m-root[data-theme='dark'] .m-seg {
+  border-color: var(--m-edge);
+  background: var(--m-card);
+  color: var(--m-text);
+}
+
+.m-root[data-theme='dark'] .m-option[aria-pressed='true'],
+.m-root[data-theme='dark'] .m-wk-item[aria-pressed='true'],
+.m-root[data-theme='dark'] .m-block[aria-pressed='true'],
+.m-root[data-theme='dark'] .m-seg[aria-pressed='true'],
+.m-root[data-theme='dark'] .m-chip[aria-pressed='true'] {
+  background: #e9eef3;
+  color: #12171d;
+}
+
+.m-root[data-theme='dark'] input[type='number'],
+.m-root[data-theme='dark'] input[type='text'],
+.m-root[data-theme='dark'] .m-wk-name {
+  color: var(--m-text);
+}
+
+/* Les séances et les cartes teintées : des fonds sombres aux mêmes teintes. */
+.m-root[data-theme='dark'] .m-wk-side {
+  background: #2b2619;
+}
+
+.m-root[data-theme='dark'] .m-wk-editor .m-wk-section,
+.m-root[data-theme='dark'] .m-wk-chart {
+  background: #232c36;
+}
+
+.m-root[data-theme='dark'] .m-wk-editor .m-wk-section:nth-of-type(3) {
+  background: #1f2d27;
+}
+
+.m-root[data-theme='dark'] .m-wk-editor .m-wk-form {
+  background: #31271f;
+}
+
+.m-root[data-theme='dark'] .m-wk-name,
+.m-root[data-theme='dark'] .m-select,
+.m-root[data-theme='dark'] .m-option::before,
+.m-root[data-theme='dark'] .m-resume-actions button,
+.m-root[data-theme='dark'] .m-hist-open:hover:not(:disabled) {
+  background: #232c36;
+  color: var(--m-text);
+}
+
+.m-root[data-theme='dark'] .m-option[aria-pressed='true'] {
+  background: #3a2a20;
+  color: var(--m-text);
+}
+
+.m-root[data-theme='dark'] .m-wk-item[aria-pressed='true'] {
+  background: #3a2a20;
+  color: var(--m-text);
+}
+
+.m-root[data-theme='dark'] .m-resume {
+  background: #31271f;
+}
+
+.m-root[data-theme='dark'] svg [stroke='#2b3138'] {
+  stroke: #c3ccd6;
+}
+
+.m-root[data-theme='dark'] svg [fill='#2b3138'] {
+  fill: #c3ccd6;
+}

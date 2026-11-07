@@ -80,11 +80,32 @@ export async function openFloatingBar(width: number, height: number): Promise<Wi
  * Garde le jeu à pleine vitesse quand sa fenêtre passe au second plan : un navigateur ralentit les
  * pages cachées, sauf celles qui tiennent un verrou. Rend de quoi le relâcher.
  */
-export function keepAwake(): () => void {
+export function keepAwake(screen = true): () => void {
   let release = () => {};
   const locks = navigator.locks;
   if (locks) {
     void locks.request('cols-de-france-ride', () => new Promise<void>((resolve) => (release = resolve)));
   }
-  return () => release();
+  // L'écran reste allumé : sans cela, une tablette s'éteint pendant la sortie, puisqu'on ne la touche pas.
+  let wake: WakeLockSentinel | null = null;
+  let wanted = screen;
+  const acquire = (): void => {
+    if (!wanted || wake || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+    navigator.wakeLock
+      .request('screen')
+      .then((lock) => {
+        wake = lock;
+        lock.addEventListener('release', () => (wake = null));
+      })
+      .catch(() => {});
+  };
+  // Le verrou saute quand la page passe au second plan : on le reprend au retour.
+  document.addEventListener('visibilitychange', acquire);
+  acquire();
+  return () => {
+    wanted = false;
+    document.removeEventListener('visibilitychange', acquire);
+    void wake?.release().catch(() => {});
+    release();
+  };
 }

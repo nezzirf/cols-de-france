@@ -251,6 +251,7 @@ class App {
     if (this.profile.sound && typeof AudioContext !== 'undefined') {
       try {
         this.sound = new Soundscape({
+          volume: this.profile.volume / 100,
           moment: this.profile.moment === 'reel' ? momentAtHour(new Date().getHours()) : this.profile.moment,
           weather: this.profile.weather === 'variable' ? 'degage' : this.profile.weather,
         });
@@ -262,6 +263,8 @@ class App {
     const steps = workout ? expandBlocks(workout.blocks) : null;
     const game = new Game(route, this.world, trainer, setupFor(this.bike, this.profile.riderKg), this.bike.shape, steps, this.profile.ftp);
     game.difficulty = this.profile.difficulty / 100;
+    game.alertsOn = this.profile.alerts;
+    game.autoPauseOn = this.profile.autoPause;
     this.game = game;
     this.rideInfo = { routeId, name: workout?.name ?? route.data.name, workout };
     this.autosave(game);
@@ -314,7 +317,7 @@ class App {
     window.addEventListener('keydown', this.onKey);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
-    this.releaseLock = keepAwake();
+    this.releaseLock = keepAwake(this.profile.screenOn);
     game.start();
     this.addEndButton();
     if (import.meta.env.DEV) {
@@ -359,6 +362,8 @@ class App {
     const steps = workout ? expandBlocks(workout.blocks) : null;
     const game = new Game(route, new NoWorld(), trainer, setupFor(this.bike, this.profile.riderKg), this.bike.shape, steps, this.profile.ftp);
     game.difficulty = this.profile.difficulty / 100;
+    game.alertsOn = this.profile.alerts;
+    game.autoPauseOn = this.profile.autoPause;
     this.game = game;
     this.route = route;
     this.rideInfo = { routeId: null, name: workout?.name ?? 'Sortie libre', workout };
@@ -432,7 +437,7 @@ class App {
 
     if (resume) game.restore(resume.state, resume.samples);
     window.addEventListener('keydown', this.onKey);
-    this.releaseLock = keepAwake();
+    this.releaseLock = keepAwake(this.profile.screenOn);
     game.start();
     // L'écran partagé et la barre flottante ont déjà leur bouton ; avec la capture, il se pose sur la page.
     if (app.mode === 'capture') this.addEndButton();
