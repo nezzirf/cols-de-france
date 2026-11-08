@@ -82,7 +82,22 @@ function rcrfPaint(x: number, y: number, z: number): Rgb {
   return frameColor(y, z);
 }
 
-export const MESH_BIKES: Record<'ef' | 'sl9' | 'pinarello' | 'trinity' | 'rcrf' | 'addict', MeshBikeSpec> = {
+export const MESH_BIKES: Record<'ef' | 'sl9' | 'pinarello' | 'trinity' | 'rcrf' | 'addict' | 'aeroad', MeshBikeSpec> = {
+  aeroad: {
+    id: 'aeroad',
+    url: `${import.meta.env.BASE_URL}models/aeroad/canyon-aeroad.glb`,
+    tyreR: 0.1992,
+    hubY: -0.0953,
+    frontHubZ: -0.2905,
+    rearHubZ: 0.2905,
+    groundY: -0.2945,
+    bbZ: 0.052,
+    bbY: -0.135,
+    saddle: { z: 0.184, top: 0.295 },
+    hood: { z: -0.362, y: 0.224, side: 0.113 },
+    pedalReach: 0.2,
+    ringRadius: 0.066,
+  },
   addict: {
     id: 'addict',
     url: `${import.meta.env.BASE_URL}models/addict/scott-addict.glb`,

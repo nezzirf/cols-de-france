@@ -36,6 +36,8 @@ export interface MeshBikeSpec {
   };
   /** Les pédales du fichier sont au bout de manivelles plus longues que 13 cm : tout ce qui dépasse de 5,5 cm de l'axe dans ce rayon autour du pédalier est retiré. */
   pedalReach?: number;
+  /** Rayon du plateau (m) : la manivelle d'origine n'est retirée qu'au-delà, pour garder le plateau entier (0,05 par défaut). */
+  ringRadius?: number;
   /** Pièces du fichier à retirer : les triangles dont le centre est dans une de ces boîtes (repère du modèle). */
   remove?: { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number }[];
   /** Le fichier a posé une ombre à plat sous chaque roue : on retire ce qui est collé au sol. */
@@ -75,7 +77,7 @@ export function splitMeshBike(spec: MeshBikeSpec): (scene: THREE.Object3D) => vo
     const r = Math.hypot(y - spec.bbY, z - spec.bbZ);
     if (Math.abs(x) > CRANK_MIN_X && r < CRANK_RADIUS) return true;
     if (spec.pedalReach && Math.abs(x) > 0.055 && r < spec.pedalReach) return true;
-    return (x > 0.025 || x < -0.035) && r > 0.05 && r < CRANK_RADIUS && z < spec.bbZ - 0.015;
+    return (x > 0.025 || x < -0.035) && r > (spec.ringRadius ?? 0.05) && r < CRANK_RADIUS && z < spec.bbZ - 0.015;
   };
   return (scene) => {
     scene.updateMatrixWorld(true);

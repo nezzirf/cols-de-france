@@ -35,7 +35,7 @@ export const BIKE_KINDS: Record<BikeKind, BikeSpec> = {
 };
 
 /** Vélo modélisé à part, avec sa propre peinture. */
-export type BikeAssetId = 'rcr' | 'rcrf' | 'addict' | 'y1rs' | 'ef' | 'sl9' | 'pinarello' | 'trinity';
+export type BikeAssetId = 'rcr' | 'rcrf' | 'addict' | 'aeroad' | 'y1rs' | 'ef' | 'sl9' | 'pinarello' | 'trinity';
 
 /** Peinture du cadre : une seconde couleur qui gagne l'arrière, l'avant, le bas ou le haut, et une fourche à part. */
 export type BikeCoat = { second: number; fade: 'rear' | 'front' | 'low' | 'high'; fork?: number } | null;
@@ -60,7 +60,7 @@ export const TEAMS: Team[] = [
     id: 'alpecin', name: 'Alpecin-Premier Tech', brand: 'Canyon', jersey: 0x1d57b8, accent: 0xe8362e, frame: 0x15171a,
     livery: livery('hem', 0x0f2f6b, { shorts: 0x10243f, helmet: 0x1d57b8, trim: 0xe8362e }),
     coat: { second: 0x1d57b8, fade: 'low' },
-    models: [{ name: 'Aeroad CFR', kind: 'aero' }, { name: 'Ultimate CFR', kind: 'grimpeur' }],
+    models: [{ name: 'Aeroad CFR', kind: 'aero', asset: 'aeroad' }, { name: 'Ultimate CFR', kind: 'grimpeur' }],
   },
   {
     id: 'bahrain', name: 'Bahrain Victorious', brand: 'Bianchi', jersey: 0x0b1f4a, accent: 0x12284c, frame: 0x0b1f4a,
@@ -108,7 +108,7 @@ export const TEAMS: Team[] = [
     id: 'movistar', name: 'Movistar Team', brand: 'Canyon', jersey: 0xf4f5f7, accent: 0x7ed957, frame: 0xf4f5f7,
     livery: livery('plain', 0xf4f5f7, { shorts: 0xeceef1, helmet: 0xf4f5f7, trim: 0xcfd5dc }),
     coat: { second: 0x0e2a66, fade: 'low' },
-    models: [{ name: 'Aeroad CFR', kind: 'aero' }, { name: 'Ultimate CFR', kind: 'grimpeur' }],
+    models: [{ name: 'Aeroad CFR', kind: 'aero', asset: 'aeroad' }, { name: 'Ultimate CFR', kind: 'grimpeur' }],
   },
   {
     id: 'nsn', name: 'NSN Cycling Team', brand: 'Scott', jersey: 0x4aa8e0, accent: 0x31c1d9, frame: 0xe6e8eb,
