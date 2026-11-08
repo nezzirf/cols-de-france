@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { loadPhotoPaint } from './bikePaint';
 import { splitMeshBike } from './meshBike';
 import { MESH_BIKES } from './meshBikeSpecs';
 import { splitY1rsCrankset } from './y1rsSplit';
@@ -39,10 +40,20 @@ export function preloadBikeAsset(): Promise<void> {
     y1rs = colnago;
     // Les vélos d'un seul maillage pèsent de 13 à 18 Mo : on les charge en arrière-plan, sans retarder le départ.
     for (const spec of Object.values(MESH_BIKES)) {
+      // Un vélo sans couleur attend sa peinture (tirée d'une photo) ; si elle manque, il garde sa peinture calculée.
+      const painted = spec.photo
+        ? loadPhotoPaint(spec.photo, spec.hubY)
+            .then((paint) => {
+              spec.paint = paint;
+            })
+            .catch(() => undefined)
+        : Promise.resolve();
       meshLoads.push(
-        load(spec.url, splitMeshBike(spec)).then((model) => {
-          if (model) meshBikes.set(spec.id, model);
-        }),
+        painted
+          .then(() => load(spec.url, splitMeshBike(spec)))
+          .then((model) => {
+            if (model) meshBikes.set(spec.id, model);
+          }),
       );
     }
   });

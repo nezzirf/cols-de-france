@@ -35,7 +35,7 @@ export const BIKE_KINDS: Record<BikeKind, BikeSpec> = {
 };
 
 /** Vélo modélisé à part, avec sa propre peinture. */
-export type BikeAssetId = 'rcr' | 'y1rs' | 'ef' | 'sl9' | 'pinarello' | 'trinity';
+export type BikeAssetId = 'rcr' | 'rcrf' | 'addict' | 'y1rs' | 'ef' | 'sl9' | 'pinarello' | 'trinity';
 
 /** Peinture du cadre : une seconde couleur qui gagne l'arrière, l'avant, le bas ou le haut, et une fourche à part. */
 export type BikeCoat = { second: number; fade: 'rear' | 'front' | 'low' | 'high'; fork?: number } | null;
@@ -72,7 +72,7 @@ export const TEAMS: Team[] = [
     id: 'decathlon', name: 'Decathlon CMA CGM', brand: 'Van Rysel', jersey: 0x1fb0b6, accent: 0xffffff, frame: 0x10285a,
     livery: livery('sweep', 0x1d4fbf, { shorts: 0x0b2f5e, helmet: 0x1fb0b6, trim: 0xe3262e }),
     coat: { second: 0xa8e0c0, fade: 'front', fork: 0xa8e0c0 },
-    models: [{ name: 'RCR-F', kind: 'aero' }, { name: 'RCR-R', kind: 'grimpeur', asset: 'rcr' }],
+    models: [{ name: 'RCR-F', kind: 'aero', asset: 'rcrf' }, { name: 'RCR-R', kind: 'grimpeur', asset: 'rcr' }],
   },
   {
     id: 'ef', name: 'EF Education-EasyPost', brand: 'Cannondale', jersey: 0xe8348b, accent: 0x1e2a78, frame: 0xe8348b,
@@ -114,7 +114,7 @@ export const TEAMS: Team[] = [
     id: 'nsn', name: 'NSN Cycling Team', brand: 'Scott', jersey: 0x4aa8e0, accent: 0x31c1d9, frame: 0xe6e8eb,
     livery: livery('diag', 0xf08a24, { shorts: 0x14202f, helmet: 0x4aa8e0, trim: 0xf08a24 }),
     coat: { second: 0x15171a, fade: 'rear' },
-    models: [{ name: 'Foil RC', kind: 'aero' }, { name: 'Addict RC', kind: 'grimpeur' }],
+    models: [{ name: 'Foil RC', kind: 'aero' }, { name: 'Addict RC', kind: 'grimpeur', asset: 'addict' }],
   },
   {
     id: 'redbull', name: 'Red Bull-Bora-hansgrohe', brand: 'Specialized', jersey: 0xf5f6f8, accent: 0xe1062c, frame: 0xf4f5f7,

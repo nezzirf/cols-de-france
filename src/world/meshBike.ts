@@ -23,6 +23,21 @@ export interface MeshBikeSpec {
   /** Selle (centre, sommet) et cocottes (haut), pour poser le cycliste. */
   saddle: { z: number; top: number };
   hood: { z: number; y: number; side: number };
+  /** Le fichier n'a ni texture ni couleur : la peinture se calcule pour chaque sommet, d'après sa place sur le vélo (repère du modèle). */
+  paint?: (x: number, y: number, z: number) => [number, number, number];
+  /** Photo du vélo de profil, déjà préparée (voir bikePaint) : position du moyeu et échelle en pixels par unité du modèle. Remplace `paint` une fois chargée. */
+  photo?: {
+    url: string;
+    centerX: number;
+    centerY: number;
+    scale: number;
+    /** Zones d'écriture de la photo (en pixels) : de l'autre côté du vélo, elles sont retournées le long de leur axe pour se lire à l'endroit. */
+    lettering?: { cx: number; cy: number; dx: number; dy: number; halfLen: number; halfWid: number }[];
+  };
+  /** Les pédales du fichier sont au bout de manivelles plus longues que 13 cm : tout ce qui dépasse de 5,5 cm de l'axe dans ce rayon autour du pédalier est retiré. */
+  pedalReach?: number;
+  /** Pièces du fichier à retirer : les triangles dont le centre est dans une de ces boîtes (repère du modèle). */
+  remove?: { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number }[];
   /** Le fichier a posé une ombre à plat sous chaque roue : on retire ce qui est collé au sol. */
   dropShadows?: boolean;
   /** La roue arrière est lenticulaire : ses logos tourneraient en bloc, on la laisse fixe. */
@@ -59,6 +74,7 @@ export function splitMeshBike(spec: MeshBikeSpec): (scene: THREE.Object3D) => vo
   const isCrank = (x: number, y: number, z: number): boolean => {
     const r = Math.hypot(y - spec.bbY, z - spec.bbZ);
     if (Math.abs(x) > CRANK_MIN_X && r < CRANK_RADIUS) return true;
+    if (spec.pedalReach && Math.abs(x) > 0.055 && r < spec.pedalReach) return true;
     return (x > 0.025 || x < -0.035) && r > 0.05 && r < CRANK_RADIUS && z < spec.bbZ - 0.015;
   };
   return (scene) => {
@@ -71,6 +87,19 @@ export function splitMeshBike(spec: MeshBikeSpec): (scene: THREE.Object3D) => vo
     const mesh: THREE.Mesh = source;
     const geometry = mesh.geometry as THREE.BufferGeometry;
     const position = geometry.getAttribute('position');
+    if (spec.paint) {
+      const colors = new Float32Array(position.count * 3);
+      const p = new THREE.Vector3();
+      for (let i = 0; i < position.count; i++) {
+        p.fromBufferAttribute(position, i).applyMatrix4(mesh.matrixWorld);
+        const [r, g, b] = spec.paint(p.x, p.y, p.z);
+        colors[3 * i] = r;
+        colors[3 * i + 1] = g;
+        colors[3 * i + 2] = b;
+      }
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      mesh.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.2 });
+    }
     const index = geometry.getIndex();
     if (!index) return;
     const world = mesh.matrixWorld;
@@ -105,6 +134,12 @@ export function splitMeshBike(spec: MeshBikeSpec): (scene: THREE.Object3D) => vo
       b.fromBufferAttribute(position, j).applyMatrix4(world);
       c.fromBufferAttribute(position, k).applyMatrix4(world);
       if (spec.dropShadows && isShadow(a, b, c)) continue;
+      if (spec.remove) {
+        const cx = (a.x + b.x + c.x) / 3;
+        const cy = (a.y + b.y + c.y) / 3;
+        const cz = (a.z + b.z + c.z) / 3;
+        if (spec.remove.some((r) => cx >= r.x0 && cx <= r.x1 && cy >= r.y0 && cy <= r.y1 && cz >= r.z0 && cz <= r.z1)) continue;
+      }
       if (all3(spec.frontHubZ)) front.push(i, j, k);
       else if (!spec.rearStatic && all3(spec.rearHubZ)) rear.push(i, j, k);
       else if (isCrank((a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3, (a.z + b.z + c.z) / 3)) continue;
