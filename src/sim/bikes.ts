@@ -114,7 +114,7 @@ export const TEAMS: Team[] = [
     id: 'nsn', name: 'NSN Cycling Team', brand: 'Scott', jersey: 0x4aa8e0, accent: 0x31c1d9, frame: 0xe6e8eb,
     livery: livery('diag', 0xf08a24, { shorts: 0x14202f, helmet: 0x4aa8e0, trim: 0xf08a24 }),
     coat: { second: 0x15171a, fade: 'rear' },
-    models: [{ name: 'Foil RC', kind: 'aero' }, { name: 'Addict RC', kind: 'grimpeur', asset: 'addict' }],
+    models: [{ name: 'Addict RC', kind: 'grimpeur', asset: 'addict' }],
   },
   {
     id: 'redbull', name: 'Red Bull-Bora-hansgrohe', brand: 'Specialized', jersey: 0xf5f6f8, accent: 0xe1062c, frame: 0xf4f5f7,
@@ -132,7 +132,7 @@ export const TEAMS: Team[] = [
     id: 'jayco', name: 'Team Jayco AlUla', brand: 'Giant', jersey: 0x6a2c91, accent: 0xf28c28, frame: 0x3d1b57,
     livery: livery('fade', 0xf28c28, { shorts: 0x3d1b57, helmet: 0x6a2c91, trim: 0xf28c28 }),
     coat: { second: 0xf28c28, fade: 'low' },
-    models: [{ name: 'Propel Advanced SL', kind: 'aero' }, { name: 'TCR Advanced SL', kind: 'grimpeur', asset: 'giant' }, { name: 'Trinity SL', kind: 'clm', asset: 'trinity' }],
+    models: [{ name: 'TCR Advanced SL', kind: 'grimpeur', asset: 'giant' }, { name: 'Trinity SL', kind: 'clm', asset: 'trinity' }],
   },
   {
     id: 'picnic', name: 'Team Picnic PostNL', brand: 'Lapierre', jersey: 0xf4f4f4, accent: 0xffffff, frame: 0xf26522,
