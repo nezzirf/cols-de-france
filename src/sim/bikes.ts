@@ -35,7 +35,7 @@ export const BIKE_KINDS: Record<BikeKind, BikeSpec> = {
 };
 
 /** Vélo modélisé à part, avec sa propre peinture. */
-export type BikeAssetId = 'rcr' | 'rcrf' | 'addict' | 'aeroad' | 'y1rs' | 'ef' | 'sl9' | 'pinarello' | 'trinity';
+export type BikeAssetId = 'rcr' | 'rcrf' | 'addict' | 'aeroad' | 'giant' | 'y1rs' | 'ef' | 'sl9' | 'pinarello' | 'trinity';
 
 /** Peinture du cadre : une seconde couleur qui gagne l'arrière, l'avant, le bas ou le haut, et une fourche à part. */
 export type BikeCoat = { second: number; fade: 'rear' | 'front' | 'low' | 'high'; fork?: number } | null;
@@ -60,13 +60,13 @@ export const TEAMS: Team[] = [
     id: 'alpecin', name: 'Alpecin-Premier Tech', brand: 'Canyon', jersey: 0x1d57b8, accent: 0xe8362e, frame: 0x15171a,
     livery: livery('hem', 0x0f2f6b, { shorts: 0x10243f, helmet: 0x1d57b8, trim: 0xe8362e }),
     coat: { second: 0x1d57b8, fade: 'low' },
-    models: [{ name: 'Aeroad CFR', kind: 'aero', asset: 'aeroad' }, { name: 'Ultimate CFR', kind: 'grimpeur' }],
+    models: [{ name: 'Aeroad CFR', kind: 'aero', asset: 'aeroad' }],
   },
   {
     id: 'bahrain', name: 'Bahrain Victorious', brand: 'Bianchi', jersey: 0x0b1f4a, accent: 0x12284c, frame: 0x0b1f4a,
     livery: livery('plain', 0x0b1f4a, { sleeveL: 0x69c6e8, sleeveR: 0x69c6e8, shorts: 0x0b1f4a, helmet: 0x0b1f4a, trim: 0x69c6e8 }),
     coat: { second: 0x7fd6c4, fade: 'low', fork: 0x7fd6c4 },
-    models: [{ name: 'Oltre RC', kind: 'aero' }, { name: 'Specialissima RC', kind: 'grimpeur' }],
+    models: [{ name: 'Oltre RC', kind: 'aero' }],
   },
   {
     id: 'decathlon', name: 'Decathlon CMA CGM', brand: 'Van Rysel', jersey: 0x1fb0b6, accent: 0xffffff, frame: 0x10285a,
@@ -84,7 +84,7 @@ export const TEAMS: Team[] = [
     id: 'groupama', name: 'Groupama-FDJ United', brand: 'Wilier', jersey: 0x4f9fe6, accent: 0xe30613, frame: 0xc8102e,
     livery: livery('plain', 0x4f9fe6, { sleeveL: 0xe30613, shorts: 0x0f2a5c, helmet: 0xffffff, trim: 0xffffff }),
     coat: { second: 0x7a0a1a, fade: 'low' },
-    models: [{ name: 'Filante SLR ID2', kind: 'aero' }, { name: 'Verticale SLR', kind: 'grimpeur' }],
+    models: [{ name: 'Filante SLR ID2', kind: 'aero' }],
   },
   {
     id: 'ineos', name: 'INEOS Grenadiers', brand: 'Pinarello', jersey: 0xff6a13, accent: 0xd7263d, frame: 0xe3e5e8,
@@ -102,13 +102,13 @@ export const TEAMS: Team[] = [
     id: 'lotto', name: 'Lotto Intermarché', brand: 'Orbea', jersey: 0xd1121f, accent: 0xffffff, frame: 0x17191d,
     livery: livery('band', 0xf6d31f, { shorts: 0x16181c, helmet: 0xd1121f, trim: 0xf6d31f }),
     coat: { second: 0xd1121f, fade: 'rear', fork: 0xd1121f },
-    models: [{ name: 'Orca Aero', kind: 'aero' }, { name: 'Orca', kind: 'grimpeur' }],
+    models: [{ name: 'Orca Aero', kind: 'aero' }],
   },
   {
     id: 'movistar', name: 'Movistar Team', brand: 'Canyon', jersey: 0xf4f5f7, accent: 0x7ed957, frame: 0xf4f5f7,
     livery: livery('plain', 0xf4f5f7, { shorts: 0xeceef1, helmet: 0xf4f5f7, trim: 0xcfd5dc }),
     coat: { second: 0x0e2a66, fade: 'low' },
-    models: [{ name: 'Aeroad CFR', kind: 'aero', asset: 'aeroad' }, { name: 'Ultimate CFR', kind: 'grimpeur' }],
+    models: [{ name: 'Aeroad CFR', kind: 'aero', asset: 'aeroad' }],
   },
   {
     id: 'nsn', name: 'NSN Cycling Team', brand: 'Scott', jersey: 0x4aa8e0, accent: 0x31c1d9, frame: 0xe6e8eb,
@@ -132,7 +132,7 @@ export const TEAMS: Team[] = [
     id: 'jayco', name: 'Team Jayco AlUla', brand: 'Giant', jersey: 0x6a2c91, accent: 0xf28c28, frame: 0x3d1b57,
     livery: livery('fade', 0xf28c28, { shorts: 0x3d1b57, helmet: 0x6a2c91, trim: 0xf28c28 }),
     coat: { second: 0xf28c28, fade: 'low' },
-    models: [{ name: 'Propel Advanced SL', kind: 'aero' }, { name: 'TCR Advanced SL', kind: 'grimpeur' }, { name: 'Trinity SL', kind: 'clm', asset: 'trinity' }],
+    models: [{ name: 'Propel Advanced SL', kind: 'aero' }, { name: 'TCR Advanced SL', kind: 'grimpeur', asset: 'giant' }, { name: 'Trinity SL', kind: 'clm', asset: 'trinity' }],
   },
   {
     id: 'picnic', name: 'Team Picnic PostNL', brand: 'Lapierre', jersey: 0xf4f4f4, accent: 0xffffff, frame: 0xf26522,
@@ -144,19 +144,19 @@ export const TEAMS: Team[] = [
     id: 'visma', name: 'Team Visma | Lease a Bike', brand: 'Cervélo', jersey: 0xf6d31f, accent: 0x111316, frame: 0x15171a,
     livery: livery('hem', 0x111316, { shorts: 0x111316, helmet: 0xf6d31f, trim: 0x111316 }),
     coat: { second: 0xf6d31f, fade: 'front', fork: 0xf6d31f },
-    models: [{ name: 'S5', kind: 'aero' }, { name: 'R5', kind: 'grimpeur' }],
+    models: [{ name: 'S5', kind: 'aero' }],
   },
   {
     id: 'uae', name: 'UAE Team Emirates-XRG', brand: 'Colnago', jersey: 0xf2f2f2, accent: 0xc8102e, frame: 0x15171a,
     livery: livery('fade', 0xc8102e, { shorts: 0x16181c, helmet: 0xf2f2f2, trim: 0x16181c }),
     coat: { second: 0xc8102e, fade: 'low' },
-    models: [{ name: 'Y1Rs', kind: 'aero', asset: 'y1rs' }, { name: 'V5Rs', kind: 'grimpeur' }],
+    models: [{ name: 'Y1Rs', kind: 'aero', asset: 'y1rs' }],
   },
   {
     id: 'unox', name: 'Uno-X Mobility', brand: 'Ridley', jersey: 0xe2231a, accent: 0xf6c21a, frame: 0xc41d16,
     livery: livery('side', 0xf6c21a, { shorts: 0x16181c, helmet: 0xe2231a, trim: 0xf6c21a }),
     coat: { second: 0xf6c21a, fade: 'low' },
-    models: [{ name: 'Noah Fast 3.0', kind: 'aero' }, { name: 'Falcn RS', kind: 'polyvalent' }],
+    models: [{ name: 'Noah Fast 3.0', kind: 'aero' }],
   },
   {
     id: 'xds', name: 'XDS Astana Team', brand: 'X-Lab', jersey: 0x2fb7c9, accent: 0xf2c200, frame: 0x12414b,
@@ -228,7 +228,9 @@ export const ALL_BIKES: Bike[] = [...genericBikes, ...teamBikes];
 export const DEFAULT_BIKE_ID = 'generique:polyvalent';
 
 export function findBike(id: string): Bike {
-  return ALL_BIKES.find((b) => b.id === id) ?? ALL_BIKES.find((b) => b.id === DEFAULT_BIKE_ID)!;
+  // Un vélo retiré du catalogue (ou d'une ancienne sauvegarde) : on reprend un autre vélo de la même équipe, sinon le vélo par défaut.
+  const team = id.split(':')[0];
+  return ALL_BIKES.find((b) => b.id === id) ?? ALL_BIKES.find((b) => b.id.startsWith(`${team}:`)) ?? ALL_BIKES.find((b) => b.id === DEFAULT_BIKE_ID)!;
 }
 
 export interface Jersey {

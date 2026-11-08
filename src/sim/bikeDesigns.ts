@@ -40,18 +40,14 @@ const BY_KIND: Record<BikeKind, FrameDesign> = {
 /** Écarts à la silhouette de sa catégorie, modèle par modèle. */
 const BY_MODEL: Record<string, Partial<FrameDesign>> = {
   'Aeroad CFR': { tubeDepth: 0.082, twoTone: 'avant' },
-  'Ultimate CFR': { tubeDepth: 0.04, topTubeRearY: 0.81 },
   'Oltre RC': { tubeDepth: 0.09, rimDepth: 0.065, twoTone: 'avant' },
-  'Specialissima RC': { tubeDepth: 0.038, tubeWidth: 0.034, topTubeRearY: 0.82 },
   'RCR-F': { twoTone: 'arriere' },
   'RCR-R': { topTubeRearY: 0.78 },
   'SuperSix Evo': { stayDrop: 0.55, tubeDepth: 0.062 },
   'Filante SLR ID2': { tubeDepth: 0.074, twoTone: 'arriere' },
-  'Verticale SLR': { topTubeRearY: 0.76, stayDrop: 0.4 },
   'Dogma F': { tubeDepth: 0.066, stayDrop: 0.4, twoTone: 'avant' },
   'Madone SLR': { tubeDepth: 0.09, splitSeatTube: true, topTubeRearY: 0.8, stayDrop: 0.6 },
   'Orca Aero': { tubeDepth: 0.086, topTubeRearY: 0.77 },
-  Orca: { topTubeRearY: 0.79, stayDrop: 0.35 },
   'Foil RC': { tubeDepth: 0.086, tubeWidth: 0.034, topTubeRearY: 0.8 },
   'Addict RC': { topTubeRearY: 0.77, stayDrop: 0.4 },
   'S-Works Tarmac SL9': { stayDrop: 0.55, tubeDepth: 0.066, twoTone: 'avant' },
@@ -59,11 +55,8 @@ const BY_MODEL: Record<string, Partial<FrameDesign>> = {
   'TCR Advanced SL': { topTubeRearY: 0.71, stayDrop: 0.3 },
   'Xelius DRS': { stayDrop: 0.6, topTubeRearY: 0.75, twoTone: 'arriere' },
   S5: { stem: 'v', tubeDepth: 0.084, topTubeRearY: 0.79 },
-  R5: { tubeDepth: 0.042, topTubeRearY: 0.8 },
   Y1Rs: { topTubeRearY: 0.7, stayDrop: 0.68, tubeDepth: 0.088, twoTone: 'avant' },
-  V5Rs: { topTubeRearY: 0.75, stayDrop: 0.35 },
   'Noah Fast 3.0': { tubeDepth: 0.08, stem: 'integree' },
-  'Falcn RS': { topTubeRearY: 0.78, stayDrop: 0.5 },
   AD9: { tubeDepth: 0.07, stayDrop: 0.5 },
 };
 

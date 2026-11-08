@@ -35,13 +35,13 @@ describe('silhouettes', () => {
     for (const name of DESIGNED_MODELS) expect(names).toContain(name);
   });
   it('donne des tubes plus profonds aux vélos aéro qu’aux grimpeurs', () => {
-    expect(design('visma:S5').tubeDepth).toBeGreaterThan(design('visma:R5').tubeDepth * 1.5);
+    expect(design('visma:S5').tubeDepth).toBeGreaterThan(design('jayco:TCR Advanced SL').tubeDepth * 1.5);
     expect(design('jayco:Trinity SL').tubeDepth).toBeGreaterThan(design('visma:S5').tubeDepth);
   });
   it('garde les traits reconnaissables des modèles', () => {
     expect(design('visma:S5').stem).toBe('v');
     expect(design('lidl:Madone SLR').splitSeatTube).toBe(true);
-    expect(design('uae:Y1Rs').topTubeRearY).toBeLessThan(design('uae:V5Rs').topTubeRearY);
+    expect(design('uae:Y1Rs').topTubeRearY).toBeLessThan(design('jayco:TCR Advanced SL').topTubeRearY);
   });
   it('distingue les cadres d’une même équipe', () => {
     for (const t of TEAMS) {
@@ -51,7 +51,7 @@ describe('silhouettes', () => {
   });
   it('place les haubans plus bas sur un cadre à haubans plongeants', () => {
     const low = frameLayout(design('uae:Y1Rs'), 0.335);
-    const high = frameLayout(design('visma:R5'), 0.335);
+    const high = frameLayout(design('jayco:TCR Advanced SL'), 0.335);
     expect(low.stay[1]).toBeLessThan(high.stay[1]);
     expect(low.seatTop[1]).toBeLessThan(high.seatTop[1]);
   });
@@ -59,7 +59,7 @@ describe('silhouettes', () => {
 
 describe('influence sur la vitesse', () => {
   const aero = 'visma:S5';
-  const climber = 'visma:R5';
+  const climber = 'jayco:TCR Advanced SL';
   const tt = 'jayco:Trinity SL';
   const mtb = 'generique:vtt-xc';
   const heavy = 'generique:vtt-enduro';

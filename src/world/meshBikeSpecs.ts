@@ -82,7 +82,27 @@ function rcrfPaint(x: number, y: number, z: number): Rgb {
   return frameColor(y, z);
 }
 
-export const MESH_BIKES: Record<'ef' | 'sl9' | 'pinarello' | 'trinity' | 'rcrf' | 'addict' | 'aeroad', MeshBikeSpec> = {
+export const MESH_BIKES: Record<'ef' | 'sl9' | 'pinarello' | 'trinity' | 'rcrf' | 'addict' | 'aeroad' | 'giant', MeshBikeSpec> = {
+  giant: {
+    id: 'giant',
+    url: `${import.meta.env.BASE_URL}models/giant/giant.glb`,
+    tyreR: 0.1996,
+    hubY: -0.1112,
+    frontHubZ: -0.2905,
+    rearHubZ: 0.2905,
+    groundY: -0.3108,
+    bbZ: 0.047,
+    bbY: -0.147,
+    saddle: { z: 0.195, top: 0.3105 },
+    hood: { z: -0.342, y: 0.232, side: 0.087 },
+    pedalReach: 0.19,
+    ringRadius: 0.062,
+    // Les deux pédales du fichier sont rangées sous le moyeu arrière : on les retire (le dérailleur, côté transmission, reste).
+    remove: [
+      { x0: -0.2, x1: -0.033, y0: -0.235, y1: -0.135, z0: 0.235, z1: 0.345 },
+      { x0: 0.052, x1: 0.2, y0: -0.235, y1: -0.135, z0: 0.235, z1: 0.345 },
+    ],
+  },
   aeroad: {
     id: 'aeroad',
     url: `${import.meta.env.BASE_URL}models/aeroad/canyon-aeroad.glb`,
