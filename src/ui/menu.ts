@@ -304,14 +304,16 @@ export class Menu {
     img.hidden = false;
   }
 
-  /** Le garage, avec l'aperçu du cycliste en haut : on y voit ce qu'on choisit. */
+  /** Le garage : la liste à gauche, l'aperçu du cycliste à droite et toujours en vue, pour voir tout de suite ce qu'on choisit. */
   private renderGaragePage(page: HTMLElement): void {
+    page.classList.add('m-garage');
+    const body = document.createElement('div');
+    body.className = 'm-garage-list';
+    page.appendChild(body);
     const stage = document.createElement('div');
     stage.className = 'm-stage';
     stage.innerHTML = '<canvas class="m-preview" aria-label="Aperçu du cycliste et du vélo, à faire tourner à la souris"></canvas>';
     page.appendChild(stage);
-    const body = document.createElement('div');
-    page.appendChild(body);
     renderGarage(body, this.context);
     this.shownBike = '';
     this.preview = new BikePreview(stage.querySelector('canvas') as HTMLCanvasElement);

@@ -402,7 +402,25 @@
   color: var(--m-text);
 }
 
-/* Garage : l'aperçu du cycliste, en haut. */
+/* Garage : la liste à gauche, l'aperçu du cycliste à droite et toujours en vue. */
+.m-garage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 40%);
+  gap: 22px;
+  align-items: start;
+}
+
+.m-garage .m-garage-list {
+  min-width: 0;
+}
+
+.m-garage .m-stage {
+  position: sticky;
+  top: 0;
+  height: min(560px, calc(100vh - 150px));
+  margin-bottom: 0;
+}
+
 .m-stage {
   height: 230px;
   margin-bottom: 14px;
@@ -526,6 +544,21 @@
   .m-bar .m-go {
     flex: 1 1 140px;
     width: auto;
+  }
+
+  /* Écran étroit : l'aperçu reste collé en haut pendant qu'on fait défiler la liste dessous. */
+  .m-garage {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .m-garage .m-stage {
+    order: -1;
+    height: 230px;
+    margin-bottom: 12px;
+    z-index: 2;
+    background: var(--m-bg);
   }
 
   .m-stage {

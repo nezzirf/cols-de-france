@@ -1,4 +1,4 @@
-// Aperçu 3D du menu : le cycliste et son vélo tournent lentement, sur fond transparent.
+// Aperçu 3D du menu : le cycliste et son vélo, vus de côté et immobiles (on peut les faire tourner au doigt), sur fond transparent.
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -7,7 +7,10 @@ import { buildBike } from '../world/bikeModel';
 import { lacquer, pbr } from '../world/materials';
 import { bikeShape, dressedRider } from '../world/riderSetup';
 
-const TURN_RAD_PER_S = 0.28;
+/** Le vélo regarde vers la droite de l'écran, côté transmission vers nous, comme sur une photo de vélo. */
+const SIDE_VIEW = -Math.PI / 2;
+/** Largeur à garder dans le cadre : le vélo est long. */
+const FRAME_WIDTH_M = 2.3;
 const DRAG_RAD_PER_PX = 0.008;
 const CRANK_ANGLE = 0.9;
 
@@ -19,7 +22,6 @@ export class BikePreview {
   private model: THREE.Group | null = null;
   private observer: ResizeObserver;
   private frame = 0;
-  private last = 0;
   private dragging = false;
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -48,7 +50,7 @@ export class BikePreview {
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     this.scene.add(floor, this.turntable);
-    this.turntable.rotation.y = -0.55;
+    this.turntable.rotation.y = SIDE_VIEW;
     this.camera.position.set(0, 1.2, 5.1);
     this.camera.lookAt(0, 0.72, 0);
 
@@ -63,6 +65,8 @@ export class BikePreview {
 
   show(bike: Bike): void {
     this.clear();
+    // Chaque vélo choisi s'affiche de côté.
+    this.turntable.rotation.y = SIDE_VIEW;
     const rider = dressedRider(bike);
     rider.pose(CRANK_ANGLE);
     rider.group.traverse((o) => (o.castShadow = true));
@@ -94,6 +98,10 @@ export class BikePreview {
     if (w === 0 || h === 0) return;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
+    // Sur une colonne étroite, la caméra recule pour que tout le vélo tienne en largeur.
+    const half = Math.tan((this.camera.fov * Math.PI) / 360);
+    this.camera.position.z = Math.max(5.1, FRAME_WIDTH_M / (2 * half * this.camera.aspect));
+    this.camera.lookAt(0, 0.72, 0);
     this.camera.updateProjectionMatrix();
   }
 
@@ -114,11 +122,8 @@ export class BikePreview {
     this.dragging = false;
   };
 
-  private loop = (now: number): void => {
+  private loop = (): void => {
     this.frame = requestAnimationFrame(this.loop);
-    const dt = Math.min(0.05, (now - this.last) / 1000);
-    this.last = now;
-    if (!this.dragging) this.turntable.rotation.y += dt * TURN_RAD_PER_S;
     this.renderer.render(this.scene, this.camera);
   };
 

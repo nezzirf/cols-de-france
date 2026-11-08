@@ -36,7 +36,7 @@ let head: HeadFrame | null = null;
 let loading: Promise<void> | null = null;
 
 /** Tête modélisée (visage, casque et lunettes), allégée à une trentaine de milliers de triangles : elle remplace celle du mannequin. */
-export const HEAD_MODEL_URL = `${import.meta.env.BASE_URL}models/pogi/pogi-head.glb`;
+export const HEAD_MODEL_URL = `${import.meta.env.BASE_URL}models/pogi/pogi-head-hd.glb`;
 let headModel: { geometry: THREE.BufferGeometry; map: THREE.Texture | null } | null = null;
 
 /** Tête modélisée, ou rien si elle n'a pas pu être chargée : le jeu garde alors la tête du mannequin. */
@@ -46,7 +46,7 @@ export const riderHeadModel = (): { geometry: THREE.BufferGeometry; map: THREE.T
 function shrink(map: THREE.Texture | null): THREE.Texture | null {
   const image = map?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
   if (!map || !image || typeof document === 'undefined') return map;
-  const size = 1024;
+  const size = 3072;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
