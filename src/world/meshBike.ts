@@ -38,6 +38,12 @@ export interface MeshBikeSpec {
   pedalReach?: number;
   /** Rayon du plateau (m) : la manivelle d'origine n'est retirée qu'au-delà, pour garder le plateau entier (0,05 par défaut). */
   ringRadius?: number;
+  /** Part du rayon du pneu qui tourne avec la roue (0,85 par défaut). */
+  spinShare?: number;
+  /** Remplace les roues du fichier (mal formées) par celles d'un autre vélo modélisé, remises à l'échelle. */
+  wheelsFrom?: string;
+  /** Retire l'arc fin que le fichier laisse au-dessus de ses anciens pneus, hors de la fourche (±7 cm de l'axe). */
+  dropArcs?: boolean;
   /** Pièces du fichier à retirer : les triangles dont le centre est dans une de ces boîtes (repère du modèle). */
   remove?: { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number }[];
   /** Le fichier a posé une ombre à plat sous chaque roue : on retire ce qui est collé au sol. */
@@ -65,7 +71,7 @@ const rearName = (spec: MeshBikeSpec): string => `${spec.id}_rear_wheel`;
 
 /** Prépare le fichier chargé : sépare les deux roues du reste du maillage et en retire les manivelles. */
 export function splitMeshBike(spec: MeshBikeSpec): (scene: THREE.Object3D) => void {
-  const spin = spec.tyreR * SPIN_SHARE;
+  const spin = spec.tyreR * (spec.spinShare ?? SPIN_SHARE);
   const inWheel = (x: number, y: number, z: number, hubZ: number): boolean => {
     const r = Math.hypot(y - spec.hubY, z - hubZ);
     if (r > spin) return false;
@@ -136,6 +142,26 @@ export function splitMeshBike(spec: MeshBikeSpec): (scene: THREE.Object3D) => vo
       b.fromBufferAttribute(position, j).applyMatrix4(world);
       c.fromBufferAttribute(position, k).applyMatrix4(world);
       if (spec.dropShadows && isShadow(a, b, c)) continue;
+      if (spec.dropArcs) {
+        // Reste de l'ancien pneu, mince (moins de 2 cm de large) et à moins de 1,15 rayon de l'axe : tout est retiré, sauf la fourche (7 cm autour de l'axe).
+        const old = (hubZ: number, keep: number): boolean => {
+          for (const q of [a, b, c]) {
+            const r = Math.hypot(q.y - spec.hubY, q.z - hubZ) / spec.tyreR;
+            if (r > 1.3 || Math.abs(q.x) > (r > 1.15 ? 0.0125 : 0.022) || Math.abs(q.z - hubZ) < keep || (r > 1.15 && q.y < spec.hubY + 0.04)) return false;
+          }
+          return true;
+        };
+        if (old(spec.frontHubZ, 0.018) || old(spec.rearHubZ, 0)) continue;
+        // Bouts de rayons de l'ancienne roue : minces (moins de 2 cm de l'axe de la roue) entre le moyeu et le pneu.
+        const stub = (hubZ: number): boolean => {
+          for (const q of [a, b, c]) {
+            const r = Math.hypot(q.y - spec.hubY, q.z - hubZ) / spec.tyreR;
+            if (r < 0.25 || r > 0.95 || Math.abs(q.x) > 0.02) return false;
+          }
+          return true;
+        };
+        if (stub(spec.frontHubZ) || stub(spec.rearHubZ)) continue;
+      }
       if (spec.remove) {
         const cx = (a.x + b.x + c.x) / 3;
         const cy = (a.y + b.y + c.y) / 3;
@@ -159,6 +185,7 @@ export function splitMeshBike(spec: MeshBikeSpec): (scene: THREE.Object3D) => vo
       [frontName(spec), front],
       [rearName(spec), rear],
     ] as [string, number[]][]) {
+      if (spec.wheelsFrom) continue;
       const wheel = new THREE.Mesh(piece(triangles), mesh.material);
       wheel.name = name;
       wheel.position.copy(mesh.position);
@@ -169,7 +196,13 @@ export function splitMeshBike(spec: MeshBikeSpec): (scene: THREE.Object3D) => vo
   };
 }
 
-export function buildMeshBike(spec: MeshBikeSpec, cloneAsset: () => THREE.Object3D, wheelRadiusM: number, material: THREE.Material | null): AssetBike {
+export function buildMeshBike(
+  spec: MeshBikeSpec,
+  cloneAsset: () => THREE.Object3D,
+  wheelRadiusM: number,
+  material: THREE.Material | null,
+  donor?: { spec: MeshBikeSpec; clone: () => THREE.Object3D },
+): AssetBike {
   const group = new THREE.Group();
   const root = cloneAsset();
   const scale = wheelRadiusM / spec.tyreR;
@@ -188,7 +221,35 @@ export function buildMeshBike(spec: MeshBikeSpec, cloneAsset: () => THREE.Object
       if (material) o.material = material;
     }
   });
+  const donorMeshes = new Map<string, THREE.Mesh>();
+  const donorRoot = donor?.clone();
+  donorRoot?.updateMatrixWorld(true);
+  donorRoot?.traverse((o) => {
+    if (o instanceof THREE.Mesh) donorMeshes.set(o.name, o);
+  });
   const wheel = (name: string, z: number): THREE.Group | null => {
+    if (donor) {
+      // Roue d'un autre vélo : mise à l'échelle du pneu et posée sur l'axe de celui-ci.
+      const front = name === frontName(spec);
+      const source = donorMeshes.get(front ? frontName(donor.spec) : rearName(donor.spec));
+      if (!source) return null;
+      const k = spec.tyreR / donor.spec.tyreR;
+      const pivot = new THREE.Group();
+      pivot.position.set(0, spec.hubY, z);
+      const inner = new THREE.Group();
+      inner.scale.setScalar(k);
+      inner.position.set(0, -donor.spec.hubY * k, -(front ? donor.spec.frontHubZ : donor.spec.rearHubZ) * k);
+      source.frustumCulled = false;
+      // La roue garde sa place dans le repère de son vélo (le fichier peut avoir un nœud parent à l'échelle).
+      source.matrixWorld.decompose(source.position, source.quaternion, source.scale);
+      inner.add(source);
+      pivot.add(inner);
+      // Dans le fichier du Canyon le pneu reste fixe dans le cadre : on en pose un, noir, autour de la jante.
+      const tube = spec.tyreR * 0.086;
+      pivot.add(new THREE.Mesh(new THREE.TorusGeometry(spec.tyreR - tube, tube, 12, 72).rotateY(Math.PI / 2), pbr({ color: 0x0c0d0f, roughness: 0.85, metalness: 0 })));
+      root.add(pivot);
+      return pivot;
+    }
     const mesh = meshes.get(name);
     if (!mesh) return null;
     const pivot = new THREE.Group();

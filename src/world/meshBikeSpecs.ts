@@ -82,7 +82,41 @@ function rcrfPaint(x: number, y: number, z: number): Rgb {
   return frameColor(y, z);
 }
 
-export const MESH_BIKES: Record<'ef' | 'sl9' | 'pinarello' | 'trinity' | 'rcrf' | 'addict' | 'aeroad' | 'giant', MeshBikeSpec> = {
+export const MESH_BIKES: Record<'ef' | 'sl9' | 'pinarello' | 'trinity' | 'rcrf' | 'addict' | 'aeroad' | 'giant' | 'filante' | 'xlab', MeshBikeSpec> = {
+  xlab: {
+    id: 'xlab',
+    url: `${import.meta.env.BASE_URL}models/xlab/xlab.glb`,
+    tyreR: 0.1925,
+    hubY: -0.1167,
+    frontHubZ: -0.29,
+    rearHubZ: 0.29,
+    groundY: -0.3092,
+    bbZ: 0.0544,
+    bbY: -0.1273,
+    saddle: { z: 0.17, top: 0.3097 },
+    hood: { z: -0.33, y: 0.22, side: 0.19 },
+    ringRadius: 0.065,
+    spinShare: 1.14,
+    dropShadows: true,
+    wheelsFrom: 'aeroad',
+    dropArcs: true,
+    // Manivelle gauche du fichier, restée vers l'arrière avec sa pédale (le jeu dessine la sienne).
+    remove: [{ x0: -0.14, x1: -0.062, y0: -0.16, y1: -0.04, z0: 0.075, z1: 0.34 }],
+  },
+  filante: {
+    id: 'filante',
+    url: `${import.meta.env.BASE_URL}models/filante/wilier-filante.glb`,
+    tyreR: 0.2,
+    hubY: -0.109,
+    frontHubZ: -0.3,
+    rearHubZ: 0.3,
+    groundY: -0.309,
+    bbZ: 0.0576,
+    bbY: -0.141,
+    saddle: { z: 0.195, top: 0.308 },
+    hood: { z: -0.352, y: 0.226, side: 0.115 },
+    ringRadius: 0.065,
+  },
   giant: {
     id: 'giant',
     url: `${import.meta.env.BASE_URL}models/giant/giant.glb`,

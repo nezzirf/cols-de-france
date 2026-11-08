@@ -270,7 +270,7 @@ export class Menu {
   /** Le cycliste et son vélo modélisés sont-ils chargés ? Les vélos d'un seul maillage arrivent après les autres. */
   private modelsReady(bike: Bike): boolean {
     if (!this.loaded.base) return false;
-    const slow = bike.asset === 'rcrf' || bike.asset === 'aeroad' || bike.asset === 'giant' || bike.asset === 'addict' || bike.asset === 'ef' || bike.asset === 'sl9' || bike.asset === 'pinarello' || bike.asset === 'trinity';
+    const slow = bike.asset === 'rcrf' || bike.asset === 'aeroad' || bike.asset === 'giant' || bike.asset === 'filante' || bike.asset === 'xlab' || bike.asset === 'addict' || bike.asset === 'ef' || bike.asset === 'sl9' || bike.asset === 'pinarello' || bike.asset === 'trinity';
     return !slow || this.loaded.meshes;
   }
 

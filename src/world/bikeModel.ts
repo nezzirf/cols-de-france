@@ -246,9 +246,10 @@ export function buildBike(look: BikeLook, base: THREE.Material, mono: boolean): 
     return { group: bike.group, wheels: [], drive: (crank) => bike.drive(crank, crank * WHEEL_TURNS_PER_CRANK), fit: bike.fit };
   }
   // Vélos modélisés d'un seul maillage (Cannondale d'EF, Specialized SL9, Pinarello Dogma) quand leur fichier est chargé.
-  if (look.asset && look.asset in MESH_BIKES && (look.shape === 'route' || look.shape === 'clm') && meshBikeReady(look.asset)) {
+  if (look.asset && look.asset in MESH_BIKES && (look.shape === 'route' || look.shape === 'clm') && meshBikeReady(look.asset) && (!MESH_BIKES[look.asset as keyof typeof MESH_BIKES].wheelsFrom || meshBikeReady(MESH_BIKES[look.asset as keyof typeof MESH_BIKES].wheelsFrom!))) {
     const id = look.asset as keyof typeof MESH_BIKES;
-    const bike = buildMeshBike(MESH_BIKES[id], () => cloneMeshBike(id), look.wheelRadiusM, mono ? base : null);
+    const donorId = MESH_BIKES[id].wheelsFrom as keyof typeof MESH_BIKES | undefined;
+    const bike = buildMeshBike(MESH_BIKES[id], () => cloneMeshBike(id), look.wheelRadiusM, mono ? base : null, donorId ? { spec: MESH_BIKES[donorId], clone: () => cloneMeshBike(donorId) } : undefined);
     return { group: bike.group, wheels: [], drive: (crank) => bike.drive(crank, crank * WHEEL_TURNS_PER_CRANK), fit: bike.fit };
   }
   // Colnago Y1Rs : le modèle 3D quand son fichier est chargé, sinon le vélo dessiné en code d'après ses photos.

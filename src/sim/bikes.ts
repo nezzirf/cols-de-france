@@ -35,7 +35,7 @@ export const BIKE_KINDS: Record<BikeKind, BikeSpec> = {
 };
 
 /** Vélo modélisé à part, avec sa propre peinture. */
-export type BikeAssetId = 'rcr' | 'rcrf' | 'addict' | 'aeroad' | 'giant' | 'y1rs' | 'ef' | 'sl9' | 'pinarello' | 'trinity';
+export type BikeAssetId = 'rcr' | 'rcrf' | 'addict' | 'aeroad' | 'giant' | 'filante' | 'xlab' | 'y1rs' | 'ef' | 'sl9' | 'pinarello' | 'trinity';
 
 /** Peinture du cadre : une seconde couleur qui gagne l'arrière, l'avant, le bas ou le haut, et une fourche à part. */
 export type BikeCoat = { second: number; fade: 'rear' | 'front' | 'low' | 'high'; fork?: number } | null;
@@ -84,7 +84,7 @@ export const TEAMS: Team[] = [
     id: 'groupama', name: 'Groupama-FDJ United', brand: 'Wilier', jersey: 0x4f9fe6, accent: 0xe30613, frame: 0xc8102e,
     livery: livery('plain', 0x4f9fe6, { sleeveL: 0xe30613, shorts: 0x0f2a5c, helmet: 0xffffff, trim: 0xffffff }),
     coat: { second: 0x7a0a1a, fade: 'low' },
-    models: [{ name: 'Filante SLR ID2', kind: 'aero' }],
+    models: [{ name: 'Filante SLR ID2', kind: 'aero', asset: 'filante' }],
   },
   {
     id: 'ineos', name: 'INEOS Grenadiers', brand: 'Pinarello', jersey: 0xff6a13, accent: 0xd7263d, frame: 0xe3e5e8,
@@ -162,7 +162,7 @@ export const TEAMS: Team[] = [
     id: 'xds', name: 'XDS Astana Team', brand: 'X-Lab', jersey: 0x2fb7c9, accent: 0xf2c200, frame: 0x12414b,
     livery: livery('hem', 0xf2c200, { shorts: 0x12414b, helmet: 0x2fb7c9, trim: 0xf2c200 }),
     coat: { second: 0x2fb7c9, fade: 'low' },
-    models: [{ name: 'AD9', kind: 'polyvalent' }],
+    models: [{ name: 'AD9', kind: 'polyvalent', asset: 'xlab' }],
   },
 ];
 
