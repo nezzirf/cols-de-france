@@ -20,6 +20,8 @@ import type { RouteEvent } from '../world/landmarks';
 const SIM_INTERVAL_MS = 50;
 const START_OFFSET_M = 12;
 const MAX_CATCH_UP_S = 2;
+/** Fenêtre de la puissance affichée : 3 s, comme les compteurs Garmin. */
+const POWER_AVG_MS = 3000;
 const STALE_DATA_MS = 3000;
 const TRAINER_PERIOD_MS = 1000;
 const FORCE_RESEND_MS = 10000;
@@ -125,6 +127,9 @@ export class Game {
   private simTimer = 0;
   private rafId = 0;
   private results: SegmentResult[] = [];
+  /** Puissance des trois dernières secondes, comme sur un compteur : c'est elle qu'on affiche (la physique et l'enregistrement gardent l'instantanée). */
+  private powerWindow: { t: number; w: number }[] = [];
+  private shownPowerW = 0;
   private data: Required<Pick<TrainerData, 'powerW' | 'cadenceRpm'>> & { bpm: number | null } = { powerW: 0, cadenceRpm: 0, bpm: null };
   private eventIndex = 0;
   /** Exploration : les sauts fausseraient les temps, les segments sont donc coupés. */
@@ -394,6 +399,9 @@ export class Game {
     }
     const d = this.physics.distanceM;
     const power = this.data.powerW;
+    this.powerWindow.push({ t: now, w: power });
+    while (this.powerWindow.length > 1 && now - this.powerWindow[0].t > POWER_AVG_MS) this.powerWindow.shift();
+    this.shownPowerW = this.powerWindow.reduce((sum, p) => sum + p.w, 0) / this.powerWindow.length;
     this.physics.advance(dt, { powerW: power, gradePct: this.route.gradeAt(d), altitudeM: this.route.eleAt(d) });
 
     // Le chrono part au premier coup de pédale, et s'arrête quand on s'arrête vraiment.
@@ -620,7 +628,7 @@ export class Game {
       distanceM: dist,
       speedKmh: this.physics.speedMps * 3.6,
       avgSpeedKmh: e > 1 && !this.exploring ? (this.traveledM(dist) / e) * 3.6 : 0,
-      powerW: this.data.powerW,
+      powerW: this.shownPowerW,
       avgPowerW: e > 1 ? this.energyJ / e : 0,
       cadenceRpm: this.data.cadenceRpm,
       heartRateBpm: this.data.bpm,
@@ -634,7 +642,7 @@ export class Game {
       lap: this.laps + 1,
       totalM: this.traveledM(dist),
       autoPaused: this.autoPause.paused,
-      zone: powerZone(this.data.powerW, this.ftp),
+      zone: powerZone(this.shownPowerW, this.ftp),
       peloton: this.peloton || this.bots ? this.pelotonSnapshot(this.traveledM(dist)) : null,
       lockedW: this.lockedW,
     };
