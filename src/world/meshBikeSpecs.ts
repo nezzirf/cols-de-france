@@ -244,6 +244,19 @@ export const MESH_BIKES: Record<'ef' | 'sl9' | 'pinarello' | 'trinity' | 'rcrf' 
     bbY: -0.1342,
     saddle: { z: 0.162, top: 0.2913 },
     hood: { z: -0.305, y: 0.238, side: 0.095 },
+    cleanSpokes: true,
+    photo: {
+      url: `${import.meta.env.BASE_URL}models/pinarello/paint.png`,
+      centerX: 400.5,
+      centerY: 474,
+      scale: 802,
+      lettering: [
+        { cx: 465, cy: 395, dx: 0.616, dy: -0.789, halfLen: 95, halfWid: 22 },
+        { cx: 337, cy: 392, dx: 0.28, dy: -0.96, halfLen: 40, halfWid: 8 },
+        { cx: 230, cy: 485, dx: 1, dy: 0.12, halfLen: 60, halfWid: 12 },
+        { cx: 282, cy: 232, dx: 0, dy: -1, halfLen: 28, halfWid: 8 },
+      ],
+    },
   },
   trinity: {
     id: 'trinity',

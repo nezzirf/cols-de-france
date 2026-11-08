@@ -42,6 +42,8 @@ export interface MeshBikeSpec {
   spinShare?: number;
   /** Remplace les roues du fichier (mal formées) par celles d'un autre vélo modélisé, remises à l'échelle. */
   wheelsFrom?: string;
+  /** Photo de peinture : moyeu et rayons des roues ne gardent pas les couleurs claires ou vives de la fourche qui les masque sur la photo. */
+  cleanSpokes?: boolean;
   /** Retire l'arc fin que le fichier laisse au-dessus de ses anciens pneus, hors de la fourche (±7 cm de l'axe). */
   dropArcs?: boolean;
   /** Pièces du fichier à retirer : les triangles dont le centre est dans une de ces boîtes (repère du modèle). */
@@ -95,8 +97,9 @@ export function splitMeshBike(spec: MeshBikeSpec): (scene: THREE.Object3D) => vo
     const mesh: THREE.Mesh = source;
     const geometry = mesh.geometry as THREE.BufferGeometry;
     const position = geometry.getAttribute('position');
+    let colors: Float32Array | null = null;
     if (spec.paint) {
-      const colors = new Float32Array(position.count * 3);
+      colors = new Float32Array(position.count * 3);
       const p = new THREE.Vector3();
       for (let i = 0; i < position.count; i++) {
         p.fromBufferAttribute(position, i).applyMatrix4(mesh.matrixWorld);
@@ -172,6 +175,20 @@ export function splitMeshBike(spec: MeshBikeSpec): (scene: THREE.Object3D) => vo
       else if (!spec.rearStatic && all3(spec.rearHubZ)) rear.push(i, j, k);
       else if (isCrank((a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3, (a.z + b.z + c.z) / 3)) continue;
       else rest.push(i, j, k);
+    }
+    if (spec.cleanSpokes && colors) {
+      const p = new THREE.Vector3();
+      for (const [triangles, hubZ] of [[front, spec.frontHubZ], [rear, spec.rearHubZ]] as [number[], number][]) {
+        for (const i of new Set(triangles)) {
+          const [r, g, b] = [colors[3 * i], colors[3 * i + 1], colors[3 * i + 2]];
+          const vivid = Math.max(r, g, b) - Math.min(r, g, b) > 0.25;
+          if (Math.max(r, g, b) < 0.5 && !vivid) continue;
+          p.fromBufferAttribute(position, i).applyMatrix4(world);
+          const rr = Math.hypot(p.y - spec.hubY, p.z - hubZ) / spec.tyreR;
+          // Au centre, tout ce qui est clair ou vif ; sur la jante et le pneu, seulement les couleurs vives (les écritures blanches restent).
+          if (rr < 0.74 || (vivid && rr < 1.15)) colors.set([0.05, 0.05, 0.06], 3 * i);
+        }
+      }
     }
     // Les trois morceaux partagent les mêmes sommets : seule la liste des triangles change (le fichier pèse déjà lourd).
     const piece = (triangles: number[]): THREE.BufferGeometry => {
