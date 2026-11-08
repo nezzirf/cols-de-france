@@ -90,7 +90,10 @@ export class Crowd {
     this.group.add(obj);
   }
 
-  /** Les bras bougent sur la carte graphique : pour chaque sommet de bras, une rotation autour de l'épaule selon le temps et la personne. */
+  /**
+   * Les bras bougent sur la carte graphique, sans squelette : le bras entier se balance un peu autour de l'épaule, et c'est l'avant-bras
+   * qui se plie autour du coude pour saluer. Un grand angle à l'épaule étirerait la peau entre le bras et le flanc.
+   */
   private armMaterial(): THREE.MeshStandardMaterial {
     const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
     material.onBeforeCompile = (shader) => {
@@ -100,28 +103,35 @@ export class Crowd {
           '#include <common>',
           `#include <common>
           uniform float uTime;
-          attribute vec3 aArm;      // poids, côté (±1), élévation du bras quand elle acclame
+          attribute vec3 aArm;      // poids, côté (±1), amplitude quand elle acclame
           attribute vec3 aPivot;    // l'épaule
+          attribute vec4 aElbow;    // le coude relatif à l'épaule, poids de l'avant-bras
           attribute vec3 aMove;     // par personne : phase, 1 si elle acclame, entrain (0 à 1) selon la distance du cycliste
-          attribute vec3 aLeg;      // hanche, genou, 1 si les jambes plient`,
+          attribute vec3 aLeg;      // hanche, genou, 1 si les jambes plient
+          vec2 rot2(vec2 v, float a) { float c = cos(a), s = sin(a); return vec2(v.x * c - v.y * s, v.x * s + v.y * c); }`,
         )
         .replace(
           '#include <beginnormal_vertex>',
           `#include <beginnormal_vertex>
           float armWeight = aArm.x;
-          vec2 armAngles = vec2(0.0);
+          float upperAngle = 0.0;
+          float foreAngle = 0.0;
+          float swingAngle = 0.0;
           if (armWeight > 0.0) {
             float wave = sin(uTime * 6.0 + aMove.x);
-            // Elle acclame : les bras montent presque à la verticale et s'agitent. Sinon, ils se balancent à peine.
-            float raise = aMove.y > 0.5 ? aArm.z + 0.3 * clamp(aArm.z / 1.9, 0.4, 1.0) * wave : 0.1 * sin(uTime * 1.3 + aMove.x);
-            float swing = aMove.y > 0.5 ? 0.45 * (1.0 - clamp(aArm.z / 1.9, 0.0, 1.0)) * sin(uTime * 6.0 + aMove.x + aArm.y * 1.6) : 0.3 * sin(uTime * 2.1 + aMove.x + aArm.y * 1.6);
-            armAngles = vec2(aArm.y * raise * armWeight, swing * armWeight);
-            float cz = cos(armAngles.x), sz = sin(armAngles.x), cx = cos(armAngles.y), sx = sin(armAngles.y);
-            // La normale tourne comme le bras.
-            vec3 n = objectNormal;
-            n = vec3(n.x * cz - n.y * sz, n.x * sz + n.y * cz, n.z);
-            n = vec3(n.x, n.y * cx - n.z * sx, n.y * sx + n.z * cx);
-            objectNormal = n;
+            float free = clamp(aArm.z / 1.9, 0.35, 1.0);
+            if (aMove.y > 0.5) {
+              // Elle acclame : le bras se lève un peu et l'avant-bras s'agite.
+              upperAngle = aArm.y * (0.28 * aArm.z + 0.1 * wave * free) * armWeight;
+              foreAngle = aArm.y * (1.05 * free + 0.5 * free * wave) * armWeight;
+              swingAngle = (1.0 - free) * 0.35 * sin(uTime * 6.0 + aMove.x + aArm.y * 1.6) * armWeight;
+            } else {
+              upperAngle = aArm.y * 0.08 * sin(uTime * 1.3 + aMove.x) * armWeight;
+              swingAngle = 0.3 * sin(uTime * 2.1 + aMove.x + aArm.y * 1.6) * armWeight;
+            }
+            // La normale tourne comme le haut du bras.
+            objectNormal.xy = rot2(objectNormal.xy, upperAngle);
+            objectNormal.yz = rot2(objectNormal.yz, swingAngle);
           }`,
         )
         .replace(
@@ -129,9 +139,12 @@ export class Crowd {
           `#include <begin_vertex>
           if (armWeight > 0.0) {
             vec3 rel = transformed - aPivot;
-            float cz = cos(armAngles.x), sz = sin(armAngles.x), cx = cos(armAngles.y), sx = sin(armAngles.y);
-            rel = vec3(rel.x * cz - rel.y * sz, rel.x * sz + rel.y * cz, rel.z);
-            rel = vec3(rel.x, rel.y * cx - rel.z * sx, rel.y * sx + rel.z * cx);
+            // L'avant-bras plie autour du coude, d'autant plus que le sommet est loin vers la main.
+            vec3 elbow = aElbow.xyz;
+            vec2 low = rot2(rel.xy - elbow.xy, foreAngle * aElbow.w);
+            rel.xy = mix(rel.xy, elbow.xy + low, aElbow.w > 0.0 ? 1.0 : 0.0);
+            rel.xy = rot2(rel.xy, upperAngle);
+            rel.yz = rot2(rel.yz, swingAngle);
             transformed = aPivot + rel;
           }
           // Le saut : en l'air, les cuisses se lèvent et les genoux se plient, les talons montent ; au sol, les jambes sont tendues.
@@ -149,8 +162,8 @@ export class Crowd {
             vec3 kneeMoved = vec3(0.0, knee.y * ct, knee.y * st);
             float cs = cos(thigh + shin), ss = sin(thigh + shin);
             vec3 r = v - knee;
-            vec3 low = kneeMoved + vec3(r.x, r.y * cs - r.z * ss, r.y * ss + r.z * cs);
-            transformed = mix(transformed, hip + mix(upper, low, lower), below);
+            vec3 lowLeg = kneeMoved + vec3(r.x, r.y * cs - r.z * ss, r.y * ss + r.z * cs);
+            transformed = mix(transformed, hip + mix(upper, lowLeg, lower), below);
           }`,
         );
     };
