@@ -23,15 +23,15 @@ export interface BikeSpec {
 }
 
 export const BIKE_KINDS: Record<BikeKind, BikeSpec> = {
-  aero: { label: 'Route aéro', kg: 7.5, cda: 0.31, crr: 0.004, wheelRadiusM: 0.335, wheelInertia: 0.3, shape: 'route', tyreM: 0.015 },
-  grimpeur: { label: 'Route grimpeur', kg: 6.9, cda: 0.322, crr: 0.004, wheelRadiusM: 0.335, wheelInertia: 0.24, shape: 'route', tyreM: 0.015 },
-  polyvalent: { label: 'Route polyvalent', kg: 7.1, cda: 0.316, crr: 0.004, wheelRadiusM: 0.335, wheelInertia: 0.27, shape: 'route', tyreM: 0.015 },
-  clm: { label: 'Contre-la-montre', kg: 8.6, cda: 0.235, crr: 0.0037, wheelRadiusM: 0.335, wheelInertia: 0.34, shape: 'clm', tyreM: 0.014 },
-  endurance: { label: 'Route endurance', kg: 8.6, cda: 0.345, crr: 0.0044, wheelRadiusM: 0.34, wheelInertia: 0.3, shape: 'route', tyreM: 0.017 },
-  gravel: { label: 'Gravel', kg: 9.2, cda: 0.36, crr: 0.0058, wheelRadiusM: 0.35, wheelInertia: 0.36, shape: 'gravel', tyreM: 0.022 },
-  'vtt-xc': { label: 'VTT cross-country', kg: 10.8, cda: 0.43, crr: 0.0078, wheelRadiusM: 0.37, wheelInertia: 0.5, shape: 'vtt', tyreM: 0.03 },
-  'vtt-enduro': { label: 'VTT tout-suspendu', kg: 14.5, cda: 0.47, crr: 0.0098, wheelRadiusM: 0.37, wheelInertia: 0.62, shape: 'vtt', tyreM: 0.036 },
-  ville: { label: 'Vélo de ville', kg: 15, cda: 0.53, crr: 0.0066, wheelRadiusM: 0.345, wheelInertia: 0.45, shape: 'ville', tyreM: 0.022 },
+  aero: { label: 'Route aéro', kg: 8.6, cda: 0.335, crr: 0.004, wheelRadiusM: 0.335, wheelInertia: 0.3, shape: 'route', tyreM: 0.015 },
+  grimpeur: { label: 'Route grimpeur', kg: 6.8, cda: 0.385, crr: 0.004, wheelRadiusM: 0.335, wheelInertia: 0.24, shape: 'route', tyreM: 0.015 },
+  polyvalent: { label: 'Route polyvalent', kg: 7.5, cda: 0.365, crr: 0.004, wheelRadiusM: 0.335, wheelInertia: 0.27, shape: 'route', tyreM: 0.015 },
+  clm: { label: 'Contre-la-montre', kg: 11, cda: 0.25, crr: 0.0037, wheelRadiusM: 0.335, wheelInertia: 0.34, shape: 'clm', tyreM: 0.014 },
+  endurance: { label: 'Route endurance', kg: 8.6, cda: 0.4, crr: 0.0044, wheelRadiusM: 0.34, wheelInertia: 0.3, shape: 'route', tyreM: 0.017 },
+  gravel: { label: 'Gravel', kg: 9.2, cda: 0.41, crr: 0.0058, wheelRadiusM: 0.35, wheelInertia: 0.36, shape: 'gravel', tyreM: 0.022 },
+  'vtt-xc': { label: 'VTT cross-country', kg: 10.8, cda: 0.49, crr: 0.0078, wheelRadiusM: 0.37, wheelInertia: 0.5, shape: 'vtt', tyreM: 0.03 },
+  'vtt-enduro': { label: 'VTT tout-suspendu', kg: 14.5, cda: 0.53, crr: 0.0098, wheelRadiusM: 0.37, wheelInertia: 0.62, shape: 'vtt', tyreM: 0.036 },
+  ville: { label: 'Vélo de ville', kg: 15, cda: 0.6, crr: 0.0066, wheelRadiusM: 0.345, wheelInertia: 0.45, shape: 'ville', tyreM: 0.022 },
 };
 
 /** Vélo modélisé à part, avec sa propre peinture. */

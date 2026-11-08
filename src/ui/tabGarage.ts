@@ -112,7 +112,7 @@ export function renderGarage(page: HTMLElement, ctx: MenuContext): void {
   const showHeader = (): string => {
     const bike = findBike(p.bikeId);
     const setup = setupFor(bike, p.riderKg);
-    const speed = (grade: number) => fr(steadySpeed(p.ftp, grade, 1000, setup) * 3.6);
+    const speed = (grade: number) => fr(steadySpeed(p.ftp, grade, 0, setup) * 3.6);
     return `<div class="m-card m-bike-head">
       <div class="m-bike-pic">${bikeIcon(bike)}</div>
       <div>
