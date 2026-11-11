@@ -1,11 +1,14 @@
 // Vitesses virtuelles pour un home trainer équipé d'un pignon fixe (Zwift Cog) : la chaîne ne
 // bouge pas, c'est la résistance qui reproduit le développement choisi.
 
-export const GEAR_COUNT = 24;
+/** Plateau unique de 46 dents. */
+export const CHAINRING_TEETH = 46;
+/** Pignons, du plus petit (rapport le plus long) au plus grand (le plus court). */
+export const COG_TEETH = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 23, 25, 28, 31, 34, 38, 42, 46, 50, 54, 58, 62, 65];
+
+export const GEAR_COUNT = COG_TEETH.length;
 export const DEFAULT_GEAR = 12;
 
-const LOWEST_RATIO = 0.75;
-const HIGHEST_RATIO = 5.49;
 /** Plateau de 42 dents sur le Cog de 14 : sert si le home trainer ne donne pas sa vitesse. */
 const CHAIN_RATIO = 3;
 const MIN_CADENCE_RPM = 20;
@@ -13,8 +16,9 @@ const MAX_GRADE_PCT = 20;
 const GRAVITY = 9.81;
 
 export function gearRatio(gear: number): number {
-  const t = (Math.max(1, Math.min(GEAR_COUNT, gear)) - 1) / (GEAR_COUNT - 1);
-  return LOWEST_RATIO * (HIGHEST_RATIO / LOWEST_RATIO) ** t;
+  // La vitesse 1 est la plus facile : le plus grand pignon.
+  const index = GEAR_COUNT - Math.max(1, Math.min(GEAR_COUNT, gear));
+  return CHAINRING_TEETH / COG_TEETH[index];
 }
 
 export interface ShiftInput {
