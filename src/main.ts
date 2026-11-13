@@ -278,7 +278,7 @@ class App {
     this.root.innerHTML = '';
     const hud = new Hud(this.root, route);
     hud.onLock = (a) => this.lockAction(a);
-    hud.setLockAvailable(!steps);
+    hud.setLockAvailable(true);
     if (steps) hud.showWorkout(steps);
     hud.setConnection(trainer.label, trainer.state);
     trainer.onState = (state) => hud.setConnection(trainer.label, state);
@@ -531,7 +531,7 @@ class App {
     }
     const demo = this.trainer instanceof DemoTrainer ? this.trainer : null;
     const step = e.shiftKey ? 50 : 10;
-    const locked = this.game.lockedPowerW !== null;
+    const locked = this.game.powerAdjustable;
     switch (e.key) {
       case 'ArrowUp':
         // Watts verrouillés : la flèche règle le verrou, d'un watt (cinq avec Maj) ; sinon, la puissance du mode démo.

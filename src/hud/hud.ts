@@ -66,6 +66,7 @@ export class Hud {
   private lockMain: HTMLElement;
   private lockSteps: HTMLElement[];
   private lockedShown: number | null | undefined;
+  private ergStepShown = false;
   /** Verrouiller les watts, ou les monter et descendre d'un watt. */
   onLock: (action: 'toggle' | 'up' | 'down') => void = () => {};
 
@@ -153,18 +154,21 @@ export class Hud {
     q('lockUp').addEventListener('click', () => this.onLock('up'));
   }
 
-  /** Pendant une séance la puissance est imposée : le verrouillage n'a pas lieu d'être. */
+  /** Faux seulement quand le HUD n'a aucune commande de puissance à montrer. */
   setLockAvailable(available: boolean): void {
     this.lockBox.hidden = !available;
   }
 
-  private showLock(lockedW: number | null): void {
-    if (lockedW === this.lockedShown) return;
+  /** Sur un palier ERG il ne reste que −1 W et +1 W : la puissance est déjà imposée, il n'y a rien à verrouiller. */
+  private showLock(lockedW: number | null, ergStep: boolean): void {
+    if (lockedW === this.lockedShown && ergStep === this.ergStepShown) return;
     this.lockedShown = lockedW;
+    this.ergStepShown = ergStep;
     const locked = lockedW !== null;
     this.lockMain.textContent = locked ? `Verrouillé · ${lockedW} W` : 'Verrouiller les watts';
+    this.lockMain.hidden = ergStep;
     this.lockBox.dataset.locked = String(locked);
-    for (const step of this.lockSteps) step.hidden = !locked;
+    for (const step of this.lockSteps) step.hidden = !(locked || ergStep);
   }
 
   update(s: RideSnapshot, now: number): void {
@@ -211,7 +215,7 @@ export class Hud {
     if (s.zone > 0) power.dataset.zone = String(s.zone);
     else delete power.dataset.zone;
     this.renderPeloton(s);
-    this.showLock(s.lockedW);
+    this.showLock(s.lockedW, s.workout !== null && !s.workout.free);
     if (this.workout && s.workout) {
       this.workout.target.textContent = s.workout.free ? 'Libre' : String(s.workout.targetW);
       this.workout.left.textContent = formatTime(Math.ceil(s.workout.stepLeftS));

@@ -25,6 +25,8 @@ const POWER_AVG_MS = 3000;
 const STALE_DATA_MS = 3000;
 const TRAINER_PERIOD_MS = 1000;
 const FORCE_RESEND_MS = 10000;
+/** Écart maximal réglable aux boutons ± sur une consigne ERG. */
+const ERG_BIAS_MAX_W = 300;
 /** Le cycliste sent la pente sous la roue avant : on anticipe d'un demi-empattement. */
 const GRADE_LOOKAHEAD_M = 0.5;
 /** Pente simulée pendant un effort libre : assez raide pour qu'il faille vraiment appuyer. */
@@ -149,6 +151,10 @@ export class Game {
   private bots: Peloton | null = null;
   /** Puissance imposée au home trainer, hors séance : la résistance ne suit plus la pente. */
   private lockedW: number | null = null;
+  /** Décalage réglé aux boutons ± sur les paliers ERG de la séance. */
+  private ergBiasW = 0;
+  private sending = false;
+  private sendAgain = false;
   /** Distance parcourue par seconde de la sortie de référence, pour courir contre soi-même. */
   private reference: number[] | null = null;
   /** Facteur 0..1 appliqué à la pente envoyée au frein. */
@@ -319,12 +325,12 @@ export class Game {
    * la résistance de la pente. Sans effet pendant une séance, qui impose déjà sa puissance.
    */
   toggleLock(): void {
-    if (this.workout) return;
+    if (this.workout && !this.inFreeStep()) return;
     if (this.lockedW !== null) {
       this.lockedW = null;
       this.lastSent = null;
       this.lastSentAt = 0;
-      this.lastSend = 0;
+      this.flush();
       this.onToast('Watts libérés : la résistance suit de nouveau la pente');
       return;
     }
@@ -339,7 +345,11 @@ export class Game {
 
   /** Monte ou descend la puissance verrouillée (1 W par pas). */
   adjustLock(deltaW: number): void {
-    if (this.workout) return;
+    // Pendant un palier ERG, les boutons montent ou descendent la consigne de la séance.
+    if (this.workout && !this.inFreeStep()) {
+      this.adjustErgBias(deltaW);
+      return;
+    }
     if (this.lockedW === null) {
       this.onToast('Verrouille d’abord les watts (touche L, ou bouton Y de la manette de droite)');
       return;
@@ -350,14 +360,62 @@ export class Game {
   private setLock(watts: number): void {
     this.lockedW = watts;
     this.lastTargetW = null;
-    this.lastSend = 0;
+    this.flush();
+  }
+
+  /** Vrai quand les boutons ± règlent une puissance : le verrou, ou la consigne d'un palier ERG. */
+  get powerAdjustable(): boolean {
+    return this.lockedW !== null || (this.workout !== null && !this.inFreeStep());
+  }
+
+  /** Décale d'un watt par appui la consigne de tous les paliers ERG de la séance. */
+  private adjustErgBias(deltaW: number): void {
+    this.ergBiasW = Math.max(-ERG_BIAS_MAX_W, Math.min(ERG_BIAS_MAX_W, this.ergBiasW + deltaW));
+    this.lastTargetW = null;
+    const state = this.workout ? workoutStateAt(this.workout, this.elapsedS) : null;
+    const sign = this.ergBiasW > 0 ? '+' : '';
+    this.onToast(`Consigne ${state ? this.ergTargetW(state.targetPct) : '--'} W (${sign}${this.ergBiasW} W)`);
+    this.flush();
+  }
+
+  private ergTargetW(targetPct: number): number {
+    const base = Math.round((targetPct / 100) * this.ftp);
+    return base > 0 ? Math.max(1, base + this.ergBiasW) : base;
+  }
+
+  /** Une séance est en cours et son palier actuel est un effort libre. */
+  private inFreeStep(): boolean {
+    return this.workout !== null && workoutStateAt(this.workout, this.elapsedS)?.step.free === true;
   }
 
   shift(delta: number): void {
-    if (this.workout) return;
+    // Les vitesses n'existent qu'hors séance, ou pendant un effort libre : un palier ERG impose déjà la puissance.
+    if (this.workout && !this.inFreeStep()) return;
     this.enableGears();
     this.gear = Math.max(1, Math.min(GEAR_COUNT, this.gear + delta));
-    this.lastSend = 0;
+    this.flush();
+  }
+
+  /**
+   * Envoie tout de suite la consigne au home trainer, sans attendre le prochain envoi périodique. Si une écriture est
+   * encore en cours, la suivante part dès qu'elle est finie, avec la valeur la plus récente : les appuis rapides ne
+   * s'empilent pas.
+   */
+  private flush(): void {
+    if (this.sending) {
+      this.sendAgain = true;
+      return;
+    }
+    this.sending = true;
+    const now = performance.now();
+    this.lastSend = now;
+    void this.sendToTrainer(Math.min(this.physics.distanceM, this.route.lengthM), now).finally(() => {
+      this.sending = false;
+      if (this.sendAgain) {
+        this.sendAgain = false;
+        this.flush();
+      }
+    });
   }
 
   private startExploring(): void {
@@ -429,10 +487,7 @@ export class Game {
       }
     }
     this.fireEvents(dist);
-    if (now - this.lastSend >= TRAINER_PERIOD_MS) {
-      this.lastSend = now;
-      void this.sendToTrainer(dist, now);
-    }
+    if (now - this.lastSend >= TRAINER_PERIOD_MS) this.flush();
     if (this.workout && this.elapsedS >= totalDuration(this.workout)) {
       this.finish();
       return;
@@ -498,14 +553,24 @@ export class Game {
       const state = workoutStateAt(this.workout, this.elapsedS);
       if (!state?.step.free) {
         this.freeAnnounced = false;
+        // Fin de l'effort libre : le verrou tombe et l'ERG reprend normalement.
+        if (this.lockedW !== null) {
+          this.lockedW = null;
+          this.lastTargetW = null;
+        }
         await this.sendWorkoutTarget();
         return;
       }
-      // Effort libre : le home trainer suit une pente fixe, c'est la cadence qui règle l'effort.
+      // Effort libre : le home trainer suit une pente fixe (c'est la cadence et la vitesse qui règlent l'effort),
+      // ou une puissance verrouillée.
       if (!this.freeAnnounced) {
         this.freeAnnounced = true;
         this.lastTargetW = null;
         this.onToast('Effort libre : tiens la puissance la plus haute possible jusqu’au bout');
+      }
+      if (this.lockedW !== null) {
+        await this.sendTarget(this.lockedW);
+        return;
       }
       await this.sendFreeGrade(now);
       return;
@@ -532,7 +597,8 @@ export class Game {
   }
 
   private async sendFreeGrade(now: number): Promise<void> {
-    const cmd = trainerCommand(FREE_EFFORT_GRADE_PCT, this.route.eleAt(this.distanceM), this.physics.setup, this.difficulty);
+    const road = trainerCommand(FREE_EFFORT_GRADE_PCT, this.route.eleAt(this.distanceM), this.physics.setup, this.difficulty);
+    const cmd = this.gearsOn ? { ...road, gradePct: this.gearedGrade(road) } : road;
     if (!commandChanged(this.lastSent, cmd) && now - this.lastSentAt < FORCE_RESEND_MS) return;
     this.lastSent = cmd;
     this.lastSentAt = now;
@@ -560,7 +626,7 @@ export class Game {
   private async sendWorkoutTarget(): Promise<void> {
     const state = workoutStateAt(this.workout!, this.elapsedS);
     if (!state) return;
-    await this.sendTarget(Math.round((state.targetPct / 100) * this.ftp));
+    await this.sendTarget(this.ergTargetW(state.targetPct));
   }
 
   /** Impose une puissance au home trainer (mode ERG). */
@@ -585,7 +651,7 @@ export class Game {
     const free = state?.step.free === true;
     return {
       free,
-      targetW: state && !free ? Math.round((state.targetPct / 100) * this.ftp) : 0,
+      targetW: state && !free ? this.ergTargetW(state.targetPct) : 0,
       stepLeftS: state ? state.stepLeftS : 0,
       elapsedS: this.elapsedS,
       totalS: totalDuration(this.workout),
@@ -638,7 +704,7 @@ export class Game {
       paused: this.paused,
       sentGradePct: this.lastSent?.gradePct ?? 0,
       workout: this.workoutSnapshot(),
-      gear: this.gearsOn && !this.workout ? this.gear : null,
+      gear: this.gearsOn && (!this.workout || this.inFreeStep()) ? this.gear : null,
       lap: this.laps + 1,
       totalM: this.traveledM(dist),
       autoPaused: this.autoPause.paused,
