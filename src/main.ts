@@ -12,6 +12,7 @@ import { DemoTrainer } from './hardware/demoTrainer';
 import { BluetoothHeartRate } from './hardware/heartRate';
 import { KickrAnt } from './hardware/antUsb';
 import { KickrBluetooth } from './hardware/kickrBluetooth';
+import { knownDevices, type KnownKind, waitUntilNearby } from './hardware/rememberedDevices';
 import { ActionGate, type ShiftDirection, ShiftGate, type ZwiftAction, ZwiftPlay } from './hardware/zwiftPlay';
 import type { HeartRateSensor, Trainer } from './hardware/types';
 import { formatTime, Hud } from './hud/hud';
@@ -39,6 +40,10 @@ import { Soundscape } from './world/soundscape';
 const DEMO_HINT = '↑ ↓ puissance · Maj : ±50 W · L verrouiller les watts · M son · + − vitesses · F caméra libre · Pg↑ Pg↓ ±1 km · P pause · V caméra · Échap quitter';
 const FREE_HINT = 'ZQSD déplacer · clic + souris regarder · A E descendre, monter · Maj vite · molette vitesse · T poser le cycliste ici · F sortir';
 const JUMP_M = 1000;
+/** Reconnexion automatique : chaque appareil est attendu 30 s à la fois, une vingtaine de fois (dix minutes). */
+const AUTO_CONNECT_WAIT_MS = 30_000;
+const AUTO_CONNECT_ROUNDS = 20;
+const AUTO_CONNECT_RETRY_MS = 3000;
 const EXPLORE_REFRESH_MS = 150;
 const MINI_REFRESH_MS = 250;
 const FLOATING_BAR = { width: 980, height: 96 };
@@ -120,23 +125,106 @@ class App {
     }
   }
 
-  private async connectHeartRate(): Promise<string> {
-    await this.hr?.disconnect();
-    this.hr = null;
+  private newHeartRate(): BluetoothHeartRate {
     const sensor = new BluetoothHeartRate();
     sensor.onBpm = (bpm) => {
       this.bpmBeforeStart = bpm;
       this.game?.receiveHeartRate(bpm);
     };
+    return sensor;
+  }
+
+  private newZwiftPlay(): ZwiftPlay {
+    const play = new ZwiftPlay();
+    play.onShift = (direction) => this.onShift(direction);
+    play.onAction = (action) => this.onZwiftAction(action);
+    return play;
+  }
+
+  /**
+   * À l'ouverture du jeu, reprend seuls les appareils Bluetooth déjà autorisés (home trainer, ceinture cardio, manettes) :
+   * chacun est attendu en tâche de fond jusqu'à ce qu'il soit allumé et à portée. Sans effet si le navigateur ne retient pas
+   * les appareils.
+   */
+  async autoConnect(): Promise<void> {
+    let known: Awaited<ReturnType<typeof knownDevices>>;
+    try {
+      known = await knownDevices();
+    } catch {
+      return;
+    }
+    for (const { device, kind } of known) void this.reconnectKnown(device, kind);
+  }
+
+  private hasDevice(device: BluetoothDevice, kind: KnownKind): boolean {
+    if (kind === 'ble') return this.trainer !== null;
+    if (kind === 'hr') return this.hr !== null;
+    return this.play.some((p) => p.deviceId === device.id);
+  }
+
+  private async reconnectKnown(device: BluetoothDevice, kind: KnownKind): Promise<void> {
+    for (let round = 0; round < AUTO_CONNECT_ROUNDS; round++) {
+      if (this.hasDevice(device, kind)) return;
+      if (!(await waitUntilNearby(device, AUTO_CONNECT_WAIT_MS))) continue;
+      try {
+        const message = await this.attachKnown(device, kind);
+        if (message) {
+          this.menu?.say(message);
+          this.menu?.refreshDevices();
+        }
+        return;
+      } catch {
+        // L'appareil s'est tu ou a refusé : on lui laisse un instant puis on recommence.
+        await new Promise((resolve) => setTimeout(resolve, AUTO_CONNECT_RETRY_MS));
+      }
+    }
+  }
+
+  /** Connecte un appareil déjà autorisé, et rend le message à afficher, ou rien si le joueur s'en est occupé entre-temps. */
+  private async attachKnown(device: BluetoothDevice, kind: KnownKind): Promise<string | null> {
+    if (kind === 'ble') {
+      const trainer = new KickrBluetooth(() => this.profile.riderKg + this.bike.kg);
+      await trainer.connectKnown(device);
+      if (this.trainer) {
+        await trainer.disconnect();
+        return null;
+      }
+      this.trainer = trainer;
+      this.trainerKind = 'ble';
+      return `${trainer.label} reconnecté (${trainer.protocol}).`;
+    }
+    if (kind === 'hr') {
+      const sensor = this.newHeartRate();
+      await sensor.connectKnown(device);
+      if (this.hr) {
+        await sensor.disconnect();
+        return null;
+      }
+      this.hr = sensor;
+      return 'Ceinture cardio reconnectée.';
+    }
+    const play = this.newZwiftPlay();
+    await play.connectKnown(device);
+    if (this.play.some((p) => p.deviceId === device.id)) {
+      await play.disconnect();
+      return null;
+    }
+    this.play.push(play);
+    this.game?.enableGears();
+    return 'Manette Zwift Play reconnectée.';
+  }
+
+  private async connectHeartRate(): Promise<string> {
+    await this.hr?.disconnect();
+    this.hr = null;
+    const sensor = this.newHeartRate();
     await sensor.connect();
     this.hr = sensor;
     return 'Ceinture cardio connectée.';
   }
 
   private async connectZwiftPlay(): Promise<string> {
-    const play = new ZwiftPlay();
-    play.onShift = (direction) => this.onShift(direction);
-    play.onAction = (action) => this.onZwiftAction(action);
+    const play = this.newZwiftPlay();
     if (!(await play.connect(this.play.map((p) => p.deviceId)))) {
       return 'Cette manette est déjà connectée. Appuie sur l’autre pour la réveiller, puis reclique sur Zwift Play.';
     }
@@ -673,4 +761,6 @@ class App {
   }
 }
 
-void new App().showMenu();
+const app = new App();
+void app.showMenu();
+void app.autoConnect();

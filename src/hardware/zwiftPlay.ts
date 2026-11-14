@@ -2,6 +2,8 @@
 // de celle de gauche (verrouillage et réglage des watts). Zwift ne publie pas ce
 // protocole. Les valeurs viennent du projet libre BikeControl et d'analyses indépendantes.
 
+import { rememberDevice } from './rememberedDevices';
+
 export const ZWIFT_COMPANY_ID = 0x094a;
 export const ZWIFT_RIDE_SERVICE = '0000fc82-0000-1000-8000-00805f9b34fb';
 export const ZWIFT_PLAY_SERVICE = '00000001-19ca-4651-86e5-fa29dcdd09d1';
@@ -199,14 +201,23 @@ export class ZwiftPlay {
    */
   async connect(connectedIds: (string | null)[]): Promise<boolean> {
     if (!navigator.bluetooth) throw new Error('Bluetooth indisponible dans ce navigateur : utilise Chrome ou Edge.');
-    this.device = await navigator.bluetooth.requestDevice({
+    const device = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: 'Zwift' }, { manufacturerData: [{ companyIdentifier: ZWIFT_COMPANY_ID }] }],
       optionalServices: [ZWIFT_RIDE_SERVICE, ZWIFT_PLAY_SERVICE],
     });
-    if (connectedIds.includes(this.device.id)) return false;
-    this.device.addEventListener('gattserverdisconnected', this.onDisconnected);
+    if (connectedIds.includes(device.id)) return false;
+    rememberDevice(device.id, 'play');
+    this.device = device;
+    device.addEventListener('gattserverdisconnected', this.onDisconnected);
     await this.open();
     return true;
+  }
+
+  /** Reprend une manette déjà autorisée, sans fenêtre de choix : à l'ouverture du jeu. */
+  async connectKnown(device: BluetoothDevice): Promise<void> {
+    this.device = device;
+    device.addEventListener('gattserverdisconnected', this.onDisconnected);
+    await this.open();
   }
 
   private async open(): Promise<void> {

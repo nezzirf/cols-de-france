@@ -23,6 +23,7 @@ import {
   WAHOO_CONTROL_POINT,
   WAHOO_UNLOCK,
 } from './ftmsProtocol';
+import { rememberDevice } from './rememberedDevices';
 import type { ConnectionState, Trainer, TrainerData } from './types';
 
 const INDICATION_TIMEOUT_MS = 2500;
@@ -62,17 +63,35 @@ export class KickrBluetooth implements Trainer {
     }
     this.setState('connecting');
     try {
-      this.device = await navigator.bluetooth.requestDevice({
+      const device = await navigator.bluetooth.requestDevice({
         filters: [{ services: [FTMS_SERVICE] }, { namePrefix: 'KICKR' }, { namePrefix: 'Wahoo' }],
         optionalServices: [FTMS_SERVICE, CYCLING_POWER_SERVICE, WAHOO_CONTROL_POINT],
       });
-      this.device.addEventListener('gattserverdisconnected', () => void this.handleDisconnect());
-      await this.openGatt();
-      this.setState('connected');
+      rememberDevice(device.id, 'ble');
+      await this.attach(device);
     } catch (err) {
       this.setState('disconnected');
       throw err;
     }
+  }
+
+  /** Reprend un home trainer déjà autorisé, sans fenêtre de choix : à l'ouverture du jeu. */
+  async connectKnown(device: BluetoothDevice): Promise<void> {
+    this.userDisconnected = false;
+    this.setState('connecting');
+    try {
+      await this.attach(device);
+    } catch (err) {
+      this.setState('disconnected');
+      throw err;
+    }
+  }
+
+  private async attach(device: BluetoothDevice): Promise<void> {
+    this.device = device;
+    device.addEventListener('gattserverdisconnected', () => void this.handleDisconnect());
+    await this.openGatt();
+    this.setState('connected');
   }
 
   private async openGatt(): Promise<void> {

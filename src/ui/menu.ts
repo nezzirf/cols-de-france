@@ -446,6 +446,11 @@ export class Menu {
     });
   }
 
+  /** Remet à jour les voyants des appareils : l'un d'eux vient de se connecter seul. */
+  refreshDevices(): void {
+    this.changed();
+  }
+
   say(text: string, error = false): void {
     const msg = this.q('[data-r="msg"]');
     msg.textContent = text;
