@@ -62,6 +62,11 @@ describe('enregistrement de la sortie', () => {
     expect(xml).toContain('<Time>2026-11-01T17:30:01.000Z</Time>');
     expect(xml).toContain('<DistanceMeters>24.0</DistanceMeters>');
   });
+  it('donne la puissance moyenne et maximale du tour, pas seulement celle de chaque point', () => {
+    const xml = buildTcx(record);
+    expect(xml).toContain(`<ns3:AvgWatts>${Math.round(record.stats.avgPowerW)}</ns3:AvgWatts>`);
+    expect(xml).toContain(`<ns3:MaxWatts>${Math.round(record.stats.maxPowerW)}</ns3:MaxWatts>`);
+  });
   it('protège les caractères spéciaux du nom', () => {
     expect(buildTcx(record)).toContain('Alpe d&apos;Huez &amp; co');
   });

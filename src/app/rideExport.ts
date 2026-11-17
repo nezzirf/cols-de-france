@@ -34,7 +34,7 @@ export function buildTcx(ride: RideRecord): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
 <Activities><Activity Sport="Biking"><Id>${iso(ride.startedAt)}</Id>
-<Lap StartTime="${iso(ride.startedAt)}"><TotalTimeSeconds>${ride.elapsedS.toFixed(0)}</TotalTimeSeconds><DistanceMeters>${(last?.distanceM ?? 0).toFixed(1)}</DistanceMeters><MaximumSpeed>${maxSpeedMps.toFixed(2)}</MaximumSpeed><Calories>${Math.round(stats.energyKJ)}</Calories>${heart}<Intensity>Active</Intensity><Cadence>${Math.round(stats.avgCadenceRpm)}</Cadence><TriggerMethod>Manual</TriggerMethod><Track>${points}</Track></Lap>
+<Lap StartTime="${iso(ride.startedAt)}"><TotalTimeSeconds>${ride.elapsedS.toFixed(0)}</TotalTimeSeconds><DistanceMeters>${(last?.distanceM ?? 0).toFixed(1)}</DistanceMeters><MaximumSpeed>${maxSpeedMps.toFixed(2)}</MaximumSpeed><Calories>${Math.round(stats.energyKJ)}</Calories>${heart}<Intensity>Active</Intensity><Cadence>${Math.round(stats.avgCadenceRpm)}</Cadence><TriggerMethod>Manual</TriggerMethod><Track>${points}</Track><Extensions><ns3:LX><ns3:AvgSpeed>${(ride.elapsedS > 0 ? (last?.distanceM ?? 0) / ride.elapsedS : 0).toFixed(2)}</ns3:AvgSpeed><ns3:AvgWatts>${Math.round(stats.avgPowerW)}</ns3:AvgWatts><ns3:MaxWatts>${Math.round(stats.maxPowerW)}</ns3:MaxWatts></ns3:LX></Extensions></Lap>
 <Notes>${escapeXml(ride.name)} (Cols de France)</Notes></Activity></Activities>
 </TrainingCenterDatabase>
 `;
