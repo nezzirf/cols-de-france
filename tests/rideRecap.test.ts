@@ -67,6 +67,15 @@ describe('enregistrement de la sortie', () => {
     expect(xml).toContain(`<ns3:AvgWatts>${Math.round(record.stats.avgPowerW)}</ns3:AvgWatts>`);
     expect(xml).toContain(`<ns3:MaxWatts>${Math.round(record.stats.maxPowerW)}</ns3:MaxWatts>`);
   });
+  it('écrit un tour par palier de la séance, chacun avec sa puissance moyenne', () => {
+    const interval = ride(6, (t) => (t < 3 ? 100 : 300));
+    const withLaps = { ...record, elapsedS: 6, samples: interval, stats: rideStats(interval, 250), lapStarts: [0, 3] };
+    const xml = buildTcx(withLaps);
+    expect(xml.match(/<Lap /g)).toHaveLength(2);
+    const watts = [...xml.matchAll(/<ns3:AvgWatts>(\d+)<\/ns3:AvgWatts>/g)].map((m) => Number(m[1]));
+    expect(watts).toEqual([100, 300]);
+    expect(xml.match(/<Trackpoint>/g)).toHaveLength(6);
+  });
   it('protège les caractères spéciaux du nom', () => {
     expect(buildTcx(record)).toContain('Alpe d&apos;Huez &amp; co');
   });

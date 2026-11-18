@@ -28,6 +28,8 @@ export interface HistoryEntry {
   bests: Record<number, number>;
   /** Vrai tant que les points de la sortie sont encore gardés. */
   detailed: boolean;
+  /** Débuts des paliers de la séance, en secondes : pour réexporter la sortie avec un tour par palier. */
+  lapStarts?: number[];
 }
 
 export interface RideToLog {
@@ -38,6 +40,7 @@ export interface RideToLog {
   distanceKm: number;
   samples: RideSample[];
   stats: RideStats;
+  lapStarts?: number[];
 }
 
 /** Les sorties plus courtes ne valent pas d'être gardées. */
@@ -86,6 +89,7 @@ export function addRide(ride: RideToLog, store: Store | null = defaultStore()): 
     tss: ride.stats.tss === null ? null : Math.round(ride.stats.tss),
     bests: powerBests(ride.samples),
     detailed: true,
+    ...(ride.lapStarts && ride.lapStarts.length > 0 ? { lapStarts: ride.lapStarts } : {}),
   };
   list.push(entry);
   list.sort((a, b) => b.id - a.id);

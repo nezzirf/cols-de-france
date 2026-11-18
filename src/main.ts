@@ -48,6 +48,11 @@ const EXPLORE_REFRESH_MS = 150;
 const MINI_REFRESH_MS = 250;
 const FLOATING_BAR = { width: 980, height: 96 };
 
+/** Débuts des paliers d'une séance, en secondes : chaque palier devient un tour du fichier enregistré. */
+function lapStartsOf(workout: Workout | null): number[] | undefined {
+  return workout ? expandBlocks(workout.blocks).map((step) => step.startS) : undefined;
+}
+
 class App {
   private root = document.getElementById('app')!;
   private canvas = document.getElementById('view') as HTMLCanvasElement;
@@ -284,10 +289,12 @@ class App {
     if (!saved) return;
     const summary = summaryFromSamples(saved.samples, this.profile.ftp, saved.state.startedAt);
     const before = personalBests(loadHistory());
-    addRide({ name: saved.name, routeId: saved.routeId, startedAt: summary.startedAt, elapsedS: summary.elapsedS, distanceKm: summary.distanceKm, samples: summary.samples, stats: summary.stats });
+    const lapStarts = lapStartsOf(saved.workout);
+    addRide({ name: saved.name, routeId: saved.routeId, startedAt: summary.startedAt, elapsedS: summary.elapsedS, distanceKm: summary.distanceKm, samples: summary.samples, stats: summary.stats, lapStarts });
     clearInProgress();
     this.showStandaloneRecap({
       name: saved.name,
+      lapStarts,
       summary,
       ftp: this.profile.ftp,
       previousBests: before,
@@ -304,6 +311,7 @@ class App {
     }
     this.showStandaloneRecap({
       name: entry.name,
+      lapStarts: entry.lapStarts,
       summary: summaryFromSamples(samples, this.profile.ftp, entry.id),
       ftp: this.profile.ftp,
       previousBests: personalBests(loadHistory(), entry.id),
@@ -708,11 +716,13 @@ class App {
     this.endButton = null;
     // La sortie entre dans l'historique et n'est plus « interrompue » : le récap compare aux records d'avant.
     const before = personalBests(loadHistory());
-    addRide({ name, routeId: this.rideInfo?.routeId ?? null, startedAt: s.startedAt, elapsedS: s.elapsedS, distanceKm: s.distanceKm, samples: s.samples, stats: s.stats });
+    const lapStarts = lapStartsOf(this.rideInfo?.workout ?? null);
+    addRide({ name, routeId: this.rideInfo?.routeId ?? null, startedAt: s.startedAt, elapsedS: s.elapsedS, distanceKm: s.distanceKm, samples: s.samples, stats: s.stats, lapStarts });
     clearInProgress();
     this.rideInfo = null;
     showRecap(this.root, {
       name,
+      lapStarts,
       summary: s,
       ftp: this.profile.ftp,
       previousBests: before,

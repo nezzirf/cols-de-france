@@ -20,6 +20,8 @@ export interface RecapOptions {
   onMenu(): void;
   /** Texte du bouton de retour. */
   menuLabel?: string;
+  /** Débuts des paliers de la séance, en secondes : le fichier enregistré a un tour par palier. */
+  lapStarts?: number[];
 }
 
 /** Une sortie sans pédalage n'a rien à enregistrer. */
@@ -39,7 +41,7 @@ function dateLabel(ms: number): string {
 
 const windowLabel = (s: number): string => (s < 60 ? `${s} s` : `${s / 60} min`);
 
-export function showRecap(root: HTMLElement, { name, summary, ftp, previousBests, onApplyFtp, onMenu, menuLabel }: RecapOptions): void {
+export function showRecap(root: HTMLElement, { name, summary, ftp, previousBests, onApplyFtp, onMenu, menuLabel, lapStarts }: RecapOptions): void {
   const { stats, samples } = summary;
   const screen = document.createElement('div');
   screen.className = 'screen over';
@@ -127,7 +129,7 @@ export function showRecap(root: HTMLElement, { name, summary, ftp, previousBests
     );
   }
 
-  const record: RideRecord = { name, startedAt: summary.startedAt, elapsedS: summary.elapsedS, samples, stats };
+  const record: RideRecord = { name, startedAt: summary.startedAt, elapsedS: summary.elapsedS, samples, stats, lapStarts };
   const save = q<HTMLButtonElement>('[data-a="save"]');
   const note = q('[data-r="note"]');
   save.addEventListener('click', () => {
